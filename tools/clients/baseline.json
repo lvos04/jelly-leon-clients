@@ -26,7 +26,7 @@
       "upstream_commit": "984181a3d6ab14e9a6d2dcc850c582e1c138bd95",
       "upstream_tree": "7ca4f4838f49c0aec9c74aff405149d8140aef1c",
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
-      "forkversie": "0.19.10-jl.0",
+      "forkversie": "0.19.10-jl.1",
       "licentie": "GPL-2.0",
       "beschermde_bestanden": ["LICENSE", "CONTRIBUTORS.md"],
       "geneste_subtrees": {}

@@ -21,6 +21,9 @@ def test_echte_repo_voldoet_aan_forkregels():
         "desktop/external/mpvqt": "gitlink→subtree",  # JLC-0001
         "android/app/build.gradle.kts": "M",  # JLC-0002
         "android/app/src/main/res/xml/backup_content.xml": "M",  # JLC-0002
+        "androidtv/app/build.gradle.kts": "M",  # JLC-0003
+        "androidtv/app/src/main/res/xml/backup_content.xml": "M",  # JLC-0003
+        "androidtv/app/src/main/res/xml/backup_rules.xml": "M",  # JLC-0003
     }
 
 

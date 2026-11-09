@@ -26,6 +26,7 @@ een patch in de client. Branding is in P0 bewust **niet** gewijzigd (ADR-0004).
 |---|---|---|---|---|
 | JLC-0001 | Submodule `external/mpvqt` als geneste subtree | desktop | bronvolledigheid (geen codewijziging) | actief |
 | JLC-0002 | Eigen applicationId `org.jellyfin.mobile.jellyleon` | android | app-identiteit (build-configuratie + back-upregels) | actief |
+| JLC-0003 | Eigen applicationId `org.jellyfin.androidtv.jellyleon` met `app_id` en zoek-authority | androidtv | app-identiteit (build-configuratie + back-upregels) | actief |
 
 Appcode (Kotlin, C++, Swift): **geen** patches — de app-identiteitspatches (JLC-0002 e.v.) wijzigen alleen
 build-configuratie en XML-resources (contract 1.2 §2.3 regel 6, besluit van de gebruiker 2026-11-09, ADR-0004).
@@ -66,3 +67,19 @@ controleren ze.
 | Upstream-PR-kans | Laag — upstream heeft geen reden voor een andere ID; een optionele Gradle-property zou kunnen, maar niet nodig. |
 | Test | `tools/clients/app_identiteit.py bron` en `tools/clients/tests/test_app_identiteit.py` (bron + aapt2-uitvoer met een nep-aapt2, Sim-getest); `app_identiteit.py bouwmap android android/app/build` met de echte `aapt2` op de debug-APK's (libre + proprietary) en de release-`.ap_` in CI en lokaal (pakketnaam, authorities en eigen permissies met de pakketnaam als prefix, sharedpref-namen, verschil met `org.jellyfin.mobile[.debug]`). Naast de officiële app installeren en Chromecast (*proprietary*) met de andere pakketnaam: NIET GEVALIDEERD (hardware). |
 | Bij upstream-sync | Wijzigt upstream `defaultConfig` of de back-upregels, dan conflicteert de sync bewust (exitcode 2, ADR-0002) en wordt de patch met de hand opnieuw toegepast; de bron-controle in *Forkregels* faalt als de ID verdwijnt. |
+
+## JLC-0003 — Eigen applicationId `org.jellyfin.androidtv.jellyleon` met `app_id` en zoek-authority
+
+| Veld | Waarde |
+|---|---|
+| Status | actief |
+| Client | androidtv |
+| Soort | app-identiteit: build-configuratie en back-upregels; geen Kotlin-code |
+| Sinds | 2026-11-09 (forkversie 0.19.10-jl.1) |
+| Doel | De Jelly Leon-build naast de officiële Jellyfin-app voor Android TV kunnen installeren, met een eigen accounttype en eigen zoeksuggesties. Release `org.jellyfin.androidtv.jellyleon`, debug `org.jellyfin.androidtv.jellyleon.debug`. |
+| Bestanden | `androidtv/app/build.gradle.kts`, `androidtv/app/src/main/res/xml/backup_content.xml`, `androidtv/app/src/main/res/xml/backup_rules.xml` |
+| Wijziging | `applicationId = namespace` → `applicationId = "org.jellyfin.androidtv.jellyleon"`; de `resValue`'s `app_id`, `app_search_suggest_authority` en `app_search_suggest_intent_data` (release en debug) worden afgeleid van `defaultConfig.applicationId` (+ `applicationIdSuffix`) in plaats van `namespace`. Back-upregels (`backup_content.xml` 2 regels, `backup_rules.xml` 4 regels): sharedpref `org.jellyfin.androidtv[.debug]_preferences` → `org.jellyfin.androidtv.jellyleon[.debug]_preferences` (`PreferenceManager.getDefaultSharedPreferences` = `${packageName}_preferences`). `namespace = "org.jellyfin.androidtv"` blijft. |
+| Waarom nodig | Upstream leidt `app_id` (accounttype van de authenticator, `res/xml/authenticator.xml`) en de zoek-authority/-data (`res/xml/searchable.xml`) af van `namespace`, terwijl de code `BuildConfig.APPLICATION_ID` gebruikt (`AccountManagerMigration.ACCOUNT_TYPE`, `MediaContentProvider.AUTHORITY`) en het manifest `${applicationId}.content`. Alleen de applicationId wijzigen zou het accounttype van de officiële app delen (Android houdt één authenticator per accounttype) en zoeksuggesties naar een niet-bestaande provider laten wijzen. |
+| Upstream-PR-kans | Middel — afleiden van `applicationId` in plaats van `namespace` is ook upstream correcter (geldt voor elke afgeleide build); de vaste eigen ID zelf blijft fork-eigen. |
+| Test | `tools/clients/app_identiteit.py bron` en `tools/clients/tests/test_app_identiteit.py` (Sim-getest); `app_identiteit.py bouwmap androidtv androidtv/app/build` met de echte `aapt2` op de debug-APK en de release-`.ap_` in CI (lokaal ook op de release-APK): pakketnaam, `string/app_id` = pakketnaam, zoek-authority = pakketnaam + `.content` en bestaat als provider, accounttype in `xml/authenticator` en authority/data in `xml/searchable` verwijzen naar die waarden, alle authorities en eigen permissies met de pakketnaam als prefix, sharedpref-namen; unit-tests van upstream (15 per variant). Naast de officiële app installeren, accounts en zoeken op een tv: NIET GEVALIDEERD (hardware). |
+| Bij upstream-sync | Zoals JLC-0002: conflict → sync faalt bewust; de bron-controle faalt als een `resValue` weer `namespace` gebruikt. |
