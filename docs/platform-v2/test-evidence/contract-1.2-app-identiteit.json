@@ -1,0 +1,353 @@
+{
+  "id": "contract-1.2-app-identiteit",
+  "datum": "2026-11-09",
+  "doel": "JC1/JC2 (contract 1.2): eigen applicationId/bundle-id naast de officiële apps — lokaal gebouwd en met aapt2 gemeten (JLC-0002, JLC-0003); Swiftfin alleen bron-controle (NIET GEVALIDEERD (Mac/Xcode)).",
+  "repo_stand_gebouwd": "werkboom met de patches van commits 6575275 (JLC-0002) en 1a189a5 (JLC-0003), byte-gelijk aan wat daarna gecommit is",
+  "omgeving": {
+    "machine": "eigen Ubuntu-machine van de gebruiker (Ubuntu 26.04), 22 CPU's, 14,5 GiB RAM, gedeeld met andere bouwers; geen proxy, geen eigen CA",
+    "jdk": "OpenJDK 21.0.12.1",
+    "android_sdk": "~/android-sdk (ANDROID_HOME): platforms;android-36, build-tools 34.0.0/35.0.0/36.0.0; aapt2 uit build-tools 36.0.0 ('Android Asset Packaging Tool (aapt) 2.20-13193326')",
+    "beperkingen": "elke Gradle-build onder flock <WERKMAP>/.lokaal/gradle.lock, nice -n 10, --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g; één build tegelijk"
+  },
+  "android": {
+    "commando": "cd android && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock <WERKMAP>/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug assembleRelease test",
+    "resultaat": "BUILD SUCCESSFUL in 3m 56s, 208 taken, exitcode 0 (16:08:35Z → 16:12:32Z)",
+    "unit_tests": "testLibreDebugUnitTest en testProprietaryDebugUnitTest: NO-SOURCE (upstream v2.7.3 heeft geen unit-tests)",
+    "release": "assembleRelease bouwt niet-ondertekende APK's (*-release-unsigned.apk, R8 + resource-shrinking); niets ondertekend of verspreid",
+    "apks": {
+      "android/app/build/outputs/apk/libre/debug/jellyfin-android-v0.0.0-dev.1-libre-debug.apk": {
+        "bytes": 34520867,
+        "sha256": "fbcc406b8651683baa27aadeab39b1d48d0ab3ba931ed73a5e09171bab5f5f77"
+      },
+      "android/app/build/outputs/apk/libre/release/jellyfin-android-v0.0.0-dev.1-libre-release-unsigned.apk": {
+        "bytes": 8897901,
+        "sha256": "58b96777cb2611d4ce3548171185c612e6dab912212e5818f5ced983ba50a4c4"
+      },
+      "android/app/build/outputs/apk/proprietary/debug/jellyfin-android-v0.0.0-dev.1-proprietary-debug.apk": {
+        "bytes": 35985159,
+        "sha256": "c491f3571a7677e0eb60df299db27321bcba4f6230b7a46ad4acdfda8b18d0e2"
+      },
+      "android/app/build/outputs/apk/proprietary/release/jellyfin-android-v0.0.0-dev.1-proprietary-release-unsigned.apk": {
+        "bytes": 9774542,
+        "sha256": "618b8a62ad430f7faaf6d7491862f2e39b16f968d60ec38e83633c72b4a39c57"
+      }
+    },
+    "aapt2_controle": {
+      "commando": "python3 tools/clients/app_identiteit.py bouwmap android android/app/build",
+      "exitcode": 0,
+      "resultaat": [
+        {
+          "artefact": "android/app/build/outputs/apk/libre/debug/jellyfin-android-v0.0.0-dev.1-libre-debug.apk",
+          "variant": "debug",
+          "pakket": "org.jellyfin.mobile.jellyleon.debug",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.debug.image-provider",
+            "org.jellyfin.mobile.jellyleon.debug.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        },
+        {
+          "artefact": "android/app/build/outputs/apk/libre/release/jellyfin-android-v0.0.0-dev.1-libre-release-unsigned.apk",
+          "variant": "release",
+          "pakket": "org.jellyfin.mobile.jellyleon",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.image-provider",
+            "org.jellyfin.mobile.jellyleon.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        },
+        {
+          "artefact": "android/app/build/outputs/apk/proprietary/debug/jellyfin-android-v0.0.0-dev.1-proprietary-debug.apk",
+          "variant": "debug",
+          "pakket": "org.jellyfin.mobile.jellyleon.debug",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.debug.image-provider",
+            "org.jellyfin.mobile.jellyleon.debug.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        },
+        {
+          "artefact": "android/app/build/outputs/apk/proprietary/release/jellyfin-android-v0.0.0-dev.1-proprietary-release-unsigned.apk",
+          "variant": "release",
+          "pakket": "org.jellyfin.mobile.jellyleon",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.image-provider",
+            "org.jellyfin.mobile.jellyleon.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        }
+      ]
+    },
+    "aapt2_controle_zoals_ci": {
+      "commando": "bouwmap op een kopie van de bouwmap zonder release-APK's (alleen debug-APK's + intermediates), zoals CI zonder assembleRelease",
+      "exitcode": 0,
+      "resultaat": [
+        {
+          "artefact": "android/app/build/outputs/apk/debug/jellyfin-android-v0.0.0-dev.1-libre-debug.apk",
+          "variant": "debug",
+          "pakket": "org.jellyfin.mobile.jellyleon.debug",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.debug.image-provider",
+            "org.jellyfin.mobile.jellyleon.debug.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        },
+        {
+          "artefact": "android/app/build/outputs/apk/debug/jellyfin-android-v0.0.0-dev.1-proprietary-debug.apk",
+          "variant": "debug",
+          "pakket": "org.jellyfin.mobile.jellyleon.debug",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.debug.image-provider",
+            "org.jellyfin.mobile.jellyleon.debug.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        },
+        {
+          "artefact": "android/app/build/intermediates/linked_resources_proto_format/libreRelease/processLibreReleaseResources/linked-resources-proto-format-libreRelease.ap_",
+          "variant": "release",
+          "pakket": "org.jellyfin.mobile.jellyleon",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.image-provider",
+            "org.jellyfin.mobile.jellyleon.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        },
+        {
+          "artefact": "android/app/build/intermediates/linked_resources_proto_format/proprietaryRelease/processProprietaryReleaseResources/linked-resources-proto-format-proprietaryRelease.ap_",
+          "variant": "release",
+          "pakket": "org.jellyfin.mobile.jellyleon",
+          "authorities": [
+            "org.jellyfin.mobile.jellyleon.image-provider",
+            "org.jellyfin.mobile.jellyleon.androidx-startup"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.mobile.jellyleon.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": []
+        }
+      ]
+    }
+  },
+  "androidtv": {
+    "commando": "cd androidtv && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock <WERKMAP>/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug assembleRelease test",
+    "resultaat": "BUILD SUCCESSFUL in 2m 15s, 462 taken, exitcode 0 (16:05:32Z → 16:07:48Z)",
+    "unit_tests": {
+      "bron": "JUnit-XML in */build/test-results/",
+      "app:testDebugUnitTest": "13/13",
+      "app:testReleaseUnitTest": "13/13",
+      "preference:testDebugUnitTest": "2/2",
+      "preference:testReleaseUnitTest": "2/2",
+      "totaal": "15 per variant, 0 fouten, 0 overgeslagen"
+    },
+    "apks": {
+      "androidtv/app/build/outputs/apk/debug/jellyfin-androidtv-v0.0.0-dev.1-debug.apk": {
+        "bytes": 28386623,
+        "sha256": "a32a8d004f9e5d2b99ecf78d000e516ea51446b831cb0e9e0e06810360edadb2"
+      },
+      "androidtv/app/build/outputs/apk/release/jellyfin-androidtv-v0.0.0-dev.1-release-unsigned.apk": {
+        "bytes": 21843232,
+        "sha256": "adddcbe937dde66dd170fa6546eba45eb04257e6bc0f56ff92a427c84a474763"
+      }
+    },
+    "aapt2_controle": {
+      "commando": "python3 tools/clients/app_identiteit.py bouwmap androidtv androidtv/app/build",
+      "exitcode": 0,
+      "resultaat": [
+        {
+          "artefact": "androidtv/app/build/outputs/apk/debug/jellyfin-androidtv-v0.0.0-dev.1-debug.apk",
+          "variant": "debug",
+          "pakket": "org.jellyfin.androidtv.jellyleon.debug",
+          "authorities": [
+            "org.jellyfin.androidtv.jellyleon.debug.androidx-startup",
+            "org.jellyfin.androidtv.jellyleon.debug.content",
+            "org.jellyfin.androidtv.jellyleon.debug.integration.provider.ImageProvider",
+            "org.jellyfin.androidtv.jellyleon.debug.acra"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.androidtv.jellyleon.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": [],
+          "res_waarden": {
+            "app_id": "org.jellyfin.androidtv.jellyleon.debug",
+            "app_search_suggest_authority": "org.jellyfin.androidtv.jellyleon.debug.content",
+            "app_search_suggest_intent_data": "content://org.jellyfin.androidtv.jellyleon.debug.content/intent",
+            "xml/authenticator:accountType": "org.jellyfin.androidtv.jellyleon.debug",
+            "xml/searchable:searchSuggestAuthority": "org.jellyfin.androidtv.jellyleon.debug.content",
+            "xml/searchable:searchSuggestIntentData": "content://org.jellyfin.androidtv.jellyleon.debug.content/intent"
+          }
+        },
+        {
+          "artefact": "androidtv/app/build/outputs/apk/release/jellyfin-androidtv-v0.0.0-dev.1-release-unsigned.apk",
+          "variant": "release",
+          "pakket": "org.jellyfin.androidtv.jellyleon",
+          "authorities": [
+            "org.jellyfin.androidtv.jellyleon.androidx-startup",
+            "org.jellyfin.androidtv.jellyleon.content",
+            "org.jellyfin.androidtv.jellyleon.integration.provider.ImageProvider",
+            "org.jellyfin.androidtv.jellyleon.acra"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.androidtv.jellyleon.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": [],
+          "res_waarden": {
+            "app_id": "org.jellyfin.androidtv.jellyleon",
+            "app_search_suggest_authority": "org.jellyfin.androidtv.jellyleon.content",
+            "app_search_suggest_intent_data": "content://org.jellyfin.androidtv.jellyleon.content/intent",
+            "xml/authenticator:accountType": "org.jellyfin.androidtv.jellyleon",
+            "xml/searchable:searchSuggestAuthority": "org.jellyfin.androidtv.jellyleon.content",
+            "xml/searchable:searchSuggestIntentData": "content://org.jellyfin.androidtv.jellyleon.content/intent"
+          }
+        }
+      ]
+    },
+    "aapt2_controle_zoals_ci": {
+      "exitcode": 0,
+      "resultaat": [
+        {
+          "artefact": "androidtv/app/build/outputs/apk/debug/jellyfin-androidtv-v0.0.0-dev.1-debug.apk",
+          "variant": "debug",
+          "pakket": "org.jellyfin.androidtv.jellyleon.debug",
+          "authorities": [
+            "org.jellyfin.androidtv.jellyleon.debug.androidx-startup",
+            "org.jellyfin.androidtv.jellyleon.debug.content",
+            "org.jellyfin.androidtv.jellyleon.debug.integration.provider.ImageProvider",
+            "org.jellyfin.androidtv.jellyleon.debug.acra"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.androidtv.jellyleon.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": [],
+          "res_waarden": {
+            "app_id": "org.jellyfin.androidtv.jellyleon.debug",
+            "app_search_suggest_authority": "org.jellyfin.androidtv.jellyleon.debug.content",
+            "app_search_suggest_intent_data": "content://org.jellyfin.androidtv.jellyleon.debug.content/intent",
+            "xml/authenticator:accountType": "org.jellyfin.androidtv.jellyleon.debug",
+            "xml/searchable:searchSuggestAuthority": "org.jellyfin.androidtv.jellyleon.debug.content",
+            "xml/searchable:searchSuggestIntentData": "content://org.jellyfin.androidtv.jellyleon.debug.content/intent"
+          }
+        },
+        {
+          "artefact": "androidtv/app/build/intermediates/linked_resources_binary_format/release/processReleaseResources/linked-resources-binary-format-release.ap_",
+          "variant": "release",
+          "pakket": "org.jellyfin.androidtv.jellyleon",
+          "authorities": [
+            "org.jellyfin.androidtv.jellyleon.androidx-startup",
+            "org.jellyfin.androidtv.jellyleon.content",
+            "org.jellyfin.androidtv.jellyleon.integration.provider.ImageProvider",
+            "org.jellyfin.androidtv.jellyleon.acra"
+          ],
+          "eigen_permissies": [
+            "org.jellyfin.androidtv.jellyleon.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          ],
+          "overtredingen": [],
+          "res_waarden": {
+            "app_id": "org.jellyfin.androidtv.jellyleon",
+            "app_search_suggest_authority": "org.jellyfin.androidtv.jellyleon.content",
+            "app_search_suggest_intent_data": "content://org.jellyfin.androidtv.jellyleon.content/intent",
+            "xml/authenticator:accountType": "org.jellyfin.androidtv.jellyleon",
+            "xml/searchable:searchSuggestAuthority": "org.jellyfin.androidtv.jellyleon.content",
+            "xml/searchable:searchSuggestIntentData": "content://org.jellyfin.androidtv.jellyleon.content/intent"
+          }
+        }
+      ]
+    }
+  },
+  "tegenproeven_op_echte_builds": [
+    {
+      "wat": "halve patch: upstream androidtv met alleen applicationId = \"org.jellyfin.androidtv.jellyleon\" (resValues nog uit namespace), assembleDebug in een tijdelijke worktree",
+      "build": "BUILD SUCCESSFUL in 1m 12s",
+      "apk_sha256": "ae471eab2d68fc18390da8e3252972abebdfa356e07be83cb5e978d7c2db2d83",
+      "exitcode_controle": 1,
+      "aantal_overtredingen": 13,
+      "kern": "accounttype (xml/authenticator → string/app_id) = 'org.jellyfin.androidtv.debug' = dat van de officiële debug-app; zoek-authority 'org.jellyfin.androidtv.debug.content' bestaat niet als provider; back-upregels met de officiële sharedpref-namen",
+      "overtredingen": [
+        "xml/backup_content: sharedpref 'org.jellyfin.androidtv.jellyleon.debug_preferences' ontbreekt (gevonden: ['org.jellyfin.androidtv_preferences', 'org.jellyfin.androidtv.debug_preferences'])",
+        "xml/backup_content: sharedpref 'org.jellyfin.androidtv_preferences' hoort niet bij 'org.jellyfin.androidtv.jellyleon.debug'",
+        "xml/backup_content: sharedpref 'org.jellyfin.androidtv.debug_preferences' hoort niet bij 'org.jellyfin.androidtv.jellyleon.debug'",
+        "xml/backup_rules: sharedpref 'org.jellyfin.androidtv.jellyleon.debug_preferences' ontbreekt (gevonden: ['org.jellyfin.androidtv_preferences', 'org.jellyfin.androidtv.debug_preferences'])",
+        "xml/backup_rules: sharedpref 'org.jellyfin.androidtv_preferences' hoort niet bij 'org.jellyfin.androidtv.jellyleon.debug'",
+        "xml/backup_rules: sharedpref 'org.jellyfin.androidtv.debug_preferences' hoort niet bij 'org.jellyfin.androidtv.jellyleon.debug'",
+        "string/app_id = 'org.jellyfin.androidtv.debug', verwacht 'org.jellyfin.androidtv.jellyleon.debug'",
+        "string/app_search_suggest_authority = 'org.jellyfin.androidtv.debug.content', verwacht 'org.jellyfin.androidtv.jellyleon.debug.content'",
+        "string/app_search_suggest_intent_data = 'content://org.jellyfin.androidtv.debug.content/intent', verwacht 'content://org.jellyfin.androidtv.jellyleon.debug.content/intent'",
+        "zoek-authority 'org.jellyfin.androidtv.debug.content' bestaat niet als provider in het manifest (zoeksuggesties wijzen naar een andere app of naar niets)",
+        "xml/authenticator accountType = 'org.jellyfin.androidtv.debug' (ruw '@0x7f120027'), verwacht 'org.jellyfin.androidtv.jellyleon.debug'",
+        "xml/searchable searchSuggestAuthority = 'org.jellyfin.androidtv.debug.content' (ruw '@0x7f12002e'), verwacht 'org.jellyfin.androidtv.jellyleon.debug.content'",
+        "xml/searchable searchSuggestIntentData = 'content://org.jellyfin.androidtv.debug.content/intent' (ruw '@0x7f12002f'), verwacht 'content://org.jellyfin.androidtv.jellyleon.debug.content/intent'"
+      ]
+    },
+    {
+      "wat": "ongewijzigde upstream androidtv v0.19.10, assembleDebug",
+      "build": "BUILD SUCCESSFUL in 23s (incrementeel)",
+      "apk_sha256": "0f9a4f12ee7aae89cd6bb3910c3aed5502f8c7409ed5f3757b4e569dfe93fe43",
+      "exitcode_controle": 1,
+      "overtredingen": [
+        "pakketnaam 'org.jellyfin.androidtv.debug' is de officiële app (botst bij installatie naast de officiële app)"
+      ]
+    }
+  ],
+  "swiftfin": {
+    "bron": "python3 tools/clients/app_identiteit.py bron → in orde: elke PRODUCT_BUNDLE_IDENTIFIER in XcodeConfig/Shared.xcconfig en Swiftfin.xcodeproj/project.pbxproj = org.jellyfin.swiftfin.jellyleon",
+    "validatie": "NIET GEVALIDEERD (Mac/Xcode): lokaal geen Xcode; de echte build-instellingen leest alleen de GitHub-macOS-runner (zie github_actions)",
+    "ci": "zie github_actions: Clients / Swiftfin 42653355814 (build-instellingen gemeten door Xcode op de runner)"
+  },
+  "tests_fork_tooling": ".venv/bin/python -m pytest -q tools/clients/tests → 159 passed (35 test_app_identiteit, 5 test_contract_kopie, 48 test_workflows); ruff check → All checks passed; actionlint → geen meldingen; check_clients.py → Forkregels in orde (android 2, androidtv 3, desktop 1, swiftfin 2 afwijkingen, alle geregistreerd)",
+  "github_actions": [
+    {
+      "workflow": "Clients / Forkregels",
+      "run_id": 42653355717,
+      "commit": "f11881f",
+      "conclusie": "success",
+      "stappen": "ruff; pytest 157 passed, 2 skipped (de byte-vergelijking met de lokale bronrepo; op de runner staat ai-server-manager er niet naast — de vaste SHA-256 is wel gecontroleerd); check_clients.py in orde; app_identiteit.py bron in orde; actionlint"
+    },
+    {
+      "workflow": "Clients / Android",
+      "run_id": 42653355793,
+      "commit": "f11881f",
+      "conclusie": "success",
+      "stappen": "assembleDebug test processLibreReleaseResources processProprietaryReleaseResources (BUILD SUCCESSFUL in 2m 39s); app_identiteit.py bouwmap android met aapt2 uit build-tools 37.0.0: 2 debug-APK's (org.jellyfin.mobile.jellyleon.debug) en 2 release-.ap_ in proto-formaat (org.jellyfin.mobile.jellyleon), 4 artefacten, 0 overtredingen"
+    },
+    {
+      "workflow": "Clients / Android TV",
+      "run_id": 42653355744,
+      "commit": "f11881f",
+      "conclusie": "success",
+      "stappen": "assembleDebug test processReleaseResources (BUILD SUCCESSFUL in 1m 53s); app_identiteit.py bouwmap androidtv met aapt2 37.0.0: debug-APK (org.jellyfin.androidtv.jellyleon.debug) en release-.ap_ (org.jellyfin.androidtv.jellyleon), 2 artefacten, 0 overtredingen"
+    },
+    {
+      "workflow": "Clients / Swiftfin",
+      "run_id": 42653355814,
+      "commit": "f11881f",
+      "conclusie": "success",
+      "stappen": "macOS 26, Xcode 26.6: simulatorbuild iOS en tvOS zonder signing; xcodebuild -showBuildSettings -json voor Debug en Release: Swiftfin iOS en Swiftfin tvOS hebben in beide configuraties PRODUCT_BUNDLE_IDENTIFIER org.jellyfin.swiftfin.jellyleon (ook iOS-Release met de doelinstelling), en CFBundleIdentifier in de Info.plist van de gebouwde Debug-simulator-app is org.jellyfin.swiftfin.jellyleon; 2 app-doelen per schema, 0 overtredingen. Niet ondertekend, niet gestart: NIET GEVALIDEERD (Mac/Xcode)"
+    }
+  ],
+  "niet_gedaan": [
+    "Geen APK geïnstalleerd of gestart: niet naast de officiële app op een emulator of apparaat → installatie naast elkaar, accounts, zoeken en back-up NIET GEVALIDEERD (hardware).",
+    "Chromecast (proprietary) met de nieuwe pakketnaam niet getest (hardware).",
+    "Swiftfin: niet ondertekend, bundle-id niet bij Apple geregistreerd, niet op een apparaat → NIET GEVALIDEERD (Mac/Xcode), NIET GEVALIDEERD (account).",
+    "Geen release ondertekend of verspreid (ADR-0008)."
+  ]
+}

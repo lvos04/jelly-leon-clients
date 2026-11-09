@@ -42,8 +42,8 @@
 6. **Forkversies:** android `2.7.3-jl.1`, androidtv `0.19.10-jl.1`, swiftfin `1.6.1-jl.1` (eerste fork-eigen
    wijziging aan de app; bij een upstream-sync weer `-jl.0`, ADR-0002). Desktop blijft `2.0.0-jl.0`.
 7. **JC3 — niet uitgevoerd (wacht op JL1):** de server `jelly-leon` stond op de peildatum nog op Jellyfin 10.11.11
-   (`global.json` SDK 9.0.0, laatste commit `f1ce7c2d0`, alleen gelezen). Zonder 12.x-server is er niets om tegen te
-   controleren; ADR-0009 blijft ongewijzigd. De statische routevergelijking v10.11.11 ↔ v12.4
+   (`global.json` SDK 9.0.0; gelezen op commit `ce980c25d` van de branch, alleen lezen). Zonder 12.x-server is er
+   niets om tegen te controleren; ADR-0009 blijft ongewijzigd. De statische routevergelijking v10.11.11 ↔ v12.4
    (`tools/clients/server_api_compat.py`) is een voorbereiding, geen compatibiliteitsbewijs.
 8. **JC5 / §13:** de ontwerptaal Peil is voor de clients niet van toepassing (contract §13, ADR-0015 van de Hub); de
    Jellyfin-vormgeving blijft. Er is hier dan ook geen ontwerpstap of ontwerpreview.
