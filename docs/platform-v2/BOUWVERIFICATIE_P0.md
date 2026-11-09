@@ -1,7 +1,8 @@
 # Bouwverificatie P0 — jelly-leon-clients (2026-11-09)
 
 Omgeving §1–§8: gedeelde Linux-bouwomgeving (4 CPU's, 15 GB RAM), Docker, Python 3.12, JDK 21, uitgaand verkeer via
-een beleidsproxy. §9: afronding op de eigen Ubuntu 26.04-machine van de gebruiker (geen proxy). Nergens macOS/Xcode, een
+een beleidsproxy (bestaat niet meer). §9–§10: afronding en review op de eigen Ubuntu 26.04-machine van de gebruiker
+(geen proxy, geen eigen CA). Nergens macOS/Xcode, een
 Android-apparaat, een tv of een NAS. Alles hieronder is echt uitgevoerd; wat niet kon staat als blokkade.
 
 ## 1. Forkregels en tooling (Sim-getest)
@@ -25,10 +26,11 @@ van android, androidtv en Swiftfin hebben geen submodules; desktop-master pint m
 
 Bewijs: [`test-evidence/p0-desktop-container-build.json`](test-evidence/p0-desktop-container-build.json).
 
+Toen gebouwd in de oude omgeving via de beleidsproxy (met een tijdelijke CA-secret). Die proxy en CA bestaan niet meer;
+het huidige commando (zonder proxy, zonder hostnetwerk, zonder CA) is:
+
 ```
-docker build --network host --build-arg HTTPS_PROXY --secret id=ca_bundle,src=<ca> \
-  -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev desktop/
-nice -n 10 tools/clients/bouwverificatie/desktop_bouw.sh
+make desktop-bouw DOCKER_LOCK=<lockbestand>   # = docker buildx build --load … desktop.Dockerfile + desktop_bouw.sh
 ```
 
 - Ubuntu 24.04 (`@sha256:fe81560990fa…`), GCC 13.3, CMake 3.28, Qt 6.4.2, libmpv 0.37, mpvqt uit de vendored subtree.

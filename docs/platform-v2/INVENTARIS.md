@@ -108,7 +108,7 @@ Smart-tv-apps (Samsung/LG), Chromecast en AirPlay: **unknown** tot D15 bekend is
 | Geteste matrix op echte apparaten (ondertitels, hervatten, afspelen) | **ontbrekend** | acceptatie B03-003 vraagt echte apparaten → Geblokkeerd |
 | Branding "Jelly Leon" (zichtbare naam) | **ontbrekend (bewust)** | P0 wijzigt niets; besluit: eigen applicationId/bundle-id naast de officiële apps, patch in P4 (ADR-0004) |
 | Distributie naar apparaten (APK/IPA/installers) | **ontbrekend** | geen TrueNAS-app (ADR-0008); kanaal is een gebruikersbesluit |
-| Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 99 tests (Sim-getest) |
+| Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 107 tests (Sim-getest) |
 
 ## 5. Bekende afhankelijkheden van derden (relevant voor licentie en distributie)
 

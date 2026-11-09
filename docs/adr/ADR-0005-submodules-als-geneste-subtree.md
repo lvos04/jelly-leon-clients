@@ -13,9 +13,13 @@
 - Elke upstream-submodule wordt een **geneste subtree (squash)** op exact de door upstream gepinde commit:
   `git rm --cached desktop/external/mpvqt` + `git subtree add --squash --prefix desktop/external/mpvqt
   https://github.com/KDE/mpvqt.git 2ebbd38…` (patch JLC-0001).
-- Bron: de officiële GitHub-spiegel van KDE (`github.com/KDE/mpvqt`) omdat `invent.kde.org` in deze bouwomgeving door
-  de proxy geweigerd wordt. Git-commits zijn inhoudsadressen: dezelfde hash = dezelfde inhoud. De oorspronkelijke URL
-  staat in de basislijn (`upstream_repo_volgens_gitmodules`).
+- Bron: de officiële GitHub-spiegel van KDE (`github.com/KDE/mpvqt`), omdat `invent.kde.org` in de oude
+  bouwomgeving door de proxy geweigerd werd. Git-commits zijn inhoudsadressen: dezelfde hash = dezelfde inhoud. De
+  oorspronkelijke URL staat in de basislijn (`upstream_repo_volgens_gitmodules`).
+- **Opnieuw gemeten op de eigen machine (2026-11-09, geen proxy):** `invent.kde.org/libraries/mpvqt.git` is bereikbaar;
+  commit `2ebbd38` daar opgehaald heeft tree `7d1a4c1bcc95…` (gelijk aan de basislijn en aan de spiegel) en is een
+  voorouder van de huidige `master` op invent.kde.org. De spiegel blijft de bron (geen wijziging nodig; bij een
+  nieuwe pin kan `upstream_sync.py --geneste-url external/mpvqt=<invent-URL>` de oorspronkelijke bron gebruiken).
 - De basislijn legt per geneste subtree de commit én de tree-hash vast; `check_clients.py` eist dat (a) upstream op die
   plek een gitlink met precies die commit heeft, (b) de geneste squashcommit naar diezelfde commit verwijst en exact
   die inhoud heeft, en (c) er nergens gitlinks of een root-`.gitmodules` staan.

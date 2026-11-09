@@ -32,7 +32,10 @@
 
 - Gemeten op echte upstream-code: desktop v2.0.0 → master (214 commits) schoon in een verse clone
   (`docs/platform-v2/test-evidence/p0-syncproef-desktop-master.json`).
-- `schedule` draait bij GitHub alleen vanaf de standaardbranch; tot deze branch daar staat, alleen handmatig.
+- `schedule` draait bij GitHub alleen vanaf de standaardbranch. Gemeten 2026-11-09 (`gh api repos/…`): de
+  standaardbranch is `ccr-c133d7a0-kuz1cv`, dus de wekelijkse run (maandag 04:17 UTC) loopt vanaf deze branch;
+  de eerste geplande run is maandag 2026-11-16. Wordt de standaardbranch later een andere, dan verhuist de
+  schedule mee met de workflow in die branch.
 - Pushen gebeurt met `GITHUB_TOKEN`; daardoor start GitHub geen push-workflows op de syncbranch — de sync-workflow roept
   de CI daarom zelf aan (`workflow_call`).
 - Terugzetten van een overgenomen sync = de squash-merge terugdraaien (`git revert -m 1`), basislijn mee.

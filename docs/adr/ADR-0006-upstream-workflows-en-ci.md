@@ -27,10 +27,18 @@
 
 ## Validatieniveaus
 
-| Workflow | Lokaal | Op GitHub |
+Eerst (P0, oude bouwomgeving met proxy) alleen statisch gecontroleerd; stand na de afronding van P0 (2026-11-09):
+
+| Workflow | Lokaal (eigen machine, geen proxy) | Op GitHub (branch `ccr-c133d7a0-kuz1cv`) |
 |---|---|---|
-| alle | `actionlint` + `shellcheck` geslaagd | **nog nooit gedraaid** |
-| forkregels | pytest 92/92 (48 tooling + 44 workflowregels), `check_clients.py` in orde | — |
-| desktop | zelfde stappen in Ubuntu 24.04-container geslaagd | — |
-| android / androidtv | geblokkeerd (Android SDK, Gradle-distributie) | — |
-| swiftfin | onmogelijk (geen macOS/Xcode) → **NIET GEVALIDEERD (Mac/Xcode)** | — |
+| alle | `actionlint` (met shellcheck) zonder meldingen; actie-SHA's tegen hun tags nagemeten (`git ls-remote`) | zie hieronder |
+| forkregels | pytest (Sim-getest), ruff, `check_clients.py` in orde | groen (o.a. run 42620737949) |
+| android | `assembleDebug test` geslaagd; upstream heeft geen unit-tests (`NO-SOURCE`) | groen (run 42608527216) |
+| androidtv | `assembleDebug test` geslaagd, 15/15 unit-tests per variant | groen (run 42608527671) |
+| desktop | Linux-build 62/62 + `ctest` 1/1 in een Ubuntu 24.04-container | groen (run 42600307251) |
+| swiftfin | onmogelijk (geen macOS/Xcode) → **NIET GEVALIDEERD (Mac/Xcode)** | groen als simulatorbuild zonder signing (run 42608527121); app niet gestart |
+| upstream-sync | Sim-getest met nep-upstreams (ook alle foutpaden) | groen, alleen het pad "geen update" (run 42620559306) |
+
+Actuele run-ID's en wat er wel en niet mee bewezen is: `docs/platform-v2/EVIDENCE.json` en
+`docs/platform-v2/BOUWVERIFICATIE_P0.md`. Geen van deze runs zegt iets over de apps op een echt apparaat
+(**NIET GEVALIDEERD (hardware)**).

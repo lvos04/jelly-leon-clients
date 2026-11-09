@@ -2,9 +2,9 @@
 # Bouwt beide schema's voor de simulator zonder code signing, zoals upstream ci.yml (macos-26, Xcode 26.6,
 # Brewfile, Carthage voor VLCKit), maar met gewone xcodebuild in plaats van fastlane.
 #
-# NIET GEVALIDEERD (Mac/Xcode): deze workflow is in de bouwomgeving niet uit te voeren (geen macOS/Xcode) en
-# nog nooit gedraaid. Pas na een groene run op GitHub mag "Sim-/CI-getest" worden gemeld; een echte
-# acceptatie vraagt bovendien een iPhone/iPad/Apple TV (D15).
+# Lokaal niet uit te voeren (geen macOS/Xcode): NIET GEVALIDEERD (Mac/Xcode). Op een GitHub-macOS-runner is deze
+# workflow groen (zie EVIDENCE.json); dat is alleen een simulatorbuild zonder signing: de app wordt niet gestart of
+# getest. Een echte acceptatie vraagt een iPhone/iPad/Apple TV (D15).
 # Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
 name: Clients / Swiftfin
 
