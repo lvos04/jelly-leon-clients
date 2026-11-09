@@ -71,5 +71,9 @@
     "Naast elkaar installeren op een emulator: er staan Android TV-systeemimages en de emulator in de SDK, maar de gebruiker heeft geen toegang tot /dev/kvm (groep kvm); zonder hardwareversnelling start een x86-image niet. Groepslidmaatschap wijzigen is een systeemwijziging buiten deze opdracht. NIET GEVALIDEERD (hardware).",
     "Desktop niet opnieuw gebouwd (geen wijziging in desktop/ in deze ronde).",
     "Swiftfin lokaal: NIET GEVALIDEERD (Mac/Xcode); ondertekenen/registreren: NIET GEVALIDEERD (account)."
-  ]
+  ],
+  "github_actions": {
+    "Clients / Forkregels": "run 42661728995 op 0af6eca: success — ruff geen meldingen, 166 passed en 2 skipped (byte-vergelijking met de contractbron, die op de runner niet naast de repo staat; de vaste SHA-256 is wel gecontroleerd), forkregels en app-identiteit in de bron in orde, actionlint geen meldingen",
+    "niet_getriggerd": "Android, Android TV en Swiftfin draaien alleen bij wijzigingen onder hun pad-filters; deze review wijzigde daar niets (laatste groene runs: 42656328113, 42656328296, 42656328216 op bdf0054)"
+  }
 }
