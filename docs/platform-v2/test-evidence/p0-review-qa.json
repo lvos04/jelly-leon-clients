@@ -1,0 +1,44 @@
+{
+  "id": "p0-review-qa",
+  "datum_utc": "2026-11-09",
+  "rol": "onafhankelijke review/QA van fase P0 (na de bouwer), zelfde bouwomgeving",
+  "validatie": "Sim-getest (fork-tooling en workflowregels) + Unit-getest (desktop Linux in container). Niets op een echt apparaat, niets op GitHub Actions, geen macOS/Xcode.",
+  "subtree_inhoud_tegen_upstream": {
+    "methode": "Per client de upstream-tag (en mpvqt-commit) opgehaald met git fetch --depth 1 in een lege bare repo; tree-hash van de upstream-commit vergeleken met de tree-hash van de squashcommit in deze repo en met HEAD:<map>.",
+    "resultaat": {
+      "android":   {"tag": "v2.7.3",   "commit": "9a5f9be6a76da47ca07733b982a12dbd0f75539b", "tree": "b13c64086c604e11050d894d292195ab88d3db2c", "squash_f4a1f0e3d": "gelijk", "HEAD:android": "gelijk"},
+      "androidtv": {"tag": "v0.19.10", "commit": "984181a3d6ab14e9a6d2dcc850c582e1c138bd95", "tree": "7ca4f4838f49c0aec9c74aff405149d8140aef1c", "squash_d633352e6": "gelijk", "HEAD:androidtv": "gelijk"},
+      "desktop":   {"tag": "v2.0.0",   "commit": "1634d3d263b881dccc62bf278d1289b471ec7af1", "tree": "13e7fbcca10a155915e5c83434cf85b9c421fda9", "squash_e6ef0fb4d": "gelijk", "HEAD:desktop": "wijkt alleen af in external/mpvqt (gitlink vervangen door de geneste subtree, JLC-0001)"},
+      "mpvqt":     {"bron": "https://github.com/KDE/mpvqt.git (officiële spiegel)", "commit": "2ebbd38bf65d01be9c55d673ecd43c8bb9a6fc8e", "tree": "7d1a4c1bcc95262daa35e60cfa010d544a57b953", "squash_b7cc2782c": "gelijk", "HEAD:desktop/external/mpvqt": "gelijk"},
+      "swiftfin":  {"tag": "1.6.1",    "commit": "5b794d2b7d4b54db89b041b8d6355461de7110db", "tree": "66547a91f4958bb44441a35484524e2c77b6db01", "squash_a42b2b9c1": "gelijk", "HEAD:swiftfin": "gelijk"}
+    },
+    "overig": "Enige gitlink in alle squash-trees: desktop external/mpvqt (2ebbd38). Geen .gitmodules in de root, geen Git LFS. upstream_sync.py status: alle vier actueel."
+  },
+  "gevonden_en_gerepareerd": [
+    "check_clients.py vertrouwde alleen de trailer git-subtree-split; een commit met de juiste trailer en andere inhoud werd als basis geaccepteerd (patch onzichtbaar). Nu: upstream_tree in de basislijn en tree-controle van elke squashcommit (test_squashcommit_met_kloppende_trailer_maar_andere_inhoud_faalt, test_geneste_squash_met_andere_inhoud_faalt).",
+    "check_clients.py --ref las basislijn en patchregister uit de werkboom; een niet-gecommitte registratie kon een afwijking in de commit goedpraten. Nu uit de commit zelf, met gemelde terugval op de werkboom (test_register_en_basislijn_komen_uit_de_gecontroleerde_commit).",
+    "Beschermde licentie-/creditbestanden werden alleen op wijziging gecontroleerd; verdween er een upstream, dan verviel de bescherming stil. Nu moet elk beschermd bestand bestaan (test_beschermd_bestand_dat_ontbreekt_faalt, test_sync_upstream_verwijdert_licentie_faalt_ex48).",
+    "upstream_sync.py draaide alleen bij SyncFailure/ToolError terug; een andere fout liet een halve syncbranch achter. Nu altijd terugdraaien (test_sync_onverwachte_fout_draait_alles_terug). Basislijn-tag buiten tagpatroon gaf een crash; nu unknown/fout.",
+    "Sync-workflow: het token stond tijdens de hele syncjob in de git-config (checkout zonder persist-credentials: false); nu alleen in de pushstap. Een netwerk-/rechtenfout bij git ls-remote leidde tot een pushpoging; nu alleen pushen bij aantoonbaar 'branch bestaat niet' (exitcode 2).",
+    "Builds van een syncbranch (nog niet beoordeelde upstream-code) draaiden in de cache-scope van de standaardbranch en konden de Gradle- en Carthage-cache vergiftigen; nu alleen-lezen (test_onbeoordeelde_upstream_code_schrijft_geen_cache)."
+  ],
+  "stappen": [
+    {"commando": ".venv/bin/ruff check --config tools/clients/ruff.toml tools/clients", "resultaat": "All checks passed (vóór en na de reparaties)"},
+    {"commando": ".venv/bin/python -m pytest -q tools/clients/tests (vóór de reparaties)", "resultaat": "39 passed"},
+    {"commando": ".venv/bin/python -m pytest -q tools/clients/tests (na de reparaties)", "resultaat": "92 passed: 48 tooling (nep-upstreams) + 44 workflowregels"},
+    {"commando": "mutatieproef: 7 bewuste fouten in kopieën van de workflows (persist-credentials weg, force-push, contents: write, actie op tag, secrets: inherit, schrijfbare Gradle-cache, gh release)", "resultaat": "alle 7 gevangen door tests/test_workflows.py; workflows daarna byte-gelijk hersteld"},
+    {"commando": "PATH=.venv/bin:$PATH actionlint -color .github/workflows/*.yml (shellcheck 0.11.0)", "resultaat": "geen meldingen (vóór en na)"},
+    {"commando": "python3 tools/clients/check_clients.py", "resultaat": "in orde; android 0, androidtv 0, desktop 1 (JLC-0001), swiftfin 0 afwijkingen"},
+    {"commando": "python3 tools/clients/check_clients.py --ref 600830428", "resultaat": "exit 1, 2 overtredingen (gitlink desktop/external/mpvqt, geneste squashcommit ontbreekt); meldt dat basislijn en register uit de werkboom komen omdat ze in die commit nog niet bestonden"},
+    {"commando": "git ls-remote op elke gepinde actie-SHA (checkout v7.0.1, setup-java v5.7.0, setup-python v7.1.0, upload-artifact v7.0.1, cache v6.1.0, gradle/actions v6.2.0)", "resultaat": "alle SHA's == de genoemde tag"},
+    {"commando": "docker buildx imagetools inspect docker.io/library/ubuntu:24.04", "resultaat": "digest sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 == base-digest in desktop.Dockerfile"},
+    {"commando": "docker build --network host --build-arg HTTPS_PROXY --secret id=ca_bundle,src=<ca> -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev desktop/ && OUT=<scratch> nice -n 10 tools/clients/bouwverificatie/desktop_bouw.sh", "resultaat": "geslaagd: bouwimage-lagen uit de BuildKit-cache van de eerdere poging (zelfde Dockerfile), compile vers in een lege uitvoermap: 62/62 stappen (MpvQt uit de vendored subtree), ctest 1/1 'test_systemcomponent' Passed; image en uitvoermap daarna verwijderd"},
+    {"commando": "verse clone (git clone --no-local) + upstream_sync.py sync desktop --tag v2.0.1 --upstream-url <lokale bare clone van jellyfin-desktop, master 3fa72e5 lokaal getagd>", "resultaat": "exit 0, branch sync/desktop-v2.0.1, upstream_tree 1425ec520ebb == tree van upstream master, mpvqt-pin ongewijzigd, check_clients.py in orde, pytest 92/92 op de syncbranch; niets gepusht, clone verwijderd"},
+    {"commando": "curl via de proxy naar dl.google.com, downloads.gradle.org, maven.google.com, repo.maven.apache.org, plugins.gradle.org", "resultaat": "dl.google.com en downloads.gradle.org: CONNECT 403 (geblokkeerd); de Maven-repositories wel bereikbaar. Android SDK en Gradle-distributie dus niet te krijgen: Android/Android TV blijven lokaal ongebouwd (blokkade bevestigd, niet omzeild)"}
+  ],
+  "niet_gedaan": [
+    "Geen enkele workflow op GitHub gedraaid (geen toegang vanuit deze omgeving; workflows alleen statisch en met tests gecontroleerd).",
+    "Android/Android TV niet gebouwd (blokkade), Swiftfin niet gebouwd (NIET GEVALIDEERD (Mac/Xcode)), desktop niet gestart of tegen een server getest.",
+    "Geen alles-in-één image, Custom App of OpenAPI: niet van toepassing op apparaat-apps (ADR-0008)."
+  ]
+}
