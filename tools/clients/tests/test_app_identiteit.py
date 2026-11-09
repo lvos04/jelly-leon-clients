@@ -2,6 +2,8 @@
 
 - `bron`: op de echte repo (moet in orde zijn) en op kopieën met precies de fouten die naast de officiële app botsen
   (geen eigen ID, `resValue` uit `namespace`, officiële sharedpref-namen, alleen de xcconfig gewijzigd).
+- Minimale patch: elk patchbestand wijkt t.o.v. de upstream-basis (subtree-squashcommit) precies zoveel regels af als
+  vastgelegd, en alleen in regels over de app-identiteit.
 - `apk`/`bouwmap`: met een nep-aapt2 die uitvoer in het echte aapt2-formaat (build-tools 36.0.0, gemeten op de lokaal
   gebouwde APK's) teruggeeft — Sim-getest. De echte aapt2-controle draait in de Android-workflows en lokaal
   (zie test-evidence/contract-1.2-app-identiteit.json).
@@ -9,16 +11,19 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import plistlib
+import re
 import shutil
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
 import app_identiteit as ai
 import pytest
-from clients_common import DEFAULT_REPO_ROOT, ToolError
+from clients_common import DEFAULT_REPO_ROOT, ToolError, find_squash_commit
 
 ROOT = Path(DEFAULT_REPO_ROOT)
 NS = "http://schemas.android.com/apk/res/android"
@@ -136,6 +141,62 @@ def test_configuratie_met_officiele_id_faalt(tmp_path):
     cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
     violations = ai.check_bron(repo)
     assert any("officiële ID" in v or "gelijk aan de namespace" in v for v in violations), violations
+
+
+# Minimale patch: per bestand precies zoveel regels als nu (toegevoegd, verwijderd) t.o.v. de upstream-basis (de jongste
+# subtree-squashcommit), en elke gewijzigde regel gaat over de app-identiteit. Groeit een patch, dan is dat een bewuste
+# keuze die ook hier, in PATCHES.md en in de review zichtbaar wordt; kleine patches blijven bij een upstream-sync los
+# te herbasen (ADR-0002/0003).
+PATCH_OMVANG = {
+    "android/app/build.gradle.kts": (2, 0),  # JLC-0002: commentaar + applicationId
+    "android/app/src/main/res/xml/backup_content.xml": (2, 2),  # JLC-0002: twee sharedpref-namen
+    "androidtv/app/build.gradle.kts": (8, 7),  # JLC-0003: applicationId + 2× drie resValue's
+    "androidtv/app/src/main/res/xml/backup_content.xml": (2, 2),  # JLC-0003
+    "androidtv/app/src/main/res/xml/backup_rules.xml": (4, 4),  # JLC-0003
+    "swiftfin/Swiftfin.xcodeproj/project.pbxproj": (1, 1),  # JLC-0004: doelinstelling iOS-Release
+    "swiftfin/XcodeConfig/Shared.xcconfig": (2, 1),  # JLC-0004: commentaar + bundle-id
+}
+IDENTITEITSREGEL_RE = re.compile(r"jellyleon|applicationId|\"app_id\"|app_search_suggest_|_preferences\"|"
+                                 r"PRODUCT_BUNDLE_IDENTIFIER|Jelly Leon \(JLC-000[234]\)")
+
+
+def upstream_basis(rel: str) -> list[str]:
+    prefix, _, binnen = rel.partition("/")
+    gevonden = find_squash_commit(ROOT, prefix)
+    assert gevonden, f"geen subtree-squashcommit voor {prefix}/ (volledige historie nodig, zoals CI fetch-depth 0)"
+    proc = subprocess.run(["git", "-C", str(ROOT), "show", f"{gevonden[0]}:{binnen}"], capture_output=True,
+                          text=True, check=True)
+    return proc.stdout.splitlines()
+
+
+def test_patch_bestanden_volgen_de_configuratie():
+    cfg = ai.load_config(ROOT)
+    verwacht = {cfg["swiftfin"]["xcconfig"], cfg["swiftfin"]["pbxproj"]}
+    for key in ai.ANDROID_CLIENTS:
+        verwacht |= {cfg[key]["gradle"], *cfg[key]["backup_xml"]}
+    assert set(PATCH_OMVANG) == verwacht
+
+
+@pytest.mark.parametrize("rel", sorted(PATCH_OMVANG))
+def test_patch_is_minimaal_en_raakt_alleen_de_app_identiteit(rel):
+    basis = upstream_basis(rel)
+    nu = (ROOT / rel).read_text(encoding="utf-8").splitlines()
+    diff = list(difflib.unified_diff(basis, nu, lineterm="", n=0))
+    plus = [regel[1:] for regel in diff if regel.startswith("+") and not regel.startswith("+++")]
+    min_ = [regel[1:] for regel in diff if regel.startswith("-") and not regel.startswith("---")]
+    assert (len(plus), len(min_)) == PATCH_OMVANG[rel], f"{rel}: patch-omvang veranderd:\n" + "\n".join(diff)
+    vreemd = [regel for regel in plus + min_ if regel.strip() and not IDENTITEITSREGEL_RE.search(regel)]
+    assert not vreemd, f"{rel}: wijziging buiten de app-identiteit: {vreemd}"
+
+
+def test_minimaliteitstoets_vangt_een_wijziging_buiten_de_identiteit(tmp_path):
+    """Tegenproef op de regelcontrole: een extra (niet-identiteits)regel in een patchbestand valt op."""
+    basis = upstream_basis("android/app/build.gradle.kts")
+    nu = (ROOT / "android/app/build.gradle.kts").read_text(encoding="utf-8").splitlines()
+    nu.insert(nu.index("    defaultConfig {") + 1, "        minSdk = 26")
+    diff = difflib.unified_diff(basis, nu, lineterm="", n=0)
+    plus = [r[1:] for r in diff if r.startswith("+") and not r.startswith("+++")]
+    assert [r for r in plus if not IDENTITEITSREGEL_RE.search(r)] == ["        minSdk = 26"]
 
 
 def test_cli_bron_exitcodes(tmp_path, capsys):
