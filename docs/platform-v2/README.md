@@ -17,6 +17,28 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
   of `JLC_CONTRACT_BRON=<map>` ook een byte-vergelijking met de actuele bron). Relatieve links in de kopie (bv. naar
   `docs/adr/ADR-0011-contract-1-2.md`) wijzen naar bestanden in ai-server-manager.
 
+## B03 2.0 — universele mediaserver (goedgekeurd door de gebruiker op 2026-11-09)
+
+- `02_BOUWPLANNEN/B03_UNIVERSELE_MEDIASERVER.md` (versie 2.0), `02_BOUWPLANNEN/B03_FASERING.md` en
+  `02_BOUWPLANNEN/B03_BESLUITEN.md` zijn byte-gelijke kopieën uit `lvos04/ai-server-manager` (bron-commit `0f390bf`),
+  net als `00_START/INHOUDSOPGAVE.md`. Nooit hier bewerken: een nieuwe stand overnemen = opnieuw byte-gelijk kopiëren.
+- **HARDE EIS van de gebruiker:** alle kijkgeschiedenis (gezien-status, hervatpunten, favorieten, beoordelingen, onthouden
+  spoorkeuzes, gebruikers, rechten) en de MediaGuard-voortgang blijven altijd beschikbaar (bouwplan §10.9 en B03-015). Geen
+  cutover zonder vóór/na-rapport per gebruiker en uitdrukkelijk akkoord van de gebruiker op elk verschil; de bestaande
+  installatie blijft ongewijzigd als terugval.
+- **Huidige mediaserver: Emby.** De overname vanuit Emby (B03-015, JLT-70…74) heeft prioriteit P0 en begint al in golf 0.
+  Voor de clients telt: na de overname loggen gebruikers in met een nieuw wachtwoord of SSO (wachtwoorden zijn niet over te
+  zetten) en hervatten ze op het juiste punt (JLT-70 met stock-web en de Android-emulator; JLT-74 op de echte NAS,
+  *Geblokkeerd*). Emby blijft ongewijzigd draaien tot de gebruiker na de controlelijst "Emby verwijderen" (bouwplan §10.9.2)
+  zelf besluit.
+- Besluiten van het bouwplan die de clients raken staan in jelly-leon (ADR-0015…0024); de verwijzingen staan in
+  [`../adr/README.md`](../adr/README.md). Een kaal ADR-nummer in de kopieën is een ADR van jelly-leon of ai-server-manager,
+  niet van deze repo.
+- `EXCEL_TAKEN.json` bevat de volledige B03-set: B03-001…079 (de uitgebreide rijen B03-004/005/007/009/010/013 vervangen
+  de oude rijen; de oude tekst staat er letterlijk vooraan in) en de testrijen JLT-01…74 (conventie van ai-server-manager:
+  Fase `P6 - E2E`, Soort `Testen`, startstatus en bewijsrijen in `Afhankelijkheid`). Nooit `Gereed` of `Geslaagd`. Deze repo
+  voert er 15 uit (o.a. B03-016 clientmatrix, B03-019 compat-regressie, B03-026 volgmodus, B03-068, B03-077 clients).
+
 ## Bestanden
 
 - `00_START/BESLUITEN_EN_ONBEKENDEN.md`
@@ -32,7 +54,9 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `01_ARCHITECTUUR/06_FASERING_EN_GATES.md`
 - `01_ARCHITECTUUR/07_API_EN_EVENTSCHEMA.md`
 - `01_ARCHITECTUUR/08_UI_EN_INTERACTIES.md`
-- `02_BOUWPLANNEN/B03_UNIVERSELE_MEDIASERVER.md`
+- `02_BOUWPLANNEN/B03_UNIVERSELE_MEDIASERVER.md` (versie 2.0, kopie)
+- `02_BOUWPLANNEN/B03_FASERING.md` (kopie)
+- `02_BOUWPLANNEN/B03_BESLUITEN.md` (kopie)
 - `03_INSTALLATIE/I24_UNIVERSELE_MEDIASERVER.md`
 - `04_BESTAANDE_APPS/A17_JELLYFIN.md`
 - `05_TESTS/GEBRUIKERSWENSEN_TRACEERBAARHEID.md`
@@ -47,4 +71,4 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `BOUWVERIFICATIE_P0.md` en `test-evidence/` — wat echt gebouwd/getest is en wat geblokkeerd was
 - `EVIDENCE.json` — status per Excel-taak (contract §11)
 - `test-evidence/contract-1.2-app-identiteit.json` — lokale builds en `aapt2`-metingen van de eigen app-identiteit
-- Besluiten: `../adr/ADR-0001…0010` (ADR-0010: contract 1.2 in deze repo)
+- Besluiten: `../adr/ADR-0001…0010` (ADR-0010: contract 1.2 in deze repo); B03 2.0-besluiten van jelly-leon die de clients raken: `../adr/README.md`
