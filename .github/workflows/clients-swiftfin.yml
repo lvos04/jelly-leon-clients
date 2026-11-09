@@ -5,6 +5,9 @@
 # Lokaal niet uit te voeren (geen macOS/Xcode): NIET GEVALIDEERD (Mac/Xcode). Op een GitHub-macOS-runner is deze
 # workflow groen (zie EVIDENCE.json); dat is alleen een simulatorbuild zonder signing: de app wordt niet gestart of
 # getest. Een echte acceptatie vraagt een iPhone/iPad/Apple TV (D15).
+# Na de build leest xcodebuild de echte build-instellingen (Debug en Release) en controleert
+# tools/clients/app_identiteit.py dat elk app-doel de eigen bundle-id heeft (JLC-0004), ook in de Info.plist van
+# de gebouwde simulator-app. Ondertekenen en installeren blijven NIET GEVALIDEERD (Mac/Xcode, account).
 # Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
 name: Clients / Swiftfin
 
@@ -13,10 +16,12 @@ on:
     paths:
       - "swiftfin/**"
       - ".github/workflows/clients-swiftfin.yml"
+      - "tools/clients/app_identiteit.*"
   pull_request:
     paths:
       - "swiftfin/**"
       - ".github/workflows/clients-swiftfin.yml"
+      - "tools/clients/app_identiteit.*"
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -90,3 +95,18 @@ jobs:
             -skipMacroValidation -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             | tee "$RUNNER_TEMP/xcodebuild.log"
+      - name: Eigen bundle-id controleren (Debug en Release, JLC-0004)
+        run: |
+          set -o pipefail
+          for configuratie in Debug Release; do
+            xcodebuild -showBuildSettings -json \
+              -project Swiftfin.xcodeproj \
+              -scheme "$SCHEMA" \
+              -configuration "$configuratie" \
+              -destination "$BESTEMMING" \
+              -skipMacroValidation -skipPackagePluginValidation \
+              > "$RUNNER_TEMP/instellingen-$configuratie.json"
+          done
+          python3 ../tools/clients/app_identiteit.py xcode --plist \
+            --instellingen "$RUNNER_TEMP/instellingen-Debug.json" \
+            --instellingen "$RUNNER_TEMP/instellingen-Release.json"

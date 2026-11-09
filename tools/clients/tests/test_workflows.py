@@ -176,3 +176,41 @@ def test_upstream_sync_roept_ci_aan_zonder_rechten_of_geheimen():
             assert job.get("if") == f"needs.sync-{client}.outputs.branch != ''"
             assert "permissions" not in job and "secrets" not in job
             assert job["with"]["ref"] == f"${{{{ needs.sync-{client}.outputs.branch }}}}"
+
+
+APP_ID_CHECKS = {
+    "clients-android.yml": ("bouwmap android app/build --verwacht debug,release",
+                            ["processLibreReleaseResources", "processProprietaryReleaseResources"]),
+    "clients-androidtv.yml": ("bouwmap androidtv app/build --verwacht debug,release", ["processReleaseResources"]),
+}
+
+
+@pytest.mark.parametrize("name", sorted(APP_ID_CHECKS))
+def test_android_ci_controleert_de_eigen_app_identiteit_met_aapt2(name):
+    """JLC-0002/0003: elke Android-run bewijst met aapt2 pakketnaam/app_id/authorities voor debug én release."""
+    data = load(WORKFLOW_DIR / name)
+    runs = [str(s.get("run") or "") for _j, _job, s in steps(data)]
+    aanroep, taken = APP_ID_CHECKS[name]
+    gradle = [i for i, r in enumerate(runs) if "./gradlew" in r]
+    check = [i for i, r in enumerate(runs) if "app_identiteit.py" in r]
+    assert len(gradle) == 1 and len(check) == 1 and check[0] > gradle[0], name
+    assert all(t in runs[gradle[0]] for t in taken), f"{name}: release-resources worden niet gelinkt"
+    assert aanroep in runs[check[0]], name
+    for trigger in ("push", "pull_request"):
+        assert "tools/clients/app_identiteit.*" in triggers(data)[trigger]["paths"], (name, trigger)
+
+
+def test_forkregels_controleert_de_app_identiteit_in_de_bron():
+    runs = [str(s.get("run") or "") for _j, _job, s in steps(load(WORKFLOW_DIR / "clients-forkregels.yml"))]
+    assert any("tools/clients/app_identiteit.py bron" in r for r in runs)
+
+
+def test_swiftfin_ci_controleert_de_bundle_id_in_debug_en_release():
+    data = load(WORKFLOW_DIR / "clients-swiftfin.yml")
+    runs = [str(s.get("run") or "") for _j, _job, s in steps(data)]
+    check = [r for r in runs if "app_identiteit.py xcode" in r]
+    assert len(check) == 1
+    assert "--plist" in check[0] and "-showBuildSettings -json" in check[0]
+    assert "for configuratie in Debug Release" in check[0]
+    assert "instellingen-Debug.json" in check[0] and "instellingen-Release.json" in check[0]
+    assert runs.index(check[0]) > next(i for i, r in enumerate(runs) if "xcodebuild build" in r)

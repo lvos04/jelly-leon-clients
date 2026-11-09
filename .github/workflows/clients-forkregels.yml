@@ -48,5 +48,7 @@ jobs:
         run: python -m pytest -q tools/clients/tests
       - name: Forkregels op deze ref
         run: python tools/clients/check_clients.py
+      - name: Eigen app-identiteit in de bron (JLC-0002/0003/0004)
+        run: python tools/clients/app_identiteit.py bron
       - name: actionlint (alleen de fork-eigen workflows in de root)
         run: actionlint -color .github/workflows/*.yml

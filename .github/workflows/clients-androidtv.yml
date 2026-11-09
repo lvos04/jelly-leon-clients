@@ -1,5 +1,7 @@
 # Jelly Leon clients — CI voor androidtv/ (fork van jellyfin-androidtv, zie tools/clients/baseline.json).
 # Bouwt de debug-APK en draait de unit tests, zoals upstream app-build/app-test (JDK 21, gradle-toolchain 21).
+# Daarna controleert aapt2 de eigen app-identiteit (JLC-0003, ADR-0004): pakketnaam, app_id (accounttype) en
+# zoek-authority in de debug-APK en in de gelinkte release-resources (geen release-APK, geen ondertekening).
 # Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
 name: Clients / Android TV
 
@@ -8,10 +10,12 @@ on:
     paths:
       - "androidtv/**"
       - ".github/workflows/clients-androidtv.yml"
+      - "tools/clients/app_identiteit.*"
   pull_request:
     paths:
       - "androidtv/**"
       - ".github/workflows/clients-androidtv.yml"
+      - "tools/clients/app_identiteit.*"
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -55,8 +59,10 @@ jobs:
           # Een syncbranch bevat nog niet beoordeelde upstream-code; die draait hier in de scope van de
           # aanroepende branch en mag daar geen cache vergiftigen.
           cache-read-only: ${{ inputs.ref != '' || github.ref_name != github.event.repository.default_branch }}
-      - name: Debug-APK bouwen en unit tests draaien
-        run: ./gradlew --no-daemon --max-workers=2 assembleDebug test
+      - name: Debug-APK bouwen, unit tests draaien en release-resources linken
+        run: ./gradlew --no-daemon --max-workers=2 assembleDebug test processReleaseResources
+      - name: Eigen app-identiteit controleren met aapt2 (JLC-0003)
+        run: python3 ../tools/clients/app_identiteit.py bouwmap androidtv app/build --verwacht debug,release
       - name: APK's verzamelen
         run: |
           mkdir -p build/jlc-artefacten

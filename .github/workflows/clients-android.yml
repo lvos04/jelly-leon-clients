@@ -1,5 +1,7 @@
 # Jelly Leon clients — CI voor android/ (fork van jellyfin-android, zie tools/clients/baseline.json).
 # Bouwt de debug-APK's (libre + proprietary) en draait de unit tests, zoals upstream app-build/app-test.
+# Daarna controleert aapt2 de eigen app-identiteit (JLC-0002, ADR-0004) in de debug-APK's en in de gelinkte
+# release-resources (process*ReleaseResources: manifest + resources, geen release-APK en geen ondertekening).
 # Upstream-workflows in android/.github/ voert GitHub niet uit (alleen de root telt, ADR-0006).
 # Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
 name: Clients / Android
@@ -9,10 +11,12 @@ on:
     paths:
       - "android/**"
       - ".github/workflows/clients-android.yml"
+      - "tools/clients/app_identiteit.*"
   pull_request:
     paths:
       - "android/**"
       - ".github/workflows/clients-android.yml"
+      - "tools/clients/app_identiteit.*"
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -56,8 +60,12 @@ jobs:
           # Een syncbranch bevat nog niet beoordeelde upstream-code; die draait hier in de scope van de
           # aanroepende branch en mag daar geen cache vergiftigen.
           cache-read-only: ${{ inputs.ref != '' || github.ref_name != github.event.repository.default_branch }}
-      - name: Debug-APK's bouwen en unit tests draaien
-        run: ./gradlew --no-daemon --max-workers=2 assembleDebug test
+      - name: Debug-APK's bouwen, unit tests draaien en release-resources linken
+        run: >-
+          ./gradlew --no-daemon --max-workers=2 assembleDebug test
+          processLibreReleaseResources processProprietaryReleaseResources
+      - name: Eigen app-identiteit controleren met aapt2 (JLC-0002)
+        run: python3 ../tools/clients/app_identiteit.py bouwmap android app/build --verwacht debug,release
       - name: APK's verzamelen
         run: |
           mkdir -p build/jlc-artefacten
