@@ -1,0 +1,41 @@
+{
+  "id": "p0-desktop-container-build",
+  "datum_utc": "2026-11-09",
+  "client": "desktop (jellyfin-desktop v2.0.0, forkversie 2.0.0-jl.0)",
+  "validatie": "Lokaal gebouwd en unit-getest in container (Linux). Niet gestart met een scherm, niet tegen een server, niet op Windows/macOS.",
+  "omgeving": {
+    "image": "jelly-leon-clients/desktop-bouw:dev uit tools/clients/bouwverificatie/desktop.Dockerfile",
+    "base_image": "docker.io/library/ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852",
+    "afhankelijkheden": "mk-build-deps uit desktop/debian/control (zonder recommends)",
+    "versies": {
+      "gcc": "13.3.0",
+      "cmake": "3.28.3-1build7",
+      "ninja": "1.11.1-2",
+      "qt6-base-dev": "6.4.2+dfsg-21.1build5",
+      "qt6-webengine-dev": "6.4.2-final+dfsg-12ubuntu9",
+      "qt6-declarative-dev": "6.4.2+dfsg-4build3",
+      "libmpv-dev": "0.37.0-1ubuntu4",
+      "mpvqt": "vendored subtree desktop/external/mpvqt @ 2ebbd38bf65d01be9c55d673ecd43c8bb9a6fc8e (JLC-0001)"
+    },
+    "beperkingen_run": "--network none --cpus 2 --memory 6g --cap-drop ALL --security-opt no-new-privileges, uid 568, bron read-only"
+  },
+  "stappen": [
+    {
+      "commando": "docker build --network host --build-arg HTTPS_PROXY --secret id=ca_bundle,src=<ca> -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev desktop/",
+      "resultaat": "geslaagd (eerste poging faalde: apt-gebruiker _apt kon de CA-secret niet lezen; opgelost met tijdelijke leesbare kopie binnen dezelfde RUN)"
+    },
+    {
+      "commando": "nice -n 10 tools/clients/bouwverificatie/desktop_bouw.sh  (cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DUSE_STATIC_MPVQT=ON; cmake --build -j 2; ctest --output-on-failure)",
+      "resultaat": "geslaagd: 62/62 bouwstappen, 0 compilerwaarschuwingen in de log, binary src/jellyfin-desktop (22 880 216 bytes); ctest 1/1 geslaagd (test_systemcomponent)"
+    },
+    {
+      "commando": "cmake -S /src -B /tmp/b -G Ninja -DCMAKE_BUILD_TYPE=Debug   (zonder -DUSE_STATIC_MPVQT=ON, zoals upstream .github/workflows/test.yml)",
+      "resultaat": "faalt zoals verwacht: find_package(MpvQt) vindt geen MpvQtConfig.cmake (debian/control noemt geen libmpvqt-dev). Bevestigt dat JLC-0001 + -DUSE_STATIC_MPVQT=ON nodig zijn."
+    }
+  ],
+  "niet_gedaan": [
+    "Applicatie starten (geen display) en inloggen/afspelen tegen een Jellyfin/Jelly Leon-server: NIET GEVALIDEERD (hardware).",
+    "Windows- en macOS-builds: niet in deze bouwomgeving; CI-workflow bouwt alleen Linux.",
+    "Debian-pakket (dpkg-buildpackage) en Flatpak: niet geprobeerd."
+  ]
+}

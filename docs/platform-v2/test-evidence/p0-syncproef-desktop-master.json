@@ -1,0 +1,18 @@
+{
+  "id": "p0-syncproef-desktop-master",
+  "datum_utc": "2026-11-09",
+  "doel": "upstream_sync.py op echte upstream-code: desktop v2.0.0 → jellyfin-desktop master (214 commits verder), inclusief de geneste subtree external/mpvqt.",
+  "opzet": "Lokale bare clone van https://github.com/jellyfin/jellyfin-desktop.git; master 3fa72e5df57ab52c907b65bb42f2a05b7ae25cd6 lokaal getagd als 'v2.0.1' (proeftag, bestaat niet upstream). Verse clone van jelly-leon-clients met git clone --no-local (zoals CI: de vorige upstream-commit 1634d3d ontbreekt). Niets gepusht; wegwerpclone daarna verwijderd.",
+  "commando": "python3 tools/clients/upstream_sync.py sync desktop --tag v2.0.1 --upstream-url <lokale clone> --json",
+  "resultaat": {
+    "exitcode": 0,
+    "branch": "sync/desktop-v2.0.1",
+    "commits": ["Squashed 'desktop/' changes from 1634d3d26..3fa72e5df", "Upstream-sync: desktop v2.0.0 → v2.0.1 (git subtree, squash)", "Upstream-sync: basislijn desktop → v2.0.1"],
+    "geneste_updates": [],
+    "opgeloste_gitlinkconflicten": [],
+    "mpvqt_pin": "ongewijzigd 2ebbd38bf65d01be9c55d673ecd43c8bb9a6fc8e (v2.0.0 en master)",
+    "check_clients_na_sync": "in orde"
+  },
+  "aanvullend": "Upstream-hoofdbranches op 2026-11-09 (git fetch --depth 1 HEAD): jellyfin-android afebde643faf, jellyfin-androidtv aa2497811b97, Swiftfin 2ff622d0a7cd — geen gitlinks, geen .gitmodules. Nieuwste stabiele tags = basislijn voor alle vier clients (upstream_sync.py status: actueel).",
+  "niet_gedaan": "De gesynchroniseerde desktop-code niet gebouwd; gewijzigde mpvqt-pin en conflicten alleen met nep-upstreams getest (tools/clients/tests/test_upstream_sync.py)."
+}

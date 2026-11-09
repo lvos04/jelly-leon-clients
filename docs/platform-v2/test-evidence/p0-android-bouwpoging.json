@@ -1,0 +1,23 @@
+{
+  "id": "p0-android-bouwpoging",
+  "datum_utc": "2026-11-09",
+  "clients": ["android (jellyfin-android v2.7.3)", "androidtv (jellyfin-androidtv v0.19.10)"],
+  "resultaat": "GEBLOKKEERD in deze bouwomgeving — niet gebouwd, niet getest.",
+  "stappen": [
+    {
+      "commando": "curl -sS -o /dev/null https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip (en repository2-3.xml)",
+      "resultaat": "CONNECT tunnel failed, response 403; proxystatus: dl.google.com:443 connect_rejected (policy denial). Android SDK command-line tools, platforms;android-36 en build-tools zijn dus niet te installeren."
+    },
+    {
+      "commando": "curl -sS https://services.gradle.org/distributions/gradle-9.6.1-wrapper.jar.sha256",
+      "resultaat": "301 naar https://downloads.gradle.org/…; downloads.gradle.org:443 connect_rejected (403). De Gradle-wrapper kan de distributies 9.6.1 (android) en 9.1.0 (androidtv) niet downloaden; lokaal is alleen Gradle 8.14.3 aanwezig, wat niet past bij AGP 9.3.1 (android)."
+    },
+    {
+      "commando": "sha256sum android/gradle/wrapper/gradle-wrapper.jar androidtv/gradle/wrapper/gradle-wrapper.jar",
+      "resultaat": "android 497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7; androidtv 76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3. Vergelijking met gradle.org niet mogelijk (zelfde blokkade); in CI doet gradle/actions/wrapper-validation dat."
+    }
+  ],
+  "bereikbaar": ["maven.google.com (200)", "repo.maven.apache.org / repo1.maven.org (200)", "plugins.gradle.org (200)", "services.gradle.org (alleen de 301)"],
+  "niet_bereikbaar": ["dl.google.com (Android SDK)", "downloads.gradle.org (Gradle-distributies)", "s01.oss.sonatype.org (alleen SDK-snapshots; niet nodig bij sdk.version=default)"],
+  "gevolg": "Android-builds worden alleen in GitHub Actions (clients-android.yml, clients-androidtv.yml) uitgevoerd; tot een groene run daar: NIET GEVALIDEERD. Niet omzeild via andere bronnen (proxybeleid)."
+}
