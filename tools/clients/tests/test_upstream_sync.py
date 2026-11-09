@@ -279,3 +279,51 @@ def test_status_basislijn_tag_buiten_patroon_is_unknown(simple_setup):
     assert rows[0]["oordeel"] == "unknown" and "basislijn-tag" in rows[0]["reden"]
     with pytest.raises(ToolError, match="basislijn-tag"):
         upstream_sync.sync(fork.path, "app", tag=None)
+
+
+# ------------------------------------------------------------- review P0-afronding: foutpaden midden in de sync
+
+
+def test_sync_geneste_bron_onbereikbaar_draait_ook_opgelost_gitlinkconflict_terug(nested_setup, tmp_path):
+    """Nieuwe pin, maar de bron van de geneste subtree is onbereikbaar: er staat dan al een mergecommit (opgelost
+    gitlink-conflict) op de syncbranch. Ook die moet volledig verdwijnen (EX48: niets half achterlaten)."""
+    up, _dep, fork, _n1, n2 = nested_setup
+    head_before = _register_vendoring(fork)
+    up.commit({"main.cpp": "int main(){return 2;}\n"}, "v2", tag="v2.0.0", gitlinks={"external/dep": n2})
+
+    with pytest.raises(upstream_sync.SyncFailure, match="ophalen van .* faalde"):
+        upstream_sync.sync(fork.path, "desk", nested_url_overrides={"external/dep": str(tmp_path / "weg")})
+    assert_unchanged(fork, head_before)
+    assert (fork.path / "desk/external/dep/dep.txt").read_text() == "dep 1\n"
+    assert baseline(fork)["clients"]["desk"]["upstream_tag"] == "v1.0.0"
+
+
+def test_sync_ophalen_van_de_tag_faalt_laat_niets_achter(simple_setup, monkeypatch):
+    """ls-remote lukt, het ophalen daarna niet (netwerk weg): geen branch, geen tijdelijke ref, exitcode 2."""
+    up, fork = simple_setup
+    head_before = fork.head()
+    up.commit({"README.md": "1.1\n"}, "v1.1", tag="v1.1.0")
+
+    def fetch_faalt(_repo, url, *refs):
+        raise upstream_sync.SyncFailure(f"ophalen van {', '.join(refs)} uit {url} faalde: verbinding verbroken")
+
+    monkeypatch.setattr(upstream_sync, "_fetch", fetch_faalt)
+    assert upstream_sync.main(["--repo-root", str(fork.path), "sync", "app"]) == 2
+    assert_unchanged(fork, head_before)
+
+
+def test_status_time_out_van_ls_remote_is_unknown_nooit_actueel(simple_setup, monkeypatch):
+    _up, fork = simple_setup
+    echte_run = upstream_sync.subprocess.run
+
+    def run(cmd, *args, **kwargs):
+        if cmd[:2] == ["git", "ls-remote"]:
+            raise upstream_sync.subprocess.TimeoutExpired(cmd, upstream_sync.LS_REMOTE_TIMEOUT_S)
+        return echte_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(upstream_sync.subprocess, "run", run)
+    rows = upstream_sync.status(fork.path)
+    assert rows[0]["oordeel"] == "unknown"
+    assert rows[0]["nieuwste_tag"] is None
+    with pytest.raises(ToolError, match="niet bereikbaar"):
+        upstream_sync.sync(fork.path, "app")
