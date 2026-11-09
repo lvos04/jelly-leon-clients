@@ -1,6 +1,6 @@
 """Veiligheidsregels voor de fork-eigen workflows (ADR-0002, ADR-0006): statisch, op de echte bestanden.
 
-Deze tests bewijzen niets over een echte run op GitHub (die heeft nog niet plaatsgevonden); ze bewaken wel dat de
+Deze tests bewijzen niets over een echte run op GitHub (die runs staan apart in EVIDENCE.json); ze bewaken wel dat de
 workflows nooit stilletjes gaan publiceren, samenvoegen, force-pushen, geheimen gebruiken of onbeoordeelde
 upstream-code met schrijfrechten of schrijfbare caches laten draaien.
 """
