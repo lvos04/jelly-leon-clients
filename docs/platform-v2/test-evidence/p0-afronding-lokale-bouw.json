@@ -1,0 +1,75 @@
+{
+  "id": "p0-afronding-lokale-bouw",
+  "datum": "2026-11-09",
+  "repo_commit_gebouwd": "f9daf172949af19e24acd403f5fbd60bf98475e0",
+  "omgeving": {
+    "machine": "eigen Ubuntu-machine van de gebruiker (Ubuntu 26.04.1 LTS, kernel 7.0.0-42), 22 CPU's, 14,5 GiB RAM, gedeeld met andere bouwers; geen proxy, geen eigen CA",
+    "jdk": "OpenJDK 21.0.12.1 (Ubuntu)",
+    "android_sdk": "~/android-sdk via ANDROID_HOME: platforms;android-36 (rev 2), build-tools;36.0.0, platform-tools 37.0.1; tijdens de builds niets extra geïnstalleerd",
+    "docker": "Docker Engine 29.1.3, buildx 0.30.1",
+    "beperkingen": "Gradle onder flock .lokaal/gradle.lock met --max-workers=4 en -Dorg.gradle.jvmargs=-Xmx2g, nice -n 10; image-build en compile onder flock .lokaal/docker-build.lock; één zware build tegelijk"
+  },
+  "voorcontrole_gradle_wrapper": {
+    "commando": "sha256sum <client>/gradle/wrapper/gradle-wrapper.jar; curl https://services.gradle.org/distributions/gradle-<v>-wrapper.jar.sha256 en gradle-<v>-bin.zip.sha256",
+    "android": {"gradle": "9.6.1", "wrapper_jar_sha256": "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7", "gelijk_aan_gradle_org": true, "distributionSha256Sum_gelijk_aan_gradle_org": true},
+    "androidtv": {"gradle": "9.1.0", "wrapper_jar_sha256": "76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3", "gelijk_aan_gradle_org": true, "distributionSha256Sum_gelijk_aan_gradle_org": true}
+  },
+  "android": {
+    "client": "android (jellyfin-android v2.7.3, forkversie 2.7.3-jl.0)",
+    "commando": "cd android && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock /home/transcode/truenas-v2/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test",
+    "resultaat": "BUILD SUCCESSFUL in 3m 3s, 97 taken, exitcode 0 (Gradle 9.6.1 gedownload van services.gradle.org, checksum door de wrapper gecontroleerd)",
+    "unit_tests": "testLibreDebugUnitTest en testProprietaryDebugUnitTest: NO-SOURCE — upstream v2.7.3 heeft geen unit-tests; er is dus niets getest behalve compileren en verpakken",
+    "artefacten": [
+      {"apk": "app/build/outputs/apk/libre/debug/jellyfin-android-v0.0.0-dev.1-libre-debug.apk", "bytes": 34520830, "sha256": "d84fe1391c16e913f3521cb8998a5635ab2f85ccb8c03b27936d7b93485232b5"},
+      {"apk": "app/build/outputs/apk/proprietary/debug/jellyfin-android-v0.0.0-dev.1-proprietary-debug.apk", "bytes": 35985144, "sha256": "1370359c9accb4d6e559b51f134d4f3e11a3784c1fa248002dcf67e5c85d1f14"}
+    ],
+    "aapt2_dump_badging": "package org.jellyfin.mobile.debug, versionName 0.0.0-dev.1 (geen JELLYFIN_VERSION gezet), minSdk 21, targetSdk 36, label 'Jellyfin Debug'; authorities org.jellyfin.mobile.debug.image-provider en org.jellyfin.mobile.debug.androidx-startup",
+    "opmerkingen": "Alleen Kotlin-compilerwaarschuwingen uit upstream-code (deprecations, nullable receivers); geen wijziging aan de client."
+  },
+  "androidtv": {
+    "client": "androidtv (jellyfin-androidtv v0.19.10, forkversie 0.19.10-jl.0)",
+    "commando": "cd androidtv && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock /home/transcode/truenas-v2/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test",
+    "resultaat": "BUILD SUCCESSFUL in 2m 48s, 317 taken, exitcode 0 (Gradle 9.1.0, AGP 8.11.1)",
+    "unit_tests": {
+      "bron": "JUnit-XML in */build/test-results/",
+      "app:testDebugUnitTest": "13/13 geslaagd (VideoSpeedControllerTests 8, CustomSeekProviderTests 3, TimeUtilsTests 2)",
+      "app:testReleaseUnitTest": "13/13 geslaagd",
+      "preference:testDebugUnitTest": "2/2 geslaagd (PreferenceStoreTests)",
+      "preference:testReleaseUnitTest": "2/2 geslaagd",
+      "playback-modules": "NO-SOURCE (geen tests upstream)",
+      "totaal": "15 testgevallen per variant, 30 uitvoeringen, 0 fouten, 0 overgeslagen"
+    },
+    "artefacten": [
+      {"apk": "app/build/outputs/apk/debug/jellyfin-androidtv-v0.0.0-dev.1-debug.apk", "bytes": 28386552, "sha256": "79e2e02ff9dd21ad3fcf44745f215b5b4078c7aba4a70a50f244355c3b9b3670"}
+    ],
+    "aapt2_dump": "package org.jellyfin.androidtv.debug, label 'Jellyfin Debug', leanback-launchable StartupActivity; string/app_id = org.jellyfin.androidtv.debug, app_search_suggest_authority = org.jellyfin.androidtv.debug.content, app_search_suggest_intent_data = content://org.jellyfin.androidtv.debug.content/intent (consistent met de pakketnaam; basis voor het patchplan in ADR-0004)",
+    "opmerkingen": "Melding 'SDK XML version 4' van AGP 8.11.1 tegen nieuwere SDK-metadata: onschadelijk, build geslaagd."
+  },
+  "desktop": {
+    "client": "desktop (jellyfin-desktop v2.0.0 + mpvqt 2ebbd38, forkversie 2.0.0-jl.0)",
+    "commando": "nice -n 10 flock /home/transcode/truenas-v2/.lokaal/docker-build.lock bash -c 'docker buildx build -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev --load desktop/ && JOBS=4 tools/clients/bouwverificatie/desktop_bouw.sh'",
+    "base_image_digest_gecontroleerd": "docker buildx imagetools inspect docker.io/library/ubuntu:24.04 → sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852, gelijk aan desktop.Dockerfile",
+    "bouwimage": "zonder proxy en zonder CA-secret (optionele ca_bundle-secret leeg); apt via archive.ubuntu.com; image a4bcd5539c0d, 2,21 GB (na afloop verwijderd)",
+    "versies": "g++-13 13.3.0-6ubuntu2~24.04.1, cmake 3.28.3-1build7, ninja-build 1.11.1-2, qt6-base-dev 6.4.2+dfsg-21.1build5, qt6-webengine-dev 6.4.2-final+dfsg-12ubuntu9, libmpv-dev 0.37.0-1ubuntu4",
+    "resultaat": "62/62 bouwstappen, 0 compilerwaarschuwingen, ctest 1/1 geslaagd (test_systemcomponent); binary src/jellyfin-desktop 22 880 216 bytes (zelfde grootte als de P0-build), sha256 f7aa2298ac9bef1cc82120175fbf749e995978be80a15e320dad879d2187aded",
+    "run_beperkingen": "--network none --cpus 4 --memory 6g --cap-drop ALL --security-opt no-new-privileges, eigen uid, bron read-only",
+    "duur": "13:41:14 → 13:45:39 (image-build ca. 3 min, compile + ctest ca. 1 min)"
+  },
+  "github_actions": {
+    "opgehaald_met": "gh run list -R lvos04/jelly-leon-clients -b ccr-c133d7a0-kuz1cv; gh run view <id> --json jobs",
+    "runs": [
+      {"workflow": "Clients / Android", "run_id": 42608527216, "commit": "f9daf172", "conclusie": "success", "stappen": "wrapper-validatie, assembleDebug test, APK-artefact"},
+      {"workflow": "Clients / Android TV", "run_id": 42608527671, "commit": "f9daf172", "conclusie": "success", "stappen": "wrapper-validatie, assembleDebug test (o.a. app:testDebugUnitTest, app:testReleaseUnitTest, preference:test*), APK-artefact"},
+      {"workflow": "Clients / Swiftfin", "run_id": 42608527121, "commit": "f9daf172", "conclusie": "success", "stappen": "macOS-runner, Xcode 26.6, Carthage, xcodebuild voor iOS- en tvOS-simulator zonder signing"},
+      {"workflow": "Clients / Forkregels", "run_id": 42608527247, "commit": "f9daf172", "conclusie": "success"},
+      {"workflow": "Clients / Desktop", "run_id": 42600307251, "commit": "92373ce9", "conclusie": "success", "stappen": "Ubuntu 24.04, afhankelijkheden uit debian/control, cmake, ctest"}
+    ]
+  },
+  "niet_gedaan": [
+    "Geen APK geïnstalleerd of gestart: geen Android-apparaat, tv of emulator gebruikt → inloggen, afspelen, ondertitels, hervatten NIET GEVALIDEERD (hardware).",
+    "Desktop-app niet gestart (geen scherm), niet tegen een server; Windows/macOS niet gebouwd.",
+    "Swiftfin: geen Mac/Xcode in deze omgeving → lokaal NIET GEVALIDEERD (Mac/Xcode); de groene GitHub-run is alleen een simulatorbuild zonder signing, geen test van de app.",
+    "Geen release-builds, niets ondertekend voor verspreiding, niets gepubliceerd."
+  ],
+  "opruimen": "Gradle-bouwmappen (android/**/build, androidtv/**/build, .gradle, .kotlin — door de upstream-.gitignore genegeerd) en .bouw/ na afloop verwijderd; docker image rm jelly-leon-clients/desktop-bouw:dev en docker image prune -f."
+}

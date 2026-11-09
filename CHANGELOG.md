@@ -18,3 +18,11 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
   register uit de gecontroleerde commit; beschermde licentiebestanden moeten bestaan; sync draait bij elke fout terug;
   sync-workflow zonder opgeslagen token en zonder schrijfbare cache voor onbeoordeelde upstream-code;
   workflowregels als tests. 92 tests.
+- Afronding P0 (eigen machine, geen proxy): android en androidtv lokaal gebouwd (`assembleDebug test`; androidtv 15/15
+  tests per variant, android heeft upstream geen tests), desktop opnieuw gebouwd (62/62, ctest 1/1); Gradle-wrappers
+  tegen gradle.org gecontroleerd; GitHub-runs van alle client-workflows groen. `make android-bouw`/`androidtv-bouw`
+  en optionele `GRADLE_LOCK`/`DOCKER_LOCK`.
+- Besluiten gebruiker vastgelegd: ADR-0004 (eigen applicationId/bundle-id naast de officiële apps, patch in P4) en
+  ADR-0009 (Swiftfin 1.6.1 blijft, server vóór P4 naar Jellyfin 12.x). Nieuw: `tools/clients/server_api_compat.py`
+  (routes van twee serverversies tegen de SDK-endpoints van de clients) met 7 tests; voorlopige meting v10.11.11 ↔
+  v12.4: geen door android/androidtv gebruikte route weg. 99 tests.

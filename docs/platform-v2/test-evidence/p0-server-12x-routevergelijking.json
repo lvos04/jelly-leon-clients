@@ -1,0 +1,75 @@
+{
+  "id": "p0-server-12x-routevergelijking",
+  "datum": "2026-11-09",
+  "doel": "Voorlopige statische controle voor ADR-0009: roepen android 2.7.3 en androidtv 0.19.10 (jellyfin-sdk-kotlin 1.7.1) REST-routes aan die in Jellyfin 12.4 niet meer bestaan? Geen compatibiliteitsbewijs.",
+  "validatie": "Statische analyse (alleen gelezen); geen server gestart, geen client gestart. Gebruik met een 12.x-server: NIET GEVALIDEERD (hardware).",
+  "bronnen": {
+    "jellyfin_server_v10.11.11": {
+      "commit": "1fbd8739292cce610231be93daf43368733edf63",
+      "map": "Jellyfin.Api/Controllers"
+    },
+    "jellyfin_server_v12.4": {
+      "commit": "83d0d0e7f76e23e2e085c8ff67d28b772d35967d",
+      "map": "Jellyfin.Api/Controllers",
+      "opmerking": "nieuwste stabiele 12.x-tag volgens git ls-remote op 2026-11-09 (v12.0 … v12.4; rc's niet meegeteld)"
+    },
+    "jellyfin_sdk_kotlin_v1.7.1": {
+      "commit": "32d9840bf2d9f36c43e2d254efdbb696877e1867",
+      "map": "jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations",
+      "api_version": "10.10.7",
+      "minimumVersion": "10.10.0"
+    },
+    "clients": {
+      "android": "android/app/src/main",
+      "androidtv": "androidtv/app/src/main, androidtv/playback, androidtv/preference"
+    }
+  },
+  "commandos": [
+    "git clone --depth 1 --branch v10.11.11 --filter=blob:none --sparse https://github.com/jellyfin/jellyfin.git srv-v10.11.11 && git -C srv-v10.11.11 sparse-checkout set Jellyfin.Api/Controllers",
+    "git clone --depth 1 --branch v12.4 --filter=blob:none --sparse https://github.com/jellyfin/jellyfin.git srv-v12.4 && git -C srv-v12.4 sparse-checkout set Jellyfin.Api/Controllers",
+    "git clone --depth 1 --branch v1.7.1 --filter=blob:none --sparse https://github.com/jellyfin/jellyfin-sdk-kotlin.git ops-v1.7.1 && git -C ops-v1.7.1 sparse-checkout set jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations",
+    "python3 -I tools/clients/server_api_compat.py --server-a srv-v10.11.11/Jellyfin.Api/Controllers --server-b srv-v12.4/Jellyfin.Api/Controllers --sdk-ops ops-v1.7.1/jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations --client android=android/app/src/main --client androidtv=androidtv/app/src/main,androidtv/playback,androidtv/preference --root ."
+  ],
+  "exitcode": 0,
+  "uitkomst": {
+    "routes_server_a": 424,
+    "routes_server_b": 419,
+    "routes_weg_in_b": [
+      "GET /environment/networkshares",
+      "GET /items/{}/criticreviews",
+      "GET /livetv/recordings/groups/{}",
+      "GET /quickconnect/initiate",
+      "POST /system/mediaencoder/path",
+      "POST /users/{}/easypassword"
+    ],
+    "routes_nieuw_in_b": 1,
+    "sdk_endpoints": 408,
+    "sdk_endpoints_ontbrekend_in_b": [
+      "GET /environment/networkshares",
+      "GET /items/{}/criticreviews",
+      "GET /livetv/recordings/groups/{}",
+      "GET /system/wakeonlaninfo",
+      "GET /tmdb/clientconfiguration"
+    ],
+    "per_client": {
+      "android": [],
+      "androidtv": []
+    },
+    "grenzen": "Statisch en alleen op routeniveau: gewijzigde parameters, DTO-velden, enums, authenticatie en gedrag worden niet gezien, evenmin zelf samengestelde URL's of de web-client van de server. Een lege uitkomst bewijst geen compatibiliteit."
+  },
+  "controle_parser": {
+    "commando": "zelfde, met --server-b = v10.11.11",
+    "resultaat": "routes_weg_in_b = []; sdk_endpoints_ontbrekend_in_b = ['GET /system/wakeonlaninfo', 'GET /tmdb/clientconfiguration'] → 406 van de 408 SDK-1.7.1-endpoints worden in de 10.11.11-servercode teruggevonden; de 2 ontbrekende bestonden in 10.11 al niet meer (SDK 1.7.1 is tegen 10.10.7 gegenereerd)"
+  },
+  "verworpen_methode": {
+    "wat": "Vergelijking van de gegenereerde SDK-bronnen 1.7.1 (API 10.10.7) met 1.9.4 (API 12.4.0)",
+    "waarom_verworpen": "De SDK-specificatie mist routes die in de servercode nog bestaan; bv. 'DELETE /Videos/ActiveEncodings' (HlsSegmentApi.stopEncodingProcess, gebruikt door beide Android-clients) ontbreekt in SDK 1.9.4 maar staat in v12.4 nog in Jellyfin.Api/Controllers/HlsSegmentController.cs ([HttpDelete(\"Videos/ActiveEncodings\")]). Die methode gaf dus valse meldingen; alleen de servercode is als bron gebruikt."
+  },
+  "sdk_versies_upstream_clients": {
+    "jellyfin-android master afebde6": "jellyfin-sdk 1.8.12 (API 10.11.11, minimum 10.11.0)",
+    "jellyfin-androidtv master aa24978 en v0.20.0-beta.4 (344d26e)": "jellyfin-sdk 1.8.12",
+    "jellyfin-sdk-kotlin v1.9.4": "API 12.4.0, minimum 12.0.0 — nog door geen upstream-Android-client gebruikt"
+  },
+  "grenzen": "Statisch en alleen op routeniveau: gewijzigde parameters, DTO-velden, enums, authenticatie en gedrag worden niet gezien, evenmin zelf samengestelde URL's of de web-client van de server. Een lege uitkomst bewijst geen compatibiliteit.",
+  "tests_van_de_tool": "tools/clients/tests/test_server_api_compat.py (7 tests met nep-controllers, nep-SDK en nep-clientbronnen; Sim-getest)"
+}

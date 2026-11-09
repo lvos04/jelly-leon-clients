@@ -5,8 +5,9 @@ Jellyfin-clients, bijgehouden met upstream en later met de zichtbare naam **"Jel
 het protocol blijven "Jellyfin", zodat alles blijft werken met de server [`jelly-leon`](https://github.com/lvos04/jelly-leon)
 (Jellyfin 10.11.11) en met gewone Jellyfin-servers.
 
-> **Stand P0 (2026-11-09):** inventaris, bouw- en syncbasis. **Aan de apps zelf is niets veranderd** — geen branding,
-> geen andere app-ID's. Niets is op een echt apparaat getest.
+> **Stand P0 (2026-11-09):** inventaris, bouw- en syncbasis; android, androidtv en desktop lokaal gebouwd en getest,
+> alle client-workflows groen op GitHub. **Aan de apps zelf is niets veranderd** — geen branding, geen andere app-ID's
+> (eigen ID's volgen in P4, ADR-0004). Niets is op een echt apparaat getest.
 
 ## Inhoud
 
@@ -41,13 +42,16 @@ De officiële bouwinstructies staan in de README van elke client. Onze CI (GitHu
 | desktop | `Clients / Desktop` | Ubuntu 24.04, afhankelijkheden uit `debian/control`, `-DUSE_STATIC_MPVQT=ON`, `ctest` |
 | swiftfin | `Clients / Swiftfin` | macOS 26 + Xcode 26.6, Carthage, `xcodebuild` voor iOS- en tvOS-simulator zonder signing |
 
-Lokaal voor ontwikkelaars (Linux): `make help`. De desktop-client is in een container te bouwen met
-`make desktop-bouw` (alleen ontwikkeling; geen installatiemethode). Debug-APK's hebben de upstream-suffix `.debug` en zijn
-alleen bedoeld om te testen.
+Lokaal voor ontwikkelaars (Linux): `make help`. `make android-bouw` / `make androidtv-bouw` (JDK 21 en `ANDROID_HOME`
+met platform 36) bouwen de debug-APK's en draaien de unit-tests; de desktop-client is in een container te bouwen met
+`make desktop-bouw` (alleen ontwikkeling; geen installatiemethode). Op een gedeelde machine: `GRADLE_LOCK=<bestand>` en
+`DOCKER_LOCK=<bestand>` serialiseren de zware stappen met `flock`. Debug-APK's hebben de upstream-suffix `.debug` en
+zijn alleen bedoeld om te testen.
 
-**Validatie:** desktop-Linux is lokaal gebouwd en unit-getest; Android-builds waren in de bouwomgeving geblokkeerd
-(Android SDK niet downloadbaar); Swiftfin is **NIET GEVALIDEERD (Mac/Xcode)**. Geen enkele workflow heeft al op GitHub
-gedraaid. Zie `BOUWVERIFICATIE_P0.md`.
+**Validatie:** android, androidtv (15/15 unit-tests per variant) en desktop-Linux (ctest 1/1) zijn lokaal gebouwd en
+getest en de vier client-workflows zijn groen op GitHub; Swiftfin bouwt in CI voor de simulator maar is **NIET
+GEVALIDEERD (Mac/Xcode)**; niets is op een apparaat gestart (**NIET GEVALIDEERD (hardware)**). Zie
+`BOUWVERIFICATIE_P0.md`.
 
 ## Upstream bijhouden
 
@@ -63,19 +67,23 @@ pusht alleen de syncbranch en draait daarop de CI. Overnemen in de hoofdbranch i
 ## Installeren op apparaten
 
 Nog niet: deze clients zijn geen TrueNAS-apps en er worden nog geen eigen APK's of iOS-builds verspreid. Gebruik tot
-de pilot de officiële Jellyfin-apps. Eerst beslist de gebruiker over de app-identiteit (zie hieronder) en het
-verspreidingskanaal.
+de pilot de officiële Jellyfin-apps. Eigen builds komen pas na de P4-patch voor de eigen app-ID's en een besluit over
+het verspreidingskanaal.
+
+## Besluiten van de gebruiker (2026-11-09)
+
+1. **App-identiteit:** eigen `applicationId` voor Android en Android TV (naast de officiële app), eigen bundle-id voor
+   iOS. De patch volgt in P4 als geregistreerde patch; tot dan alles upstream. (ADR-0004)
+2. **Swiftfin 1.6.1 blijft**; de server gaat vóór P4 naar de nieuwste stabiele Jellyfin 12.x (.NET 10), in een aparte
+   fase in `jelly-leon`/`jelly-leon-web`; de Android-clients worden dan op 12.x gecontroleerd. (ADR-0009)
+3. **Zichtbaarheid:** repos en images worden publiek na een scan van de volledige historie op geheimen en
+   privégegevens (bevindingen eerst aan de gebruiker). (ADR-0007)
 
 ## Open vragen voor de gebruiker
 
-1. **Android `applicationId`** — zelfde ID (`org.jellyfin.mobile`, `org.jellyfin.androidtv`): de Jelly Leon-app
-   vervangt de officiële app (eerst verwijderen, app-gegevens weg, geen officiële updates). Andere ID: beide naast
-   elkaar, terugval mogelijk, maar een kleine geregistreerde patch nodig. Advies: andere ID. (ADR-0004)
-2. **iOS bundle-id en Apple-account** voor Swiftfin-builds op echte apparaten. (ADR-0004)
-3. **Swiftfin 1.6.1 verwacht Jellyfin 12.0**; Jelly Leon is 10.11.11 → houden, terug naar Swiftfin 1.5, of server
-   upgraden? (ADR-0009)
-4. **Welke apparaten** (D15): tv-modellen, telefoons, Android TV/Apple TV — nodig voor de echte testmatrix.
-5. **Zichtbaarheid van deze repo** vóór verspreiding aan anderen (GPL: bron beschikbaar). (ADR-0007)
+1. **Concrete app-ID** (voorstel in ADR-0004) en **Apple-account** voor Swiftfin-builds op echte apparaten.
+2. **Welke apparaten** (D15): tv-modellen, telefoons, Android TV/Apple TV — nodig voor de echte testmatrix.
+3. **Verspreidingskanaal** voor eigen APK's/IPA's/installers (ADR-0008).
 
 ## Licentie en credits
 

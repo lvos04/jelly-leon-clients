@@ -1,8 +1,8 @@
 # Bouwverificatie P0 — jelly-leon-clients (2026-11-09)
 
-Omgeving: gedeelde Linux-bouwomgeving (4 CPU's, 15 GB RAM), Docker, Python 3.12, JDK 21, uitgaand verkeer via een
-beleidsproxy. Geen macOS/Xcode, geen Android-apparaat, geen tv, geen NAS. Alles hieronder is echt uitgevoerd; wat niet
-kon staat als blokkade.
+Omgeving §1–§8: gedeelde Linux-bouwomgeving (4 CPU's, 15 GB RAM), Docker, Python 3.12, JDK 21, uitgaand verkeer via
+een beleidsproxy. §9: afronding op de eigen Ubuntu 26.04-machine van de gebruiker (geen proxy). Nergens macOS/Xcode, een
+Android-apparaat, een tv of een NAS. Alles hieronder is echt uitgevoerd; wat niet kon staat als blokkade.
 
 ## 1. Forkregels en tooling (Sim-getest)
 
@@ -39,20 +39,22 @@ nice -n 10 tools/clients/bouwverificatie/desktop_bouw.sh
 - **Niet gedaan:** de app starten, inloggen of afspelen (geen scherm/server) → NIET GEVALIDEERD (hardware);
   Windows/macOS-builds; Debian-pakket; Flatpak.
 
-## 4. Android en Android TV — geblokkeerd
+## 4. Android en Android TV — in de oude omgeving geblokkeerd (opgelost in §9)
 
 Bewijs: [`test-evidence/p0-android-bouwpoging.json`](test-evidence/p0-android-bouwpoging.json).
 
 - `dl.google.com` (Android SDK command-line tools, platforms, build-tools) → proxy weigert (403, policy).
 - `services.gradle.org` stuurt door naar `downloads.gradle.org` → proxy weigert (403). De wrappers vragen Gradle
   9.6.1 (android) en 9.1.0 (androidtv); lokaal staat alleen 8.14.3, ongeschikt voor AGP 9.3.1.
-- Niet omzeild via andere bronnen (proxybeleid). **Blocker**: de builds draaien alleen in GitHub Actions
-  (`clients-android.yml`, `clients-androidtv.yml`); tot een groene run daar NIET GEVALIDEERD.
+- Niet omzeild via andere bronnen (proxybeleid). Toen: builds alleen in GitHub Actions. **Stand nu:** lokaal gebouwd
+  en getest (§9) en groen op GitHub.
 
 ## 5. Swiftfin — niet uitvoerbaar
 
 Geen macOS/Xcode in deze omgeving. `clients-swiftfin.yml` (macos-26, Xcode 26.6, Carthage, `xcodebuild` voor iOS- en
-tvOS-simulator zonder signing) is alleen statisch gecontroleerd (actionlint). **NIET GEVALIDEERD (Mac/Xcode).**
+tvOS-simulator zonder signing) was in P0 alleen statisch gecontroleerd (actionlint); inmiddels is de workflow op een
+GitHub-macOS-runner groen (§9). Dat is een simulatorbuild zonder signing: de app is niet gestart, niet getest en niet
+op een apparaat gezet. **NIET GEVALIDEERD (Mac/Xcode).**
 
 ## 6. Syncproef op echte upstream-code
 
@@ -95,8 +97,37 @@ bouwomgeving; wat niet kon staat er als niet gedaan.
 6. Client-CI op een syncbranch kon de Gradle-/Carthage-cache van de standaardbranch vullen met nog niet beoordeelde
    upstream-code; nu alleen-lezen.
 
-**Blijft open (niet te repareren in deze omgeving):** Android/Android TV-build (proxy), Swiftfin
-(**NIET GEVALIDEERD (Mac/Xcode)**), geen enkele workflow op GitHub gedraaid, niets op echte apparaten
-(**NIET GEVALIDEERD (hardware)**). De door `git subtree` zelf gemaakte squashcommits (o.a. `b7cc2782c`) dragen niet de
+**Bleef toen open:** Android/Android TV-build (proxy) en de eerste GitHub-runs — beide inmiddels gedaan (§9).
+**Blijft open:** Swiftfin (**NIET GEVALIDEERD (Mac/Xcode)**), niets op echte apparaten (**NIET GEVALIDEERD
+(hardware)**). De door `git subtree` zelf gemaakte squashcommits (o.a. `b7cc2782c`) dragen niet de
 twee vaste afsluitregels van §12; dat is inherent aan `git subtree` en is zonder history-herschrijving (force-push)
 niet te herstellen.
+
+## 9. Afronding P0 op de eigen machine van de gebruiker (2026-11-09)
+
+Bewijs: [`test-evidence/p0-afronding-lokale-bouw.json`](test-evidence/p0-afronding-lokale-bouw.json). Ubuntu 26.04.1,
+JDK 21.0.12, Android SDK in `~/android-sdk` (platform 36, build-tools 36.0.0; niets extra nodig), Docker 29; geen proxy.
+Zware stappen één tegelijk, onder `flock` met de andere bouwers op de machine, `nice -n 10`.
+
+| Stap | Commando (kort) | Resultaat |
+|---|---|---|
+| Gradle-wrappers | `sha256sum gradle-wrapper.jar` ↔ `services.gradle.org/…-wrapper.jar.sha256` | android (9.6.1) en androidtv (9.1.0): jar en `distributionSha256Sum` gelijk aan gradle.org |
+| android | `make android-bouw` ≙ `./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test` | **BUILD SUCCESSFUL** (3 min); 2 debug-APK's (`libre`, `proprietary`), pakket `org.jellyfin.mobile.debug`, minSdk 21/targetSdk 36; unit-tests `NO-SOURCE` (upstream heeft er geen) |
+| androidtv | `make androidtv-bouw` (idem) | **BUILD SUCCESSFUL** (2 min 48 s); 15/15 tests in `testDebugUnitTest` én 15/15 in `testReleaseUnitTest`; debug-APK `org.jellyfin.androidtv.debug`, `app_id`/zoek-authority consistent |
+| desktop | `docker buildx build … desktop.Dockerfile` + `JOBS=4 desktop_bouw.sh` | bouwimage op base-digest `fe81560990fa…` (nagemeten), **62/62** stappen, 0 compilerwaarschuwingen, **ctest 1/1**; binary even groot als in P0 |
+| `make androidtv-bouw` (tweede keer) | controle van het nieuwe make-doel | 317 taken up-to-date, exit 0; zonder `ANDROID_HOME` exit 2 met melding |
+| fork-tooling | `pytest -q tools/clients/tests`, `ruff`, `actionlint`, `check_clients.py` | **99 passed** (92 + 7 voor `server_api_compat.py`), geen meldingen, forkregels in orde |
+
+**GitHub Actions** (branch `ccr-c133d7a0-kuz1cv`, vóór deze ronde al gedraaid, nu nagekeken): Clients / Android
+`42608527216`, Android TV `42608527671`, Swiftfin `42608527121` (iOS- en tvOS-simulatorbuild zonder signing),
+Forkregels `42608527247` — alle groen op commit `f9daf172`; Desktop `42600307251` groen op `92373ce9`. De runs van
+deze ronde staan in `EVIDENCE.json`.
+
+**12.x-voorbereiding (ADR-0009):** statische routevergelijking server v10.11.11 ↔ v12.4 tegen de endpoints van
+jellyfin-sdk-kotlin 1.7.1 — 6 routes weg, geen ervan door android/androidtv gebruikt
+([`test-evidence/p0-server-12x-routevergelijking.json`](test-evidence/p0-server-12x-routevergelijking.json)); dit is
+geen compatibiliteitsbewijs.
+
+**Niet gedaan:** APK's installeren of starten (geen apparaat/emulator), desktop-app starten, Windows/macOS-builds,
+release-builds of ondertekening, iets publiceren. Swiftfin lokaal: **NIET GEVALIDEERD (Mac/Xcode)**; gebruik op
+apparaten: **NIET GEVALIDEERD (hardware)**. Bouwmappen en bouwimage na afloop verwijderd (`make opruimen`).

@@ -58,11 +58,11 @@ Stand P0: **één** patch (JLC-0001, mpvqt-bron; geen codewijziging). Appcode: g
 - Alleen de **zichtbare** naam wordt later "Jelly Leon" — eerst via build-configuratie, anders als geregistreerde patch.
   Bij android en desktop komt het meeste zichtbare uit de web-client van de server (`jelly-leon-web`).
 - **In P0 is niets aan branding gewijzigd.**
-- **OPEN VRAAG voor de gebruiker — Android `applicationId`:** zelfde ID (`org.jellyfin.mobile`/`org.jellyfin.androidtv`)
-  = vervangt de officiële app (eerst verwijderen, app-gegevens weg, geen officiële updates meer); andere ID = naast
-  elkaar installeerbaar (terugval mogelijk), maar vraagt een patch (bij Android TV ook accounttype en
-  zoek-authority, die upstream uit `namespace` afleidt). iOS: een eigen bundle-id is waarschijnlijk onvermijdelijk.
-  Advies: andere ID's. **In P0 niets veranderd.**
+- **Besluit gebruiker (2026-11-09) — app-identiteit:** eigen `applicationId` voor Android en Android TV, naast de
+  officiële app installeerbaar; eigen bundle-id voor iOS (NIET GEVALIDEERD (Mac/Xcode)). De patch volgt in **P4** als
+  geregistreerde patch (android: `applicationId` + back-upregels; androidtv daarnaast `app_id`,
+  `app_search_suggest_authority` en `app_search_suggest_intent_data`, die upstream uit `namespace` afleidt). Patchplan
+  en voorstel voor de waarde: ADR-0004. **Tot P4 blijft elke ID upstream.**
 
 ## 5. Licenties (ADR-0007)
 
@@ -80,17 +80,22 @@ de forkversie staat in de basislijn (en later in release-metadata).
 
 | Client | CI-workflow | Lokaal (2026-11-09) | Validatie |
 |---|---|---|---|
-| android | `clients-android.yml` (JDK 21, `assembleDebug test`) | geblokkeerd: SDK + Gradle-distributie geweigerd door proxy | NIET GEVALIDEERD (CI nog niet gedraaid) |
-| androidtv | `clients-androidtv.yml` (JDK 21, `assembleDebug test`) | geblokkeerd (idem) | NIET GEVALIDEERD (CI nog niet gedraaid) |
-| desktop | `clients-desktop.yml` (Ubuntu 24.04, `ctest`) | **gebouwd**, ctest 1/1 (container) | Unit-getest (Linux); app-gebruik NIET GEVALIDEERD (hardware) |
-| swiftfin | `clients-swiftfin.yml` (macOS 26, Xcode 26.6, simulator) | onmogelijk | NIET GEVALIDEERD (Mac/Xcode) |
-| fork-tooling | `clients-forkregels.yml` | 92/92 tests (48 tooling + 44 workflowregels), forkregels in orde, actionlint/shellcheck | Sim-getest |
+| android | `clients-android.yml` (JDK 21, `assembleDebug test`) | **gebouwd** (`make android-bouw`); upstream heeft geen unit-tests (`NO-SOURCE`); CI groen | Unit-getest (build); app-gebruik NIET GEVALIDEERD (hardware) |
+| androidtv | `clients-androidtv.yml` (JDK 21, `assembleDebug test`) | **gebouwd** (`make androidtv-bouw`), 15/15 tests per variant; CI groen | Unit-getest; app-gebruik NIET GEVALIDEERD (hardware) |
+| desktop | `clients-desktop.yml` (Ubuntu 24.04, `ctest`) | **gebouwd**, ctest 1/1 (container, `make desktop-bouw`); CI groen | Unit-getest (Linux); app-gebruik NIET GEVALIDEERD (hardware) |
+| swiftfin | `clients-swiftfin.yml` (macOS 26, Xcode 26.6, simulator) | onmogelijk (geen Mac); CI-simulatorbuild zonder signing groen | NIET GEVALIDEERD (Mac/Xcode) |
+| fork-tooling | `clients-forkregels.yml` | 99/99 tests (55 tooling + 44 workflowregels), forkregels in orde, actionlint/shellcheck | Sim-getest |
+
+Lokale zware builds op een gedeelde machine: `GRADLE_LOCK=<bestand>` / `DOCKER_LOCK=<bestand>` laten `make` de stap
+onder `flock` draaien (standaard `--max-workers=4`, Gradle-heap 2 GiB).
 
 ## 8. Servercompatibiliteit
 
 Android en Android TV (SDK 1.7.1, API 10.10.7) en desktop (web-client van de server) passen bij Jelly Leon 10.11.11.
-**Swiftfin 1.6.1 verwacht Jellyfin 12.0** (SDK 3.0.0) en toont tegen 10.11 een updatewaarschuwing; open besluit in
-ADR-0009. Niets is op een echt apparaat getest; de matrix in [`INVENTARIS.md`](INVENTARIS.md) §3 staat volledig op
+**Swiftfin 1.6.1 verwacht Jellyfin 12.0** (SDK 3.0.0) en toont tegen 10.11 een updatewaarschuwing. **Besluit
+gebruiker (2026-11-09, ADR-0009):** Swiftfin 1.6.1 blijft; de server gaat vóór P4 in een aparte fase naar de nieuwste
+stabiele Jellyfin 12.x (.NET 10); dan worden de Android-clients op 12.x-compatibiliteit gecontroleerd
+(`tools/clients/server_api_compat.py` + tests tegen een 12.x-server). Niets is op een echt apparaat getest; de matrix in [`INVENTARIS.md`](INVENTARIS.md) §3 staat volledig op
 NIET GEVALIDEERD tot een echte sessie (inloggen, afspelen, ondertitel, hervatten) per apparaat uit D15.
 
 ## 9. Installatie en distributie (ADR-0008)
