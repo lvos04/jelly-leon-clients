@@ -1,0 +1,85 @@
+# Jelly Leon clients — CI voor swiftfin/ (fork van Swiftfin, iOS en tvOS, zie tools/clients/baseline.json).
+# Bouwt beide schema's voor de simulator zonder code signing, zoals upstream ci.yml (macos-26, Xcode 26.6,
+# Brewfile, Carthage voor VLCKit), maar met gewone xcodebuild in plaats van fastlane.
+#
+# NIET GEVALIDEERD (Mac/Xcode): deze workflow is in de bouwomgeving niet uit te voeren (geen macOS/Xcode) en
+# nog nooit gedraaid. Pas na een groene run op GitHub mag "Sim-/CI-getest" worden gemeld; een echte
+# acceptatie vraagt bovendien een iPhone/iPad/Apple TV (D15).
+# Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
+name: Clients / Swiftfin
+
+on:
+  push:
+    paths:
+      - "swiftfin/**"
+      - ".github/workflows/clients-swiftfin.yml"
+  pull_request:
+    paths:
+      - "swiftfin/**"
+      - ".github/workflows/clients-swiftfin.yml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git-ref om te bouwen (bv. een syncbranch); leeg = de ref van de aanroep"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clients-swiftfin-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    name: Swiftfin — ${{ matrix.schema }} (simulator, zonder signing)
+    runs-on: macos-26
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - schema: "Swiftfin"
+            bestemming: "generic/platform=iOS Simulator"
+          - schema: "Swiftfin tvOS"
+            bestemming: "generic/platform=tvOS Simulator"
+    env:
+      XCODE_VERSION: "26.6"
+      SCHEMA: ${{ matrix.schema }}
+      BESTEMMING: ${{ matrix.bestemming }}
+    defaults:
+      run:
+        working-directory: swiftfin
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Xcode kiezen (zelfde versie als upstream)
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+      - name: Hulpmiddelen uit de upstream-Brewfile (carthage, swiftgen, swiftformat, swiftlint)
+        run: brew bundle --file Brewfile
+      - name: Carthage-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: swiftfin/Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('swiftfin/Cartfile') }}
+      - name: Carthage (VLCKit als binaire xcframeworks)
+        run: carthage update --use-xcframeworks --cache-builds
+      - name: Bouwen voor de simulator zonder code signing
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Swiftfin.xcodeproj \
+            -scheme "$SCHEMA" \
+            -configuration Debug \
+            -destination "$BESTEMMING" \
+            -skipMacroValidation -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tee "$RUNNER_TEMP/xcodebuild.log"

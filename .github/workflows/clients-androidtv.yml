@@ -1,0 +1,67 @@
+# Jelly Leon clients — CI voor androidtv/ (fork van jellyfin-androidtv, zie tools/clients/baseline.json).
+# Bouwt de debug-APK en draait de unit tests, zoals upstream app-build/app-test (JDK 21, gradle-toolchain 21).
+# Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
+name: Clients / Android TV
+
+on:
+  push:
+    paths:
+      - "androidtv/**"
+      - ".github/workflows/clients-androidtv.yml"
+  pull_request:
+    paths:
+      - "androidtv/**"
+      - ".github/workflows/clients-androidtv.yml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git-ref om te bouwen (bv. een syncbranch); leeg = de ref van de aanroep"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clients-androidtv-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bouwen-en-testen:
+    name: Android TV — assembleDebug + unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: androidtv
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Java 21 (zoals upstream en gradle/libs.versions.toml java-jdk)
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Gradle-wrapper valideren (checksum tegen gradle.org)
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Gradle instellen
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Debug-APK bouwen en unit tests draaien
+        run: ./gradlew --no-daemon --max-workers=2 assembleDebug test
+      - name: APK's verzamelen
+        run: |
+          mkdir -p build/jlc-artefacten
+          find app/build/outputs/apk -name '*.apk' -exec cp {} build/jlc-artefacten/ \;
+          ls -l build/jlc-artefacten
+      - name: APK's bewaren (14 dagen, niet ondertekend voor release)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: androidtv-debug-apk
+          path: androidtv/build/jlc-artefacten/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,145 @@
+# Jelly Leon clients — wekelijkse/handmatige upstream-sync per client (ADR-0002, B03-013, EX48).
+# 1. Status: nieuwste stabiele upstream-tag per client (unknown bij netwerkfout, nooit "actueel").
+# 2. Per client: sync in branch sync/<client>-<tag> (herbruikbare workflow) en push van alleen die branch.
+# 3. Per gesynchroniseerde client: forkregels + de client-CI op de syncbranch.
+# Rood = niet overnemen. Samenvoegen in de hoofdbranch en elke release blijven handmatige R2-stappen.
+# Let op: GitHub draait `schedule` alleen vanaf de standaardbranch van de repository.
+name: Clients / Upstream-sync
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      client:
+        description: "Welke client"
+        type: choice
+        options: [alle, android, androidtv, desktop, swiftfin]
+        default: alle
+      tag:
+        description: "Specifieke upstream-tag (alleen zinvol bij één client; leeg = nieuwste stabiele)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clients-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  status:
+    name: Upstream-status
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Status naar de samenvatting
+        run: |
+          set -euo pipefail
+          python tools/clients/upstream_sync.py status --json > "$RUNNER_TEMP/status.json"
+          python - "$RUNNER_TEMP/status.json" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          rows = json.load(open(sys.argv[1]))
+          print("| Client | Basislijn | Nieuwste upstream | Oordeel |")
+          print("|---|---|---|---|")
+          for r in rows:
+              print(f"| {r['client']} | {r['basislijn_tag']} | {r['nieuwste_tag'] or '—'} | {r['oordeel']} {r['reden']} |")
+          PY
+
+  sync-android:
+    needs: status
+    if: github.event_name == 'schedule' || inputs.client == 'alle' || inputs.client == 'android'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/clients-upstream-sync-een.yml
+    with:
+      client: android
+      tag: ${{ inputs.client == 'android' && inputs.tag || '' }}
+  forkregels-android:
+    needs: sync-android
+    if: needs.sync-android.outputs.branch != ''
+    uses: ./.github/workflows/clients-forkregels.yml
+    with:
+      ref: ${{ needs.sync-android.outputs.branch }}
+  ci-android:
+    needs: sync-android
+    if: needs.sync-android.outputs.branch != ''
+    uses: ./.github/workflows/clients-android.yml
+    with:
+      ref: ${{ needs.sync-android.outputs.branch }}
+
+  sync-androidtv:
+    needs: status
+    if: github.event_name == 'schedule' || inputs.client == 'alle' || inputs.client == 'androidtv'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/clients-upstream-sync-een.yml
+    with:
+      client: androidtv
+      tag: ${{ inputs.client == 'androidtv' && inputs.tag || '' }}
+  forkregels-androidtv:
+    needs: sync-androidtv
+    if: needs.sync-androidtv.outputs.branch != ''
+    uses: ./.github/workflows/clients-forkregels.yml
+    with:
+      ref: ${{ needs.sync-androidtv.outputs.branch }}
+  ci-androidtv:
+    needs: sync-androidtv
+    if: needs.sync-androidtv.outputs.branch != ''
+    uses: ./.github/workflows/clients-androidtv.yml
+    with:
+      ref: ${{ needs.sync-androidtv.outputs.branch }}
+
+  sync-desktop:
+    needs: status
+    if: github.event_name == 'schedule' || inputs.client == 'alle' || inputs.client == 'desktop'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/clients-upstream-sync-een.yml
+    with:
+      client: desktop
+      tag: ${{ inputs.client == 'desktop' && inputs.tag || '' }}
+  forkregels-desktop:
+    needs: sync-desktop
+    if: needs.sync-desktop.outputs.branch != ''
+    uses: ./.github/workflows/clients-forkregels.yml
+    with:
+      ref: ${{ needs.sync-desktop.outputs.branch }}
+  ci-desktop:
+    needs: sync-desktop
+    if: needs.sync-desktop.outputs.branch != ''
+    uses: ./.github/workflows/clients-desktop.yml
+    with:
+      ref: ${{ needs.sync-desktop.outputs.branch }}
+
+  sync-swiftfin:
+    needs: status
+    if: github.event_name == 'schedule' || inputs.client == 'alle' || inputs.client == 'swiftfin'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/clients-upstream-sync-een.yml
+    with:
+      client: swiftfin
+      tag: ${{ inputs.client == 'swiftfin' && inputs.tag || '' }}
+  forkregels-swiftfin:
+    needs: sync-swiftfin
+    if: needs.sync-swiftfin.outputs.branch != ''
+    uses: ./.github/workflows/clients-forkregels.yml
+    with:
+      ref: ${{ needs.sync-swiftfin.outputs.branch }}
+  ci-swiftfin:
+    needs: sync-swiftfin
+    if: needs.sync-swiftfin.outputs.branch != ''
+    uses: ./.github/workflows/clients-swiftfin.yml
+    with:
+      ref: ${{ needs.sync-swiftfin.outputs.branch }}

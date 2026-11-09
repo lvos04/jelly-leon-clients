@@ -1,0 +1,86 @@
+# Jelly Leon clients — herbruikbare stap: één client synchroniseren met upstream (ADR-0002).
+# `tools/clients/upstream_sync.py sync <client>` = git subtree pull --prefix <map> --squash <upstream> <tag>
+# in branch sync/<client>-<tag>, inclusief geneste subtrees (ADR-0005), basislijn en forkregels.
+# Conflict of overtreding → job rood (EX48), er wordt niets gepusht. Gelukt → alleen de syncbranch pushen;
+# nooit samenvoegen met de hoofdbranch, nooit een release of image (R2: mens beoordeelt).
+name: Clients / Upstream-sync (één client)
+
+on:
+  workflow_call:
+    inputs:
+      client:
+        type: string
+        required: true
+      tag:
+        type: string
+        required: false
+        default: ""
+    outputs:
+      branch:
+        description: "Gepushte syncbranch, of leeg als de client al actueel is"
+        value: ${{ jobs.sync.outputs.branch }}
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Upstream-sync ${{ inputs.client }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      branch: ${{ steps.sync.outputs.branch }}
+    env:
+      CLIENT: ${{ inputs.client }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Repository ophalen (volledige historie)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Python 3.12
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Git-identiteit voor de synccommits
+        run: |
+          git config user.name "jelly-leon-clients upstream-sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Synchroniseren in sync/<client>-<tag>
+        id: sync
+        run: |
+          set -euo pipefail
+          args=(sync "$CLIENT" --json)
+          if [ -n "$TAG" ]; then args+=(--tag "$TAG"); fi
+          set +e
+          python tools/clients/upstream_sync.py "${args[@]}" > "$RUNNER_TEMP/sync.json"
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/sync.json"
+          {
+            echo "### Upstream-sync \`$CLIENT\`"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/sync.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Upstream-sync $CLIENT mislukt (exitcode $rc): niets gepusht. Zie de samenvatting (EX48)."
+            exit "$rc"
+          fi
+          branch="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("branch") or "")' "$RUNNER_TEMP/sync.json")"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - name: Syncbranch pushen (alleen de syncbranch)
+        if: steps.sync.outputs.branch != ''
+        env:
+          BRANCH: ${{ steps.sync.outputs.branch }}
+        run: |
+          set -euo pipefail
+          case "$BRANCH" in sync/*) ;; *) echo "::error::onverwachte branchnaam $BRANCH"; exit 3 ;; esac
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null; then
+            echo "::notice::$BRANCH bestaat al op origin (eerdere sync nog niet beoordeeld); niet overschreven."
+          else
+            git push origin "HEAD:refs/heads/$BRANCH"
+          fi

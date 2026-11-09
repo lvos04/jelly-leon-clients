@@ -1,0 +1,56 @@
+# Jelly Leon clients — CI voor desktop/ (fork van jellyfin-desktop, zie tools/clients/baseline.json).
+# Linux-build zoals upstream .github/workflows/test.yml (afhankelijkheden uit desktop/debian/control op
+# ubuntu-24.04), maar mpvqt uit de vendored subtree desktop/external/mpvqt (-DUSE_STATIC_MPVQT=ON, JLC-0001):
+# zonder die optie faalt de configure omdat debian/control geen libmpvqt-dev noemt.
+# Windows/macOS-builds (upstream main.yml) zitten bewust nog niet in P0.
+# Lokaal reproduceerbaar met tools/clients/bouwverificatie/desktop_bouw.sh.
+name: Clients / Desktop
+
+on:
+  push:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/clients-desktop.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/clients-desktop.yml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git-ref om te bouwen (bv. een syncbranch); leeg = de ref van de aanroep"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clients-desktop-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Desktop — Linux-build + ctest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Build-afhankelijkheden uit desktop/debian/control
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends devscripts equivs ninja-build
+          sudo mk-build-deps --install --remove \
+            --tool 'apt-get --yes --no-install-recommends' desktop/debian/control
+      - name: Configureren (mpvqt uit de vendored subtree)
+        run: cmake -S desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Debug -DUSE_STATIC_MPVQT=ON
+      - name: Bouwen
+        run: cmake --build build/desktop -j 2
+      - name: Tests (ctest)
+        run: ctest --test-dir build/desktop --output-on-failure
