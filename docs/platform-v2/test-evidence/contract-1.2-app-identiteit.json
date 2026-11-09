@@ -349,5 +349,34 @@
     "Chromecast (proprietary) met de nieuwe pakketnaam niet getest (hardware).",
     "Swiftfin: niet ondertekend, bundle-id niet bij Apple geregistreerd, niet op een apparaat → NIET GEVALIDEERD (Mac/Xcode), NIET GEVALIDEERD (account).",
     "Geen release ondertekend of verspreid (ADR-0008)."
-  ]
+  ],
+  "github_actions_herhaald": {
+    "commit": "bdf0054 (laatste commit van de ronde; raakt app_identiteit.py, dus alle client-workflows opnieuw)",
+    "runs": [
+      {
+        "workflow": "Clients / Forkregels",
+        "run_id": 42656328106,
+        "conclusie": "success",
+        "stappen": "157 passed, 2 skipped; forkregels en app-identiteit in de bron in orde"
+      },
+      {
+        "workflow": "Clients / Android",
+        "run_id": 42656328113,
+        "conclusie": "success",
+        "stappen": "aapt2: 4 artefacten, 0 overtredingen"
+      },
+      {
+        "workflow": "Clients / Android TV",
+        "run_id": 42656328296,
+        "conclusie": "success",
+        "stappen": "aapt2: 2 artefacten, 0 overtredingen"
+      },
+      {
+        "workflow": "Clients / Swiftfin",
+        "run_id": 42656328216,
+        "conclusie": "success",
+        "stappen": "iOS en tvOS, Debug en Release: org.jellyfin.swiftfin.jellyleon; Info.plist Debug idem"
+      }
+    ]
+  }
 }
