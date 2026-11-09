@@ -8,6 +8,15 @@ Hier staan alleen de eigen B-, I-, A- en promptdocumenten plus de gedeelde archi
 
 Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; ze worden via de onboarding-wizard in de web-UI vastgelegd.
 
+## Contract (kopie, niet lokaal wijzigen)
+
+- `PLATFORM_CONTRACTEN.md` — `contracts 1.2`, byte-gelijke kopie van `lvos04/ai-server-manager`
+  `docs/platform-v2/PLATFORM_CONTRACTEN.md` (bron-commit `8b54f39`); bij verschil wint de bron.
+- `CONTRACT_1.2_CONFORMITEIT.md` — wat elke repo voor 1.2 moet veranderen (deze repo: §11, JC1–JC5); zelfde bron.
+- Drifttest: `tools/clients/tests/test_contract_kopie.py` (vaste SHA-256 van de bron; met de bronrepo naast deze repo
+  of `JLC_CONTRACT_BRON=<map>` ook een byte-vergelijking met de actuele bron). Relatieve links in de kopie (bv. naar
+  `docs/adr/ADR-0011-contract-1-2.md`) wijzen naar bestanden in ai-server-manager.
+
 ## Bestanden
 
 - `00_START/BESLUITEN_EN_ONBEKENDEN.md`
