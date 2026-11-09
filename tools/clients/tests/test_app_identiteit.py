@@ -467,6 +467,7 @@ def test_parsers_op_echte_aapt2_uitvoer():
     assert res.files["xml/authenticator"] == "res/xml/authenticator.xml"
     assert ai.resolve(res, tree[0].attrs["accountType"]) == "org.jellyfin.androidtv.jellyleon.debug"
     assert ai.parse_attr_value('"a.b" (Raw: "a.b")') == "a.b" and ai.parse_attr_value("false") == "false"
+    assert ai.parse_attr_value(r'"Jelly \"Leon\" é\\x" (Raw: "…")') == 'Jelly "Leon" é\\x'
 
 
 # --------------------------------------------------------------------------------- Swiftfin (xcodebuild-instellingen)

@@ -233,8 +233,8 @@ def parse_attr_value(raw: str) -> str:
     raw = raw.strip()
     quoted = QUOTED_RE.match(raw)
     if quoted:
-        return bytes(quoted.group(1), "utf-8").decode("unicode_escape") if "\\" in quoted.group(1) \
-            else quoted.group(1)
+        # alleen de escapes die aapt2 in een tekenreeks zet (\" en \\); niets anders interpreteren (UTF-8 blijft heel)
+        return re.sub(r'\\(["\\])', r"\1", quoted.group(1))
     return raw.split(" ", 1)[0]
 
 
