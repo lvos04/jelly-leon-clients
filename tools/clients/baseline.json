@@ -12,7 +12,7 @@
       "upstream_commit": "9a5f9be6a76da47ca07733b982a12dbd0f75539b",
       "upstream_tree": "b13c64086c604e11050d894d292195ab88d3db2c",
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
-      "forkversie": "2.7.3-jl.0",
+      "forkversie": "2.7.3-jl.1",
       "licentie": "GPL-2.0",
       "beschermde_bestanden": ["LICENSE.md"],
       "geneste_subtrees": {}

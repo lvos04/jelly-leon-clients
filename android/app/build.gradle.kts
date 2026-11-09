@@ -31,6 +31,8 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
+        // Jelly Leon (JLC-0002): eigen applicationId naast de officiële app; namespace blijft org.jellyfin.mobile
+        applicationId = "org.jellyfin.mobile.jellyleon"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionName = project.getVersionName()

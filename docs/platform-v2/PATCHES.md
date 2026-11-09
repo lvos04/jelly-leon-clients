@@ -25,14 +25,15 @@ een patch in de client. Branding is in P0 bewust **niet** gewijzigd (ADR-0004).
 | ID | Titel | Client | Soort | Status |
 |---|---|---|---|---|
 | JLC-0001 | Submodule `external/mpvqt` als geneste subtree | desktop | bronvolledigheid (geen codewijziging) | actief |
+| JLC-0002 | Eigen applicationId `org.jellyfin.mobile.jellyleon` | android | app-identiteit (build-configuratie + back-upregels) | actief |
 
-Appcode (Kotlin, C++, Swift): **geen** patches in P0.
-
-**Gepland (nog géén patch, dus nog niet in de tabel):** in P4 de eigen app-identiteit naast de officiële apps
-(besluit gebruiker 2026-11-09, ADR-0004) — voorlopig JLC-0002 (android: `android/app/build.gradle.kts`,
-`android/app/src/main/res/xml/backup_content.xml`) en JLC-0003 (androidtv: `androidtv/app/build.gradle.kts`,
-`androidtv/app/src/main/res/xml/backup_content.xml`, `androidtv/app/src/main/res/xml/backup_rules.xml`). Pas bij de
-echte wijziging krijgen ze een eigen sectie met alle verplichte velden.
+Appcode (Kotlin, C++, Swift): **geen** patches — de app-identiteitspatches (JLC-0002 e.v.) wijzigen alleen
+build-configuratie en XML-resources (contract 1.2 §2.3 regel 6, besluit van de gebruiker 2026-11-09, ADR-0004).
+Kotlin-`namespace`/pakketten, de clientnaam in de `Authorization`-header, apparaatprofielen, API-gedrag, zichtbare
+naam en pictogrammen zijn ongewijzigd.
+De verwachte ID's staan centraal in `tools/clients/app_identiteit.json`; `tools/clients/app_identiteit.py bron`
+(workflow *Clients / Forkregels*) en `… bouwmap` met `aapt2` (workflows *Clients / Android* en *Clients / Android TV*)
+controleren ze.
 
 ## JLC-0001 — Submodule `external/mpvqt` als geneste subtree
 
@@ -49,3 +50,19 @@ echte wijziging krijgen ze een eigen sectie met alle verplichte velden.
 | Upstream-PR-kans | n.v.t. — upstream gebruikt bewust een submodule. |
 | Test | `tools/clients/check_clients.py`: upstream-gitlink == geneste basislijn-commit, geneste squashcommit == dezelfde commit en dezelfde inhoud (`upstream_tree` `7d1a4c1bcc95…`, in de review tegen de bron nagemeten); `tools/clients/tests/test_check_clients.py` en `test_upstream_sync.py` (gitlink-pin gelijk/gewijzigd/nieuw); lokale container-build met `-DUSE_STATIC_MPVQT=ON` (zie `BOUWVERIFICATIE_P0.md`). |
 | Bij upstream-sync | Ongewijzigde pin → schone merge. Gewijzigde pin → `upstream_sync.py` lost het gitlink-conflict op en zet de geneste subtree op de nieuwe pin. Nieuwe submodule → sync faalt bewust (handmatig beoordelen). |
+
+## JLC-0002 — Eigen applicationId `org.jellyfin.mobile.jellyleon`
+
+| Veld | Waarde |
+|---|---|
+| Status | actief |
+| Client | android |
+| Soort | app-identiteit: build-configuratie en back-upregels; geen Kotlin-code |
+| Sinds | 2026-11-09 (forkversie 2.7.3-jl.1) |
+| Doel | De Jelly Leon-build naast de officiële Jellyfin-app kunnen installeren (eigen gegevens, eigen updates, terugvallen op de officiële app blijft mogelijk). Release `org.jellyfin.mobile.jellyleon`, debug `org.jellyfin.mobile.jellyleon.debug` (upstream-suffix `.debug` blijft). |
+| Bestanden | `android/app/build.gradle.kts`, `android/app/src/main/res/xml/backup_content.xml` |
+| Wijziging | `defaultConfig`: `applicationId = "org.jellyfin.mobile.jellyleon"` (stond er upstream niet: impliciet gelijk aan `namespace`); `namespace = "org.jellyfin.mobile"` blijft. Back-upregels: sharedpref `org.jellyfin.mobile[.debug]_preferences` → `org.jellyfin.mobile.jellyleon[.debug]_preferences` (de app schrijft `${packageName}_preferences`, `AppPreferences.kt`); vorm verder gelijk aan upstream. |
+| Waarom nodig | Zonder eigen ID vervangt de build de officiële app (zelfde pakketnaam, andere ondertekening → installatie faalt of de officiële app moet eerst weg). Zonder aangepaste back-upregels vallen de instellingen stil buiten de Android-back-up. Authorities (`${applicationId}.image-provider`, `.androidx-startup`) en `BuildConfig.APPLICATION_ID` volgen vanzelf. Een build-optie zonder bestandswijziging bestaat niet (de Gradle-configuratie zelf is de plek). |
+| Upstream-PR-kans | Laag — upstream heeft geen reden voor een andere ID; een optionele Gradle-property zou kunnen, maar niet nodig. |
+| Test | `tools/clients/app_identiteit.py bron` en `tools/clients/tests/test_app_identiteit.py` (bron + aapt2-uitvoer met een nep-aapt2, Sim-getest); `app_identiteit.py bouwmap android android/app/build` met de echte `aapt2` op de debug-APK's (libre + proprietary) en de release-`.ap_` in CI en lokaal (pakketnaam, authorities en eigen permissies met de pakketnaam als prefix, sharedpref-namen, verschil met `org.jellyfin.mobile[.debug]`). Naast de officiële app installeren en Chromecast (*proprietary*) met de andere pakketnaam: NIET GEVALIDEERD (hardware). |
+| Bij upstream-sync | Wijzigt upstream `defaultConfig` of de back-upregels, dan conflicteert de sync bewust (exitcode 2, ADR-0002) en wordt de patch met de hand opnieuw toegepast; de bron-controle in *Forkregels* faalt als de ID verdwijnt. |

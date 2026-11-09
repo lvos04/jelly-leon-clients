@@ -16,7 +16,12 @@ def test_echte_repo_voldoet_aan_forkregels():
     assert result.violations == []
     keys = {r["client"] for r in result.report}
     assert keys == {"android", "androidtv", "desktop", "swiftfin"}
-    assert result.changed == {"desktop/external/mpvqt": "gitlink→subtree"}
+    # Precies de geregistreerde afwijkingen (PATCHES.md); elke nieuwe afwijking hoort hier bewust bij te komen.
+    assert result.changed == {
+        "desktop/external/mpvqt": "gitlink→subtree",  # JLC-0001
+        "android/app/build.gradle.kts": "M",  # JLC-0002
+        "android/app/src/main/res/xml/backup_content.xml": "M",  # JLC-0002
+    }
 
 
 def test_schone_fork_in_orde(simple_setup):
