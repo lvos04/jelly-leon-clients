@@ -1,0 +1,427 @@
+//
+// Swiftfin is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, you can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
+//
+
+import Defaults
+import FactoryKit
+import JellyfinAPI
+import OrderedCollections
+import SwiftUI
+
+struct SelectUserView: View {
+
+    typealias UserItem = (user: UserState, server: ServerState)
+
+    @Default(.accentColor)
+    private var accentColor
+    @Default(.selectUserUseSplashscreen)
+    private var selectUserUseSplashscreen
+    @Default(.selectUserAllServersSplashscreen)
+    private var selectUserAllServersSplashscreen
+    @Default(.selectUserServerSelection)
+    private var serverSelection
+    @Default(.selectUserDisplayType)
+    private var userListDisplayType
+    @Default(.selectUserSortOrder)
+    private var userSortOrder
+
+    @Environment(\.localUserAuthenticationAction)
+    private var authenticationAction
+    @Environment(\.horizontalSizeClass)
+    private var horizontalSizeClass
+
+    @Injected(\.userSessionManager)
+    private var userSessionManager: UserSessionManager
+
+    @Router
+    private var router
+
+    @State
+    private var selectedUsers: Set<UserState> = []
+    @State
+    private var isEditing = false
+    @State
+    private var isPresentingConfirmDeleteUsers = false
+
+    @StateObject
+    private var viewModel = SelectUserViewModel()
+
+    private var selectedServer: ServerState? {
+        serverSelection.server(from: viewModel.servers.keys)
+    }
+
+    private var areAllUsersSelected: Bool {
+        selectedUsers.count == userItems.count
+    }
+
+    private func toggleAllUsersSelected() {
+        if areAllUsersSelected {
+            selectedUsers.removeAll()
+        } else {
+            selectedUsers.insert(contentsOf: userItems.map(\.user))
+        }
+    }
+
+    private var splashScreenImageSources: [ImageSource] {
+        switch (serverSelection, selectUserAllServersSplashscreen) {
+        case (.all, .all):
+            viewModel
+                .servers
+                .keys
+                .shuffled()
+                .map(\.splashScreenImageSource)
+
+        case let (.server(id), _), let (.all, .server(id)):
+            viewModel
+                .servers
+                .keys
+                .first(where: { $0.id == id })
+                .map { [$0.splashScreenImageSource] } ?? []
+        }
+    }
+
+    private var userItems: [UserItem] {
+        let items: [UserItem] = {
+            switch serverSelection {
+            case .all:
+                return viewModel.servers
+                    .map { server, users in
+                        users.map { UserItem(user: $0, server: server) }
+                    }
+                    .flattened()
+            case let .server(id: id):
+                guard let server = viewModel.servers.keys.first(where: { $0.id == id }) else {
+                    return []
+                }
+                return viewModel.servers[server]!
+                    .map { UserItem(user: $0, server: server) }
+            }
+        }()
+
+        return {
+            switch userSortOrder {
+            case .name:
+                items.sorted(using: \.user.username)
+            case .lastSeen:
+                items.sorted { lhs, rhs in
+                    let lhsDate = lhs.user.data.lastActivityDate ?? .distantPast
+                    let rhsDate = rhs.user.data.lastActivityDate ?? .distantPast
+                    return lhsDate < rhsDate
+                }
+            }
+        }()
+    }
+
+    private func addUser(server: ServerState) {
+        UIDevice.impact(.light)
+        router.route(to: .userSignIn(server: server))
+    }
+
+    private func delete(user: UserState) {
+        selectedUsers.insert(user)
+        isPresentingConfirmDeleteUsers = true
+    }
+
+    private func select(user: UserState) {
+        Task { @MainActor in
+
+            do {
+                guard let authenticationAction else { return }
+
+                let evaluatedPolicy = try await authenticationAction(
+                    policy: user.accessPolicy,
+                    reason: user.accessPolicy.authenticateReason(user: user)
+                )
+                let pin = (evaluatedPolicy as? PinEvaluatedUserAccessPolicy)?.pin ?? ""
+
+                await viewModel.signIn(user, pin: pin)
+            } catch {
+                await viewModel.error(error)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var splashScreenBackground: some View {
+        if selectUserUseSplashscreen, splashScreenImageSources.isNotEmpty {
+            AlternateLayoutView {
+                Color.clear
+            } content: {
+                ImageView(splashScreenImageSources)
+                    .pipeline(.Swiftfin.local)
+                    .aspectRatio(contentMode: .fill)
+                    .id(splashScreenImageSources)
+            }
+            .overlay {
+                Color.black
+                    .opacity(0.9)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                if userItems.isEmpty {
+                    EmptyUserView {
+                        if let selectedServer {
+                            addUser(server: selectedServer)
+                        }
+                    }
+                    .contextMenu {
+                        if selectedServer == nil {
+                            Text(L10n.selectServer)
+
+                            ForEach(viewModel.servers.keys) { server in
+                                Button {
+                                    addUser(server: server)
+                                } label: {
+                                    Text(server.name)
+                                    Text(server.effectiveServerURL.absoluteString)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    switch userListDisplayType {
+                    case .list:
+                        ListView(
+                            userItems: userItems,
+                            isEditing: $isEditing,
+                            selectedUsers: $selectedUsers,
+                            serverSelection: serverSelection,
+                            action: { select(user: $0) },
+                            onDelete: { delete(user: $0) }
+                        )
+                    case .grid:
+                        GridView(
+                            userItems: userItems,
+                            isEditing: $isEditing,
+                            selectedUsers: $selectedUsers,
+                            serverSelection: serverSelection,
+                            action: { select(user: $0) },
+                            onDelete: { delete(user: $0) }
+                        )
+                    }
+                }
+            }
+            .animation(.linear(duration: 0.1), value: userListDisplayType)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .focusSection()
+            .mask {
+                VStack(spacing: 0) {
+                    #if os(tvOS)
+                    if userListDisplayType == .list {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .white, location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 30)
+                    }
+                    #endif
+
+                    Color.white
+
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white, location: 0),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 30)
+                }
+                .ignoresSafeArea(.all, edges: .horizontal)
+            }
+
+            Toolbar(
+                servers: viewModel.servers.keys,
+                allUsers: userItems,
+                isEditing: $isEditing,
+                selectedUsers: $selectedUsers,
+                onDelete: {
+                    isPresentingConfirmDeleteUsers = true
+                }
+            )
+            .focusSection()
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            switch viewModel.state {
+            case .initial, .loading:
+                ProgressView()
+            case .content:
+                if viewModel.servers.isEmpty {
+                    ConnectToJellyfinView()
+                } else {
+                    contentView
+                }
+            }
+        }
+        .animation(.linear(duration: 0.1), value: viewModel.state)
+        .animation(.linear(duration: 0.1), value: selectedServer)
+        .environment(\.isOverComplexContent, true)
+        .isEditing(isEditing)
+        .onFirstAppear {
+            viewModel.getServers()
+        }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Image(.jellyfinBlobBlue)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: UIDevice.isTV ? 100 : 30)
+            }
+
+            #if os(iOS)
+            if horizontalSizeClass == .compact {
+                ToolbarItem(placement: .topBarLeading) {
+                    if isEditing {
+                        Button(
+                            areAllUsersSelected ? L10n.removeAll : L10n.selectAll,
+                            action: toggleAllUsersSelected
+                        )
+                        .foregroundStyle(.primary, .secondary)
+                        .if(true) { view in
+                            if #available(iOS 26.0, *) {
+                                view
+                            } else {
+                                view
+                                    .backport
+                                    .buttonStyle(.glass)
+                            }
+                        }
+                        .controlSize(.small)
+                    }
+                }
+
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if isEditing {
+                        Button(L10n.cancel, role: .cancel) {
+                            isEditing = false
+                        }
+                        .foregroundStyle(.primary, .secondary)
+                        .if(true) { view in
+                            if #available(iOS 26.0, *) {
+                                view
+                            } else {
+                                view
+                                    .backport
+                                    .buttonStyle(.glass)
+                            }
+                        }
+                        .controlSize(.small)
+                    } else {
+                        Menu(
+                            L10n.advanced,
+                            systemImage: "gearshape.fill"
+                        ) {
+                            AdvancedMenuContent(
+                                hasUsers: userItems.isNotEmpty,
+                                isEditing: $isEditing
+                            )
+                        }
+                        .backport
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                    }
+                }
+
+                ToolbarItem(placement: .bottomBar) {
+                    if isEditing {
+                        Button(L10n.delete, role: .destructive) {
+                            isPresentingConfirmDeleteUsers = true
+                        }
+                        .backport
+                        .buttonStyle(.glassProminent)
+                        .disabled(selectedUsers.isEmpty)
+                    }
+                }
+            }
+            #endif
+        }
+        .background {
+            splashScreenBackground
+                .ignoresSafeArea()
+        }
+        #if os(iOS)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        #endif
+        .onChange(of: isEditing) {
+            guard !isEditing, !isPresentingConfirmDeleteUsers else { return }
+            selectedUsers.removeAll()
+        }
+        .onChange(of: viewModel.servers.keys) {
+            let newValue = viewModel.servers.keys
+            if case let SelectUserServerSelection.server(id: id) = serverSelection,
+               !newValue.contains(where: { $0.id == id })
+            {
+                if newValue.count == 1, let firstServer = newValue.first {
+                    let newSelection = SelectUserServerSelection.server(id: firstServer.id)
+                    serverSelection = newSelection
+                    selectUserAllServersSplashscreen = newSelection
+                } else {
+                    serverSelection = .all
+                    selectUserAllServersSplashscreen = .all
+                }
+            }
+        }
+        .onReceive(viewModel.$error) { error in
+            guard error != nil else { return }
+            UIDevice.feedback(.error)
+        }
+        .onReceive(viewModel.events) { event in
+            switch event {
+            case let .signedIn(user):
+                Task { @MainActor in
+                    do {
+                        try await userSessionManager.signIn(userID: user.id)
+                        UIDevice.feedback(.success)
+                    } catch {
+                        await viewModel.error(error)
+                    }
+                }
+            }
+        }
+        .onNotification(.didConnectToServer) { server in
+            viewModel.background.getServers()
+            serverSelection = .server(id: server.id)
+        }
+        .onNotification(.didChangeServerConnection) { _ in
+            viewModel.background.getServers()
+        }
+        .onNotification(.didDeleteServer) { _ in
+            viewModel.background.getServers()
+        }
+        .alert(
+            L10n.delete,
+            isPresented: $isPresentingConfirmDeleteUsers
+        ) {
+            Button(L10n.delete, role: .destructive) {
+                viewModel.deleteUsers(selectedUsers)
+                selectedUsers.removeAll()
+                isEditing = false
+                UIDevice.feedback(.success)
+            }
+        } message: {
+            if selectedUsers.count == 1, let first = selectedUsers.first {
+                Text(L10n.deleteUserSingleConfirmation(first.username))
+            } else {
+                Text(L10n.deleteUserMultipleConfirmation(selectedUsers.count))
+            }
+        }
+        .errorMessage($viewModel.error)
+    }
+}
