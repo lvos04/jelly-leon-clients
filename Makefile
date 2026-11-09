@@ -51,7 +51,7 @@ android-bouw androidtv-bouw: %-bouw:
 	cd $* && $(GRADLE) assembleDebug test
 
 desktop-image:
-	$(if $(DOCKER_LOCK),flock $(DOCKER_LOCK)) docker build --network host --build-arg HTTPS_PROXY \
+	nice -n 10 $(if $(DOCKER_LOCK),flock $(DOCKER_LOCK)) docker buildx build --load \
 	  $(if $(CA_BUNDLE),--secret id=ca_bundle$(comma)src=$(CA_BUNDLE),) \
 	  -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev desktop/
 
