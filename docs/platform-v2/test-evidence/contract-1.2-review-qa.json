@@ -1,0 +1,75 @@
+{
+  "id": "contract-1.2-review-qa",
+  "datum": "2026-11-09",
+  "soort": "onafhankelijke review/QA van contract 1.2 + eigen applicationId (jelly-leon-clients)",
+  "uitgangspunt_commit": "e7f681b",
+  "omgeving": "eigen Ubuntu 26.04-machine van de gebruiker (22 CPU's, 14,5 GiB RAM, gedeeld met andere bouwers), geen proxy en geen eigen CA; Gradle onder flock <werkmap>/.lokaal/gradle.lock (nice -n 10, --no-daemon, --max-workers=4, -Xmx2g); aapt2 uit build-tools 36.0.0",
+  "opnieuw_uitgevoerd": [
+    {
+      "wat": "forkregels zoals de CI",
+      "commando": "ruff check --config tools/clients/ruff.toml tools/clients; python -m pytest -q tools/clients/tests; python3 tools/clients/check_clients.py; python3 tools/clients/app_identiteit.py bron; actionlint -color .github/workflows/*.yml",
+      "resultaat": "op e7f681b: ruff geen meldingen, 159 passed, forkregels in orde (android 2, androidtv 3, desktop 1, swiftfin 2 afwijkingen, alle geregistreerd), app-identiteit in de bron in orde, actionlint geen meldingen; na deze review 168 passed"
+    },
+    {
+      "wat": "contractkopie",
+      "commando": "cmp docs/platform-v2/{PLATFORM_CONTRACTEN,CONTRACT_1.2_CONFORMITEIT}.md <werkmap>/ai-server-manager/docs/platform-v2/…",
+      "resultaat": "beide byte-gelijk aan de bron (laatste wijziging daar: 8b54f39)"
+    },
+    {
+      "wat": "androidtv opnieuw gebouwd en getest (zoals CI: debug-APK, unit-tests, release-resources)",
+      "commando": "ANDROID_HOME=$HOME/android-sdk make androidtv-bouw GRADLE_LOCK=<gradle.lock>",
+      "resultaat": "BUILD SUCCESSFUL in 1m 19s; JUnit-XML app 13/13 + preference 2/2 in testDebugUnitTest én testReleaseUnitTest, 0 fouten; aapt2: 2 artefacten (debug-APK, release-.ap_), 0 overtredingen; pakket org.jellyfin.androidtv.jellyleon[.debug], authorities …androidx-startup, …content, …integration.provider.ImageProvider, …acra (alle met de eigen pakketnaam vooraan)"
+    },
+    {
+      "wat": "android opnieuw gebouwd (zoals CI)",
+      "commando": "ANDROID_HOME=$HOME/android-sdk make android-bouw GRADLE_LOCK=<gradle.lock>",
+      "resultaat": "BUILD SUCCESSFUL in 1m 6s; testLibreDebugUnitTest/testProprietaryDebugUnitTest NO-SOURCE (upstream heeft geen unit-tests); aapt2: 4 artefacten (2 debug-APK's, 2 release-.ap_ in proto-formaat), 0 overtredingen"
+    },
+    {
+      "wat": "upstream-eigen controles (zoals upstream app-lint.yaml: ./gradlew detekt lint)",
+      "commando": "cd androidtv|android && nice -n 10 flock <gradle.lock> ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g detekt lint",
+      "resultaat": "beide BUILD SUCCESSFUL (upstream zet abortOnError = false en detekt ignoreFailures = true; bevindingen gaan daar als SARIF naar GitHub). Geen enkele lint- of detekt-bevinding op een door JLC-0002/0003 gewijzigde regel: androidtv app 756 lint-meldingen (35 Error: MissingQuantity 30, NotificationPermission 2, RestrictedApi 2, ImpliedQuantity 1), detekt o.a. ComplexCondition op app/build.gradle.kts:40 (ondertekeningsblok van upstream); android proprietaryDebug 7 Error / 107 Warning, in build.gradle.kts alleen op compileSdk/targetSdk (regels 31/37), niet op de applicationId-regels 34–35. Geen vergelijkende run op de ongewijzigde upstream gedaan."
+    },
+    {
+      "wat": "Swiftfin-CI-log nagelezen (run 42656328216)",
+      "resultaat": "Swiftfin iOS en Swiftfin tvOS, Debug en Release: PRODUCT_BUNDLE_IDENTIFIER org.jellyfin.swiftfin.jellyleon; Info.plist van de Debug-simulatorbuild idem; 0 overtredingen"
+    }
+  ],
+  "syncproef_upstream_hoofdbranches": {
+    "doel": "Zijn de patches JLC-0002/0003/0004 bij een subtree-pull los te herbasen, en faalt de sync anders veilig?",
+    "opzet": "Bare clones van jellyfin-android, jellyfin-androidtv en Swiftfin (GitHub); HEAD lokaal getagd als proeftag (bestaat niet upstream): android v2.7.4 = afebde643faf36e626472201b00b97c970336540 (156 commits na v2.7.3), androidtv v0.19.11 = aa2497811b9759059b22b416dd4bc90b2066cc78 (1258 commits na v0.19.10, hoofdbranch op weg naar 0.20), swiftfin 1.6.2 = e3cbfcd3caa573eebfa6fd3c05acfe455e1e6cf4 (245 commits na 1.6.1). Verse clone van deze repo (git clone --no-local, e7f681b) in /tmp; niets gepusht; alles daarna verwijderd.",
+    "commando": "python3 tools/clients/upstream_sync.py sync <client> --tag <proeftag> --upstream-url <bare clone> --json",
+    "android": {
+      "exitcode": 0,
+      "branch": "sync/android-v2.7.4",
+      "resultaat": "schone sync; upstream wijzigde app/build.gradle.kts (afhankelijkheden, 2+/1-) zonder de patchregels te raken; check_clients.py en app_identiteit.py bron in orde",
+      "bouw_en_aapt2": {
+        "commando": "cd android && nice -n 10 flock <gradle.lock> ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test processLibreReleaseResources processProprietaryReleaseResources && python3 ../tools/clients/app_identiteit.py bouwmap android app/build --verwacht debug,release",
+        "resultaat": "BUILD SUCCESSFUL in 3m 40s (upstream-hoofdbranch: Gradle 9.8.0, AGP 9.4.1, compileSdk 37; AGP haalde platforms;android-37.0 zelf op); unit-tests NO-SOURCE; aapt2 4 artefacten (2 debug-APK, 2 release-.ap_), 0 overtredingen: pakket org.jellyfin.mobile.jellyleon[.debug], authorities en eigen permissie met de eigen pakketnaam vooraan"
+      }
+    },
+    "androidtv": {
+      "exitcode": 2,
+      "reden": "forkregels geschonden na sync: beschermd bestand androidtv/CONTRIBUTORS.md bestaat upstream niet meer",
+      "terugdraaien": "oorspronkelijke branch terug, geen syncbranch, geen tijdelijke refs, werkboom schoon",
+      "patch_los": "handmatige git subtree merge (proefbranch, zonder de tool): schone merge, app_identiteit.py bron in orde (applicationId en de drie resValue's uit defaultConfig.applicationId intact)",
+      "let_op": "upstream heeft op de hoofdbranch res/xml/authenticator.xml verwijderd; de aapt2-controle meldt dan 'xml/authenticator ontbreekt in het archief' (fail-closed) en moet bij die sync bewust worden aangepast"
+    },
+    "swiftfin": {
+      "exitcode": 2,
+      "reden": "mergeconflict in swiftfin/Swiftfin.xcodeproj/project.pbxproj: upstream wijzigt PRODUCT_NAME op de regel naast de JLC-0004-regel van Swiftfin iOS/Release",
+      "terugdraaien": "oorspronkelijke branch terug, geen syncbranch, geen tijdelijke refs, werkboom schoon",
+      "let_op": "upstream voegt een doel toe met PRODUCT_BUNDLE_IDENTIFIER org.jellyfin.swiftfin.screenshots; de bron-controle keurt elke andere waarde dan de eigen bundle-id af (fail-closed) tot een mens beslist"
+    }
+  },
+  "reparaties_in_deze_review": [
+    "tests/test_app_identiteit.py: patch-omvang per bestand t.o.v. de upstream-basis (squashcommit) vastgelegd en elke gewijzigde regel moet over de app-identiteit gaan (8 nieuwe tests, met tegenproef en mutatieproef: één extra commentaarwijziging in backup_rules.xml laat de test falen)",
+    "PATCHES.md: uitkomst van de syncproef per patch onder 'Bij upstream-sync'",
+    "README: zin over debug-APK's rechtgezet"
+  ],
+  "niet_gedaan": [
+    "Naast elkaar installeren op een emulator: er staan Android TV-systeemimages en de emulator in de SDK, maar de gebruiker heeft geen toegang tot /dev/kvm (groep kvm); zonder hardwareversnelling start een x86-image niet. Groepslidmaatschap wijzigen is een systeemwijziging buiten deze opdracht. NIET GEVALIDEERD (hardware).",
+    "Desktop niet opnieuw gebouwd (geen wijziging in desktop/ in deze ronde).",
+    "Swiftfin lokaal: NIET GEVALIDEERD (Mac/Xcode); ondertekenen/registreren: NIET GEVALIDEERD (account)."
+  ]
+}
