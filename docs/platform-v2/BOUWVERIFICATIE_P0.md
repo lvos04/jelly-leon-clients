@@ -65,3 +65,38 @@ Niets gepusht; wegwerpclone verwijderd. De gesynchroniseerde code is niet gebouw
 
 Bouwmap `.bouw/` (genegeerd door git) en de bouwimage `jelly-leon-clients/desktop-bouw:dev` worden na de verificatie
 verwijderd (`docker image rm`, `docker image prune -f`); de image is reproduceerbaar uit de Dockerfile.
+
+## 8. Onafhankelijke review (QA), 2026-11-09
+
+Bewijs: [`test-evidence/p0-review-qa.json`](test-evidence/p0-review-qa.json). Alles opnieuw uitgevoerd in dezelfde
+bouwomgeving; wat niet kon staat er als niet gedaan.
+
+| Controle | Resultaat |
+|---|---|
+| Inhoud subtrees tegen upstream (tags/commit opgehaald, tree-hashes vergeleken) | android, androidtv, desktop, swiftfin en mpvqt **byte-gelijk** aan upstream; desktop wijkt alleen af in `external/mpvqt` (JLC-0001) |
+| Gepinde actie-SHA's tegen hun tags (`git ls-remote`) | alle gelijk |
+| Base-digest `ubuntu:24.04` (`docker buildx imagetools inspect`) | gelijk aan `desktop.Dockerfile` |
+| Desktop opnieuw gebouwd (bouwimage-lagen uit BuildKit-cache, compile vers) | 62/62 stappen, `ctest` 1/1 |
+| Syncproef met de nieuwe tooling (desktop v2.0.0 → upstream master, verse clone) | exit 0, `upstream_tree` gelijk aan upstream, forkregels in orde, 92/92 tests op de syncbranch; niets gepusht |
+| Android-blokkade nagemeten | `dl.google.com` en `downloads.gradle.org`: 403 via de proxy → blijft **Geblokkeerd** |
+| Tests vóór / na de reparaties | 39 → **92 passed** (48 tooling + 44 workflowregels); ruff en actionlint zonder meldingen |
+
+**Gevonden en gerepareerd** (zie de review-commits):
+
+1. De forkregels vertrouwden alleen de trailer `git-subtree-split`; een commit met de juiste trailer en andere inhoud
+   werd als upstream-basis geaccepteerd. Nu: `upstream_tree` in de basislijn en tree-controle van elke squashcommit.
+2. `check_clients.py --ref` las basislijn en register uit de werkboom; nu uit de gecontroleerde commit (terugval op de
+   werkboom alleen als ze daar ontbreken, en dan gemeld). De meting `--ref 600830428` hierboven gebruikt daarom de
+   basislijn uit de werkboom (die bestond in die commit nog niet).
+3. Beschermde licentiebestanden moesten alleen ongewijzigd zijn; nu moeten ze ook bestaan.
+4. `upstream_sync.py` draaide alleen bij verwachte fouten terug; nu bij elke fout.
+5. Sync-workflow: token niet meer in de git-config tijdens de sync; pushen alleen als de syncbranch aantoonbaar niet
+   bestaat.
+6. Client-CI op een syncbranch kon de Gradle-/Carthage-cache van de standaardbranch vullen met nog niet beoordeelde
+   upstream-code; nu alleen-lezen.
+
+**Blijft open (niet te repareren in deze omgeving):** Android/Android TV-build (proxy), Swiftfin
+(**NIET GEVALIDEERD (Mac/Xcode)**), geen enkele workflow op GitHub gedraaid, niets op echte apparaten
+(**NIET GEVALIDEERD (hardware)**). De door `git subtree` zelf gemaakte squashcommits (o.a. `b7cc2782c`) dragen niet de
+twee vaste afsluitregels van §12; dat is inherent aan `git subtree` en is zonder history-herschrijving (force-push)
+niet te herstellen.

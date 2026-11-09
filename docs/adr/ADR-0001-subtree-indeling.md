@@ -13,7 +13,9 @@
   tag; de trailers `git-subtree-dir`/`git-subtree-split` leggen de upstream-commit vast.
 - Alles **buiten** die mappen (`README.md`, `docs/`, `tools/`, `.github/`, `Makefile`) is fork-eigen.
 - Bron van waarheid voor de basis is `tools/clients/baseline.json`; `tools/clients/check_clients.py` bewaakt dat
-  basislijn en squashcommits overeenkomen (CI *Clients / Forkregels*).
+  basislijn en squashcommits overeenkomen (CI *Clients / Forkregels*): de trailer `git-subtree-split` moet
+  `upstream_commit` zijn **en** de inhoud (tree-hash) van de squashcommit moet `upstream_tree` zijn. Alleen de trailer
+  is geen bewijs: een commit met de juiste trailer en andere inhoud zou anders een patch verbergen (review P0).
 - Geen submodules (zie ADR-0005), geen volledige upstream-historie in de repo.
 
 ## Waarom

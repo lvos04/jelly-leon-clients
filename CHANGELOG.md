@@ -14,3 +14,7 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
 - Bouwverificatie: desktop (Linux) gebouwd en unit-getest in een container; Android geblokkeerd in de bouwomgeving;
   Swiftfin NIET GEVALIDEERD (Mac/Xcode).
 - Docs: README, forkstrategie, inventaris, patchregister, ADR-0001…0009. Branding en app-identiteit ongewijzigd.
+- Review P0: inhoud (tree-hash) van elke squashcommit gecontroleerd tegen de basislijn; forkregels lezen basislijn en
+  register uit de gecontroleerde commit; beschermde licentiebestanden moeten bestaan; sync draait bij elke fout terug;
+  sync-workflow zonder opgeslagen token en zonder schrijfbare cache voor onbeoordeelde upstream-code;
+  workflowregels als tests. 92 tests.

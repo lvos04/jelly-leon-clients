@@ -8,7 +8,8 @@ subtree-squashcommit, die exact de upstream-tag uit `tools/clients/baseline.json
 - een niet-geregistreerde afwijking → CI faalt;
 - een geregistreerd bestand dat niet (meer) afwijkt → CI faalt (register verouderd, bv. na upstream-acceptatie);
 - beschermde bestanden (licenties en credits: `android/LICENSE.md`, `androidtv/LICENSE`, `androidtv/CONTRIBUTORS.md`,
-  `desktop/LICENSE`, `swiftfin/LICENSE.md`, de LGPL-teksten van mpvqt) mogen **nooit** afwijken;
+  `desktop/LICENSE`, `swiftfin/LICENSE.md`, de LGPL-teksten van mpvqt) mogen **nooit** afwijken of ontbreken;
+- het register en de basislijn worden gelezen uit de gecontroleerde commit (een niet-gecommitte registratie telt niet);
 - geen gitlinks/submodules: die zou `git subtree` leeg laten (ADR-0005).
 
 Alles **buiten** de vier clientmappen (`README.md`, `docs/`, `tools/`, `.github/`, `Makefile`) is fork-eigen en
@@ -40,5 +41,5 @@ Appcode (Kotlin, C++, Swift): **geen** patches in P0.
 | Wijziging | gitlink (mode 160000) verwijderd; `git subtree add --squash --prefix desktop/external/mpvqt https://github.com/KDE/mpvqt.git 2ebbd38…` (officiële GitHub-spiegel van `invent.kde.org/libraries/mpvqt`, dezelfde commit-hash). `desktop/.gitmodules` blijft byte-gelijk aan upstream (in een submap heeft het geen effect). |
 | Waarom nodig | Zonder deze bron is de desktop-client niet reproduceerbaar te bouwen op systemen zonder `libmpvqt-dev` en is de fork niet bronvolledig (GPL-2.0/LGPL). Een git-submodule in de root zou de subtree-indeling (ADR-0001) doorbreken. |
 | Upstream-PR-kans | n.v.t. — upstream gebruikt bewust een submodule. |
-| Test | `tools/clients/check_clients.py`: upstream-gitlink == geneste basislijn-commit en geneste squashcommit == dezelfde commit; `tools/clients/tests/test_check_clients.py` en `test_upstream_sync.py` (gitlink-pin gelijk/gewijzigd/nieuw); lokale container-build met `-DUSE_STATIC_MPVQT=ON` (zie `BOUWVERIFICATIE_P0.md`). |
+| Test | `tools/clients/check_clients.py`: upstream-gitlink == geneste basislijn-commit, geneste squashcommit == dezelfde commit en dezelfde inhoud (`upstream_tree` `7d1a4c1bcc95…`, in de review tegen de bron nagemeten); `tools/clients/tests/test_check_clients.py` en `test_upstream_sync.py` (gitlink-pin gelijk/gewijzigd/nieuw); lokale container-build met `-DUSE_STATIC_MPVQT=ON` (zie `BOUWVERIFICATIE_P0.md`). |
 | Bij upstream-sync | Ongewijzigde pin → schone merge. Gewijzigde pin → `upstream_sync.py` lost het gitlink-conflict op en zet de geneste subtree op de nieuwe pin. Nieuwe submodule → sync faalt bewust (handmatig beoordelen). |

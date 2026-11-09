@@ -14,8 +14,9 @@ apparaat getest; daarvoor is D15 (welke tv's, telefoons, Apple TV, Android TV in
 | `desktop/external/mpvqt/` | KDE MpvQt (submodule van desktop) | — | `2ebbd38bf65d…` (`v1.1.1-1-g2ebbd38`) | door upstream desktop gepind | LGPL-2.1-only/LGPL-3.0-only |
 | `swiftfin/` | `jellyfin/Swiftfin` | `1.6.1` (zonder `v`) | `5b794d2b7d4b…` | `1.6.1` (actueel) | MPL-2.0 (`LICENSE.md`) |
 
-Elke import is een `git subtree add --squash`; de squashcommit bevat exact de upstream-boom van de tag (gecontroleerd door
-`tools/clients/check_clients.py`). Bron van waarheid: `tools/clients/baseline.json`.
+Elke import is een `git subtree add --squash`; de squashcommit bevat exact de upstream-boom van de tag: in de review
+nagemeten (upstream-tag opgehaald, tree-hashes gelijk, `test-evidence/p0-review-qa.json`) en sindsdien bewaakt door
+`tools/clients/check_clients.py` (`upstream_tree` in de basislijn). Bron van waarheid: `tools/clients/baseline.json`.
 
 ## 2. Per client
 
@@ -103,7 +104,7 @@ Smart-tv-apps (Samsung/LG), Chromecast en AirPlay: **unknown** tot D15 bekend is
 | Geteste matrix op echte apparaten (ondertitels, hervatten, afspelen) | **ontbrekend** | acceptatie B03-003 vraagt echte apparaten → Geblokkeerd |
 | Branding "Jelly Leon" (zichtbare naam) | **ontbrekend (bewust)** | P0 wijzigt niets; applicationId/bundle-id is een open vraag (ADR-0004) |
 | Distributie naar apparaten (APK/IPA/installers) | **ontbrekend** | geen TrueNAS-app (ADR-0008); kanaal is een gebruikersbesluit |
-| Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 39 tests (Sim-getest) |
+| Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 92 tests (Sim-getest) |
 
 ## 5. Bekende afhankelijkheden van derden (relevant voor licentie en distributie)
 

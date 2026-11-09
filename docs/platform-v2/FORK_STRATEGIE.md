@@ -21,8 +21,9 @@ tools/clients/  fork-tooling (basislijn, forkregels, upstream-sync, bouwverifica
 docs/        ADR's, inventaris, patchregister, bewijs
 ```
 
-- Basislijn per client in `tools/clients/baseline.json` (tag, upstream-commit, tagpatroon, forkversie, licentie,
-  beschermde bestanden, geneste subtrees).
+- Basislijn per client in `tools/clients/baseline.json` (tag, upstream-commit, tree-hash van die commit, tagpatroon,
+  forkversie, licentie, beschermde bestanden, geneste subtrees). `check_clients.py` eist dat elke squashcommit exact
+  die upstream-inhoud heeft (review P0: in de bouwomgeving tegen upstream nagemeten, alle vijf gelijk).
 - **Submodules:** `git subtree` neemt submodule-inhoud niet mee. Alleen desktop heeft er één (`external/mpvqt`); die is
   als geneste subtree op exact de upstream-pin toegevoegd (JLC-0001). Elke nieuwe upstream-submodule laat de sync
   bewust falen.
@@ -38,8 +39,9 @@ python3 tools/clients/upstream_sync.py sync desktop --tag v2.0.1
 `sync` = `git subtree pull --prefix <map> --squash <upstream-url> <tag>` in branch **`sync/<client>-<tag>`**, met:
 vorige upstream-commit ophalen (verse clone), gewijzigde mpvqt-pin volgen, basislijn bijwerken, forkregels controleren.
 Conflict, nieuwe/verdwenen submodule of geschonden forkregel → alles terug en exitcode 2; niets gepusht.
-Workflow `Clients / Upstream-sync` doet dit wekelijks en handmatig, pusht alleen de syncbranch en draait daarop
-forkregels + client-CI. **Overnemen in de hoofdbranch en elke release zijn handmatige R2-stappen.**
+Workflow `Clients / Upstream-sync` doet dit wekelijks en handmatig, pusht alleen de syncbranch (token alleen in de
+pushstap) en draait daarop forkregels + client-CI met alleen leesrechten en zonder schrijfbare cache.
+**Overnemen in de hoofdbranch en elke release zijn handmatige R2-stappen.**
 
 Stand 2026-11-09: alle vier clients staan op de nieuwste stabiele upstream-tag (`status` → `actueel`). Syncproef op
 echte code: desktop v2.0.0 → upstream master (214 commits) schoon in een verse clone.
@@ -82,7 +84,7 @@ de forkversie staat in de basislijn (en later in release-metadata).
 | androidtv | `clients-androidtv.yml` (JDK 21, `assembleDebug test`) | geblokkeerd (idem) | NIET GEVALIDEERD (CI nog niet gedraaid) |
 | desktop | `clients-desktop.yml` (Ubuntu 24.04, `ctest`) | **gebouwd**, ctest 1/1 (container) | Unit-getest (Linux); app-gebruik NIET GEVALIDEERD (hardware) |
 | swiftfin | `clients-swiftfin.yml` (macOS 26, Xcode 26.6, simulator) | onmogelijk | NIET GEVALIDEERD (Mac/Xcode) |
-| fork-tooling | `clients-forkregels.yml` | 39/39 tests, forkregels in orde, actionlint/shellcheck | Sim-getest |
+| fork-tooling | `clients-forkregels.yml` | 92/92 tests (48 tooling + 44 workflowregels), forkregels in orde, actionlint/shellcheck | Sim-getest |
 
 ## 8. Servercompatibiliteit
 

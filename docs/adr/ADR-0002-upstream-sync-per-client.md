@@ -15,12 +15,16 @@
    - maakt branch `sync/<client>-<tag>` en doet `git subtree merge --prefix <map> --squash <tag-commit>` (inhoudelijk
      gelijk aan `git subtree pull --prefix <map> --squash <upstream-url> <tag>`);
    - volgt een gewijzigde submodule-pin met de geneste subtree (ADR-0005);
-   - werkt `baseline.json` bij (tag, commit, forkversie `<upstream>-jl.0`) en draait `check_clients.py`.
-3. **Falen is veilig.** Elk ander mergeconflict, een nieuwe of verdwenen submodule, of een geschonden forkregel
-   (bv. upstream nam onze patch over en het register is verouderd) → volledige terugdraaiing (oorspronkelijke branch,
-   syncbranch weg, werkboom schoon) en **exitcode 2**. Niets wordt gepusht.
+   - werkt `baseline.json` bij (tag, commit, **tree-hash** `upstream_tree`, forkversie `<upstream>-jl.0`) en draait
+     `check_clients.py`.
+3. **Falen is veilig.** Elk ander mergeconflict, een nieuwe of verdwenen submodule, een geschonden forkregel
+   (bv. upstream nam onze patch over en het register is verouderd, of upstream haalde een licentiebestand weg) of elke
+   andere fout tijdens de sync → volledige terugdraaiing (oorspronkelijke branch, syncbranch weg, werkboom schoon) en
+   **exitcode 2**. Niets wordt gepusht.
 4. **Workflow** `clients-upstream-sync.yml` (wekelijks + handmatig): per client de herbruikbare sync, push van alleen
-   `sync/<client>-<tag>` (bestaat die al op origin → niet overschrijven), daarna forkregels + client-CI op die branch.
+   `sync/<client>-<tag>` (bestaat die al op origin → niet overschrijven; is origin niet te controleren → niets pushen),
+   daarna forkregels + client-CI op die branch. Het token staat alleen in de pushstap; de client-CI op de syncbranch
+   heeft alleen leesrechten en schrijft geen caches (ADR-0006).
 5. **Overnemen is een mens (R2).** Samenvoegen met de hoofdbranch en elke release/APK-distributie zijn handmatige
    stappen na review en groene CI. De workflow maakt geen PR, merge, tag, release of image.
 

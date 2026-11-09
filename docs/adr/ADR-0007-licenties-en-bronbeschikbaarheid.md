@@ -9,7 +9,8 @@
 
 - Licentiebestanden en credits blijven **byte-gelijk** aan upstream; `check_clients.py` weigert elke wijziging aan
   `android/LICENSE.md`, `androidtv/LICENSE`, `androidtv/CONTRIBUTORS.md`, `desktop/LICENSE`, `swiftfin/LICENSE.md` en de
-  LGPL-teksten van mpvqt — ook met registratie. Geen extra licentiebestand in de root zonder vraag aan de gebruiker.
+  LGPL-teksten van mpvqt — ook met registratie — en eist dat ze bestaan (verdwijnt er upstream een, dan faalt de
+  sync en beoordeelt een mens). Geen extra licentiebestand in de root zonder vraag aan de gebruiker.
 - Fork-eigen code (`tools/`, workflows, docs) krijgt in P0 **geen** eigen licentie (contract §10: niet zonder vraag).
 - **Wijzigingen herkenbaar** (GPL-2.0 §2a, MPL-2.0 §3.3): elke afwijking staat met datum en doel in `PATCHES.md`.
 - **Bron beschikbaar** voor elke verspreide build: de exacte commit van deze repo (inclusief vendored mpvqt) hoort bij

@@ -16,9 +16,11 @@
 - Bron: de officiële GitHub-spiegel van KDE (`github.com/KDE/mpvqt`) omdat `invent.kde.org` in deze bouwomgeving door
   de proxy geweigerd wordt. Git-commits zijn inhoudsadressen: dezelfde hash = dezelfde inhoud. De oorspronkelijke URL
   staat in de basislijn (`upstream_repo_volgens_gitmodules`).
-- De basislijn legt per geneste subtree de commit vast; `check_clients.py` eist dat (a) upstream op die plek een gitlink
-  met precies die commit heeft, (b) de geneste squashcommit naar diezelfde commit verwijst, en (c) er nergens gitlinks of
-  een root-`.gitmodules` staan.
+- De basislijn legt per geneste subtree de commit én de tree-hash vast; `check_clients.py` eist dat (a) upstream op die
+  plek een gitlink met precies die commit heeft, (b) de geneste squashcommit naar diezelfde commit verwijst en exact
+  die inhoud heeft, en (c) er nergens gitlinks of een root-`.gitmodules` staan.
+- Gemeten in de review (2026-11-09): de mpvqt-commit `2ebbd38` opgehaald van de GitHub-spiegel heeft tree
+  `7d1a4c1bcc95…`, gelijk aan de geneste squashcommit en aan `HEAD:desktop/external/mpvqt`.
 - Upstream-sync (ADR-0002): ongewijzigde pin → schone merge; gewijzigde pin → het gitlink-conflict wordt opgelost en de
   geneste subtree volgt naar de nieuwe pin; **nieuwe of verdwenen submodule → sync faalt bewust** (nieuwe code van
   derden eerst door een mens laten beoordelen).

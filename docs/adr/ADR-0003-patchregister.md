@@ -9,11 +9,13 @@
 - Elke afwijking van upstream **binnen een clientmap** is een patch `JLC-<nnnn>` in `docs/platform-v2/PATCHES.md`
   met de velden `Status` (`actief` | `upstream-aangeboden` | `vervallen`), `Client`, `Doel`, `Bestanden` (paden tussen
   backticks; eindigt een pad op `/`, dan dekt het de hele map), `Waarom nodig`, `Upstream-PR-kans`, `Test`.
-- `tools/clients/check_clients.py` vergelijkt per client de boom van de jongste squashcommit met `HEAD:<map>`
-  (en per geneste subtree met diens squashcommit) en faalt bij:
+- `tools/clients/check_clients.py` vergelijkt per client de boom van de jongste squashcommit met `<ref>:<map>`
+  (en per geneste subtree met diens squashcommit) en gebruikt daarbij de basislijn en het register **uit dezelfde
+  commit** (een niet-gecommitte registratie telt niet). Faalt bij:
   - een niet-geregistreerde afwijking (gewijzigd, toegevoegd, verwijderd, vervangen gitlink);
   - een geregistreerd pad dat niet (meer) afwijkt (register verouderd);
-  - een wijziging aan een beschermd bestand (licenties, `CONTRIBUTORS.md`) — ook mét registratie;
+  - een wijziging aan een beschermd bestand (licenties, `CONTRIBUTORS.md`) — ook mét registratie — of een beschermd
+    bestand dat ontbreekt (bv. upstream hernoemde de licentie: mens beoordeelt, basislijn bijwerken);
   - ontbrekende verplichte velden, onbekende status of client, dubbele ID's.
 - Volgorde vóór een patch: configuratie/build-optie → serverkant (plugin of web-client) → pas dan een clientpatch.
 
