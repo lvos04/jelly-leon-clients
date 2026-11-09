@@ -1,0 +1,7 @@
+# Ruff-instellingen voor de fork-tooling (alleen tools/clients; de upstream-clientmappen worden niet gelint).
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "PL"]
+ignore = ["PLR0912", "PLR0913", "PLR0915", "PLR2004", "PLR0911", "PLC0415"]

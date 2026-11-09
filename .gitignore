@@ -1,0 +1,5 @@
+# Fork-eigen (jelly-leon-clients). De clientmappen hebben elk hun eigen upstream-.gitignore.
+/.bouw/
+/.venv/
+__pycache__/
+.pytest_cache/

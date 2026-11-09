@@ -1,0 +1,68 @@
+{
+  "schema_versie": 1,
+  "toelichting": "Bron van waarheid voor de upstream-basis per client (ADR-0001, ADR-0002). Wordt alleen door tools/clients/upstream_sync.py of in een gereviewde commit gewijzigd; check_clients.py bewaakt de overeenkomst met de git-subtree-commits.",
+  "peildatum": "2026-11-09",
+  "clients": {
+    "android": {
+      "naam": "Jellyfin Android",
+      "zichtbare_naam_doel": "Jelly Leon",
+      "prefix": "android",
+      "upstream_repo": "https://github.com/jellyfin/jellyfin-android.git",
+      "upstream_tag": "v2.7.3",
+      "upstream_commit": "9a5f9be6a76da47ca07733b982a12dbd0f75539b",
+      "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
+      "forkversie": "2.7.3-jl.0",
+      "licentie": "GPL-2.0",
+      "beschermde_bestanden": ["LICENSE.md"],
+      "geneste_subtrees": {}
+    },
+    "androidtv": {
+      "naam": "Jellyfin Android TV",
+      "zichtbare_naam_doel": "Jelly Leon",
+      "prefix": "androidtv",
+      "upstream_repo": "https://github.com/jellyfin/jellyfin-androidtv.git",
+      "upstream_tag": "v0.19.10",
+      "upstream_commit": "984181a3d6ab14e9a6d2dcc850c582e1c138bd95",
+      "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
+      "forkversie": "0.19.10-jl.0",
+      "licentie": "GPL-2.0",
+      "beschermde_bestanden": ["LICENSE", "CONTRIBUTORS.md"],
+      "geneste_subtrees": {}
+    },
+    "desktop": {
+      "naam": "Jellyfin Desktop",
+      "zichtbare_naam_doel": "Jelly Leon",
+      "prefix": "desktop",
+      "upstream_repo": "https://github.com/jellyfin/jellyfin-desktop.git",
+      "upstream_tag": "v2.0.0",
+      "upstream_commit": "1634d3d263b881dccc62bf278d1289b471ec7af1",
+      "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
+      "forkversie": "2.0.0-jl.0",
+      "licentie": "GPL-2.0",
+      "beschermde_bestanden": ["LICENSE"],
+      "geneste_subtrees": {
+        "external/mpvqt": {
+          "naam": "KDE MpvQt",
+          "upstream_repo": "https://github.com/KDE/mpvqt.git",
+          "upstream_repo_volgens_gitmodules": "https://invent.kde.org/libraries/mpvqt.git",
+          "upstream_commit": "2ebbd38bf65d01be9c55d673ecd43c8bb9a6fc8e",
+          "licentie": "LGPL-2.1-only OR LGPL-3.0-only (plus BSD-3-Clause/MIT/CC0 voor build-bestanden)",
+          "beschermde_bestanden": ["LICENSES/LGPL-2.1-only.txt", "LICENSES/LGPL-3.0-only.txt"]
+        }
+      }
+    },
+    "swiftfin": {
+      "naam": "Swiftfin (iOS/tvOS)",
+      "zichtbare_naam_doel": "Jelly Leon",
+      "prefix": "swiftfin",
+      "upstream_repo": "https://github.com/jellyfin/Swiftfin.git",
+      "upstream_tag": "1.6.1",
+      "upstream_commit": "5b794d2b7d4b54db89b041b8d6355461de7110db",
+      "tag_patroon": "^(\\d+)\\.(\\d+)(?:\\.(\\d+))?$",
+      "forkversie": "1.6.1-jl.0",
+      "licentie": "MPL-2.0",
+      "beschermde_bestanden": ["LICENSE.md"],
+      "geneste_subtrees": {}
+    }
+  }
+}
