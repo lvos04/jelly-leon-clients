@@ -29,3 +29,12 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `05_TESTS/GEBRUIKERSWENSEN_TRACEERBAARHEID.md`
 - `05_TESTS/INTEGRALE_E2E_TESTMATRIX.md`
 - `06_TEMPLATES/PROMPTS_PER_APP/PROMPT_B03_UNIVERSELE_MEDIASERVER.md`
+
+## Eigen documenten van deze repo (fase P0)
+
+- `FORK_STRATEGIE.md` — aanpak: subtree-indeling, upstream-sync per client, patchregister, branding, licenties
+- `INVENTARIS.md` — per client taal/build, toolchain, minimale SDK/OS, tests, servercompatibiliteit, delta-matrix B03-003
+- `PATCHES.md` — patchregister (JLC-…), automatisch gecontroleerd door `tools/clients/check_clients.py`
+- `BOUWVERIFICATIE_P0.md` en `test-evidence/` — wat echt gebouwd/getest is en wat geblokkeerd was
+- `EVIDENCE.json` — status per Excel-taak (contract §11)
+- Besluiten: `../adr/ADR-0001…0009`
