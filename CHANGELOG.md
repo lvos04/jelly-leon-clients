@@ -31,3 +31,21 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
   Makefile en de bouwdocs; drie extra negatieve sync-tests; nieuwe tests voor de bouwcontainer en voor
   `EVIDENCE.json` (§11); verouderde teksten in workflowcommentaar en ADR-0002/0005/0006 rechtgezet; ADR-0008 met
   toetsing per contractparagraaf. Android, Android TV en desktop opnieuw gebouwd: artefacten byte-gelijk. 115 tests.
+
+## Contract 1.2 — 2026-11-09 (ontwikkelstand, niets gepubliceerd)
+
+- Kopie van `PLATFORM_CONTRACTEN.md` (`contracts 1.2`) en `CONTRACT_1.2_CONFORMITEIT.md`, byte-gelijk aan
+  ai-server-manager `8b54f39`, met drifttest (vaste SHA-256; met de bronrepo ernaast ook byte-vergelijking).
+- **Eigen app-identiteit naast de officiële apps** (besluit van de gebruiker, ADR-0004; JC1/JC2), als geregistreerde
+  patches zonder codewijziging: JLC-0002 android `org.jellyfin.mobile.jellyleon`, JLC-0003 androidtv
+  `org.jellyfin.androidtv.jellyleon` (ook `app_id`, zoek-authority/-data uit de applicationId en de back-upregels),
+  JLC-0004 Swiftfin `org.jellyfin.swiftfin.jellyleon` (xcconfig én de doelinstelling iOS-Release; NIET GEVALIDEERD
+  (Mac/Xcode)). Forkversies `2.7.3-jl.1`, `0.19.10-jl.1`, `1.6.1-jl.1`.
+- `tools/clients/app_identiteit.py` (+ `app_identiteit.json`): controle in de bron, met `aapt2` op APK's en gelinkte
+  release-resources, en op de Xcode-build-instellingen; in CI in Forkregels, Android, Android TV en Swiftfin;
+  `make check` en `make android-bouw`/`androidtv-bouw` draaien hem ook. 159 tests.
+- Lokaal gebouwd met de patches: android `assembleDebug assembleRelease test` (4 APK's), androidtv idem (15/15 tests
+  per variant); `aapt2` 0 overtredingen; tegenproeven op een echte upstream-build en een "halve patch" falen zoals
+  bedoeld.
+- ADR-0010 (contract 1.2 in deze repo); ADR-0004 met de vastgezette ID's; ADR-0008 getoetst aan 1.2 (§13 N.v.t.).
+- JC3 (clients tegen de 12.x-server) niet uitgevoerd: de server staat nog op 10.11.11 (wacht op JL1).

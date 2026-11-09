@@ -1,11 +1,11 @@
 # Forkstrategie Jelly Leon clients (B03-001 / B03-003 / B03-013)
 
-Versie P0 · 2026-11-09 · repo `lvos04/jelly-leon-clients`.
+Versie P0 + contract 1.2 · 2026-11-09 · repo `lvos04/jelly-leon-clients`.
 
 Deze repo bevat de apparaat-apps van het universele mediaplatform: forks van **jellyfin-android v2.7.3**,
 **jellyfin-androidtv v0.19.10**, **jellyfin-desktop v2.0.0** en **Swiftfin 1.6.1** (iOS/tvOS). Doel: zelf kunnen bouwen,
 upstream bijhouden en later alleen de zichtbare naam "Jelly Leon" geven — **zonder** het Jellyfin-protocol of de
-compatibiliteit met de server `jelly-leon` (Jellyfin 10.11.11) te breken. Besluiten: `docs/adr/` (ADR-0001…0009).
+compatibiliteit met de server `jelly-leon` (Jellyfin 10.11.11) te breken. Besluiten: `docs/adr/` (ADR-0001…0010).
 Inventaris per client: [`INVENTARIS.md`](INVENTARIS.md). Bouwverificatie: [`BOUWVERIFICATIE_P0.md`](BOUWVERIFICATIE_P0.md).
 
 ## 1. Indeling (ADR-0001, ADR-0005)
@@ -50,19 +50,22 @@ echte code: desktop v2.0.0 → upstream master (214 commits) schoon in een verse
 
 Elke afwijking binnen een clientmap staat in [`PATCHES.md`](PATCHES.md) (`JLC-<nnnn>`); `check_clients.py` faalt op
 niet-geregistreerde of verouderde registraties en op elke wijziging van licentie-/creditbestanden.
-Stand P0: **één** patch (JLC-0001, mpvqt-bron; geen codewijziging). Appcode: geen patches.
+Stand contract 1.2: **vier** patches — JLC-0001 (mpvqt-bron) en de eigen app-identiteit JLC-0002 (android),
+JLC-0003 (androidtv), JLC-0004 (swiftfin); alleen build-configuratie en XML-resources. Appcode: geen patches.
 
 ## 4. Branding en app-identiteit (ADR-0004)
 
 - Technische identiteit blijft "Jellyfin" (clientnaam in de `Authorization`-header, apparaatprofielen, API-gedrag).
 - Alleen de **zichtbare** naam wordt later "Jelly Leon" — eerst via build-configuratie, anders als geregistreerde patch.
   Bij android en desktop komt het meeste zichtbare uit de web-client van de server (`jelly-leon-web`).
-- **In P0 is niets aan branding gewijzigd.**
-- **Besluit gebruiker (2026-11-09) — app-identiteit:** eigen `applicationId` voor Android en Android TV, naast de
-  officiële app installeerbaar; eigen bundle-id voor iOS (NIET GEVALIDEERD (Mac/Xcode)). De patch volgt in **P4** als
-  geregistreerde patch (android: `applicationId` + back-upregels; androidtv daarnaast `app_id`,
-  `app_search_suggest_authority` en `app_search_suggest_intent_data`, die upstream uit `namespace` afleidt). Patchplan
-  en voorstel voor de waarde: ADR-0004. **Tot P4 blijft elke ID upstream.**
+- **Zichtbare branding is nog niet gewijzigd** (naam en pictogram blijven "Jellyfin").
+- **Besluit gebruiker (2026-11-09) — app-identiteit, uitgevoerd in de ronde van contract 1.2 (JC1/JC2):** eigen ID
+  naast de officiële app — android **`org.jellyfin.mobile.jellyleon`** (JLC-0002), androidtv
+  **`org.jellyfin.androidtv.jellyleon`** (JLC-0003; ook `app_id`, `app_search_suggest_authority`,
+  `app_search_suggest_intent_data` en de back-upregels), swiftfin **`org.jellyfin.swiftfin.jellyleon`** (JLC-0004,
+  NIET GEVALIDEERD (Mac/Xcode)); debug houdt de suffix `.debug`. Kotlin-`namespace` blijft. Bewaakt door
+  `tools/clients/app_identiteit.py` (bron in *Forkregels*, `aapt2` in de Android-workflows, Xcode-instellingen in
+  *Swiftfin*). Waarom deze ID's en de afwijking van de contracttekst "nooit `org.jellyfin.*`": ADR-0004 en ADR-0010.
 
 ## 5. Licenties (ADR-0007)
 
@@ -72,19 +75,21 @@ byte-gelijk (CI-controle); wijzigingen herkenbaar via `PATCHES.md`; bij elke ver
 
 ## 6. Versieschema
 
-Forkversie per client `<upstream-versie>-jl.<N>`; nu `2.7.3-jl.0`, `0.19.10-jl.0`, `2.0.0-jl.0`, `1.6.1-jl.0`
-(ontwikkelstand, nooit gepubliceerd). Bij een sync wordt `N` weer `0`. De apps zelf melden in P0 hun upstream-versie;
+Forkversie per client `<upstream-versie>-jl.<N>`; nu `2.7.3-jl.1`, `0.19.10-jl.1`, `2.0.0-jl.0`, `1.6.1-jl.1`
+(ontwikkelstand, nooit gepubliceerd; `jl.1` = met de eigen app-identiteit). Bij een sync wordt `N` weer `0`. De apps zelf melden in P0 hun upstream-versie;
 de forkversie staat in de basislijn (en later in release-metadata).
 
 ## 7. Bouwen en testen (ADR-0006)
 
 | Client | CI-workflow | Lokaal (2026-11-09) | Validatie |
 |---|---|---|---|
-| android | `clients-android.yml` (JDK 21, `assembleDebug test`) | **gebouwd** (`make android-bouw`); upstream heeft geen unit-tests (`NO-SOURCE`); CI groen | alleen gebouwd (compileren + verpakken; geen tests om te draaien); app-gebruik NIET GEVALIDEERD (hardware) |
-| androidtv | `clients-androidtv.yml` (JDK 21, `assembleDebug test`) | **gebouwd** (`make androidtv-bouw`), 15/15 tests per variant; CI groen | Unit-getest; app-gebruik NIET GEVALIDEERD (hardware) |
-| desktop | `clients-desktop.yml` (Ubuntu 24.04, `ctest`) | **gebouwd**, ctest 1/1 (container, `make desktop-bouw`); CI groen | Unit-getest (Linux); app-gebruik NIET GEVALIDEERD (hardware) |
-| swiftfin | `clients-swiftfin.yml` (macOS 26, Xcode 26.6, simulator) | onmogelijk (geen Mac); CI-simulatorbuild zonder signing groen | NIET GEVALIDEERD (Mac/Xcode) |
-| fork-tooling | `clients-forkregels.yml` | 115/115 tests (58 tooling + 44 workflowregels + 5 bouwcontainer- + 8 EVIDENCE-regels), forkregels in orde, actionlint/shellcheck | Sim-getest |
+| android | `clients-android.yml` (JDK 21, `assembleDebug test` + release-resources, `aapt2`-controle app-identiteit) | **gebouwd** met JLC-0002 (`assembleDebug assembleRelease test`); upstream heeft geen unit-tests (`NO-SOURCE`); `aapt2`: 4 APK's in orde | gebouwd en app-identiteit gemeten; app-gebruik NIET GEVALIDEERD (hardware) |
+| androidtv | `clients-androidtv.yml` (JDK 21, `assembleDebug test` + release-resources, `aapt2`-controle) | **gebouwd** met JLC-0003, 15/15 tests per variant; `aapt2`: debug- en release-APK in orde | Unit-getest; app-gebruik NIET GEVALIDEERD (hardware) |
+| desktop | `clients-desktop.yml` (Ubuntu 24.04, `ctest`) | **gebouwd**, ctest 1/1 (container, `make desktop-bouw`; P0, ongewijzigd) | Unit-getest (Linux); app-gebruik NIET GEVALIDEERD (hardware) |
+| swiftfin | `clients-swiftfin.yml` (macOS 26, Xcode 26.6, simulator; bundle-id uit `-showBuildSettings`) | onmogelijk (geen Mac); bron-controle bundle-id lokaal in orde | NIET GEVALIDEERD (Mac/Xcode) |
+| fork-tooling | `clients-forkregels.yml` (+ `app_identiteit.py bron`) | 159/159 tests (o.a. 35 app-identiteit, 5 contract-drift, 48 workflowregels), forkregels in orde, actionlint | Sim-getest |
+
+GitHub-runs per commit: `EVIDENCE.json` en `test-evidence/contract-1.2-app-identiteit.json`.
 
 Lokale zware builds op een gedeelde machine: `GRADLE_LOCK=<bestand>` / `DOCKER_LOCK=<bestand>` laten `make` de stap
 onder `flock` draaien (standaard `--max-workers=4`, Gradle-heap 2 GiB).

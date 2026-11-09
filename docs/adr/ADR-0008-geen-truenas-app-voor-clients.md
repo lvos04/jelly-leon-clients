@@ -24,7 +24,7 @@
   F-Droid-achtige repository geleverd door `jelly-leon`/de Hub, (c) alleen sideloaden. Elke optie vraagt eerst het
   besluit over app-identiteit en ondertekening (ADR-0004).
 
-## Toetsing per contractparagraaf (contracts 1.1, review P0-afronding 2026-11-09)
+## Toetsing per contractparagraaf (contracts 1.2, bijgewerkt 2026-11-09; eerst 1.1 bij de review P0-afronding)
 
 Deze repo levert geen dienst, dus de dienst-eisen zijn **N.v.t.**; wat wél geldt, is gecontroleerd en waar mogelijk
 met een test vastgezet.
@@ -35,6 +35,7 @@ met een test vastgezet.
 | 1 | Geen `latest`, base-images op digest | bouwcontainer: Dockerfile-frontend `docker/dockerfile:1.7.1@sha256:…` en `ubuntu:24.04@sha256:…`; acties op commit-SHA; dev-hulpmiddelen op exacte versie | `tests/test_bouwverificatie.py`, `tests/test_workflows.py` |
 | 1 | Geen shell/root voor AI, geen `sudo`, geen Docker-socket | geen AI-functies; compile in de container zonder netwerk, zonder capabilities, niet-root, bron alleen-lezen, zonder Docker-socket; `sudo` alleen in de CI-runner voor `apt-get` (GitHub-runner, niet in een container) | `tests/test_bouwverificatie.py` |
 | 2 | Eén alles-in-één image, één poort, `/appdata`, 568 | N.v.t. (geen dienst); de bouwcontainer draait als 568 (of de eigen uid) | dit ADR |
+| 2.3 r. 6 | Clients: eigen applicationId/bundle-id als patch, namespace en identiteit "Jellyfin" blijven | JLC-0002/0003/0004 (ADR-0004, ADR-0010); iOS/tvOS NIET GEVALIDEERD (Mac/Xcode) | `tools/clients/app_identiteit.py` (bron, `aapt2`, Xcode-instellingen), `tests/test_app_identiteit.py` |
 | 3 | Geen geheimen in formulier/Git/logs; `/appdata/secrets` | geen formulier; geen geheimen in de repo of workflows (geen `secrets.*`, checkout zonder opgeslagen token); signing-sleutels pas bij een besluit over ondertekening (ADR-0004) | `tests/test_workflows.py` |
 | 4 | Auth/enrollment/rollen, 401 bij ongeldige auth | N.v.t.: geen API; de apps loggen in bij de Jellyfin-server zoals upstream | — |
 | 5 | Foutformaat, `Idempotency-Key`, `/healthz`, `/readyz`, OpenAPI-export | N.v.t.: geen HTTP-API; de clients gebruiken de API van `jelly-leon` | — |
@@ -45,3 +46,5 @@ met een test vastgezet.
 | 10 | Repo-indeling, CI, CHANGELOG, geen licentie zonder vraag | eigen indeling voor een fork (ADR-0001), CI per client, CHANGELOG, geen eigen licentie (ADR-0007) | ADR-0001, ADR-0006 |
 | 11 | EVIDENCE.json, nooit `Gereed`/`Geslaagd` | bijgehouden; statussen alleen `Bezig`/`Geblokkeerd` | `tests/test_evidence.py` (velden, statuslijsten, validatiewaarden, bestaande commits) |
 | 12 | Branch, geen PR/force-push, NL-commits | gevolgd (afsluitregel volgens de lopende sessie, zie contract 1.2 A2) | — |
+| 13 | Ontwerptaal (Peil) | N.v.t.: Jelly Leon-clients houden de Jellyfin-vormgeving (JC5) | — |
+| A1 | Kopie van het contract | byte-gelijk aan ai-server-manager `8b54f39` | `tests/test_contract_kopie.py` |

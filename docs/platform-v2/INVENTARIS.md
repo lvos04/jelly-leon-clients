@@ -29,7 +29,7 @@ nagemeten (upstream-tag opgehaald, tree-hashes gelijk, `test-evidence/p0-review-
 | Toolchain | JDK **21** (`.tools-versions`), bytecode-doel Java 11 met desugaring |
 | SDK | `compileSdk` 36, `targetSdk` 36, **`minSdk` 21** (Android 5.0) |
 | Varianten | flavors `libre` (zonder Google-diensten) en `proprietary` (standaard; Google Cast + Play Services); build types `debug` (`.debug`-suffix) en `release` (minify, ondertekening via `KEYSTORE_*`-variabelen) |
-| Identiteit | `applicationId` = `namespace` = **`org.jellyfin.mobile`** (debug: `org.jellyfin.mobile.debug`); appnaam `Jellyfin` (`strings_donottranslate.xml`) |
+| Identiteit | upstream: `applicationId` = `namespace` = `org.jellyfin.mobile` (debug `.debug`). **Fork (JLC-0002, besluit gebruiker 2026-11-09):** `applicationId` **`org.jellyfin.mobile.jellyleon`** (debug `org.jellyfin.mobile.jellyleon.debug`), `namespace` blijft `org.jellyfin.mobile`; gemeten met `aapt2` in de lokaal gebouwde debug- en release-APK's (libre + proprietary). Appnaam `Jellyfin` (`strings_donottranslate.xml`) ongewijzigd |
 | Server-API | jellyfin-sdk-kotlin **1.7.1**: API gegenereerd tegen server **10.10.7**, minimum **10.10.0** → past bij Jelly Leon 10.11.11 |
 | Tests | **geen** unit- of instrumentatietests in v2.7.3 (geen `src/test`, `src/androidTest`); gemeten: `testLibreDebugUnitTest` en `testProprietaryDebugUnitTest` zijn `NO-SOURCE` (testframeworks JUnit 6/Kotest/MockK zijn wel geconfigureerd). Upstream-CI: build, test, lint+detekt, wrapper-validatie. |
 | Submodules | geen |
@@ -43,11 +43,11 @@ nagemeten (upstream-tag opgehaald, tree-hashes gelijk, `test-evidence/p0-review-
 | Taal / build | Kotlin, Gradle-wrapper **9.1.0** (sha256 vastgezet), AGP **8.11.1**, Kotlin **2.2.21**; modules `app`, `playback:{core,jellyfin,media3:exoplayer,media3:session}`, `preference` |
 | Toolchain | JDK **21** (Gradle-toolchain `java-jdk = 21`), bytecode Java 1.8 |
 | SDK | `compileSdk` 36, `targetSdk` 36, **`minSdk` 21** |
-| Identiteit | `applicationId` = `namespace` = **`org.jellyfin.androidtv`** (debug `.debug`); appnaam `Jellyfin` / `Jellyfin Debug`. Let op: `app_id` (accounttype van de authenticator) en de zoeksuggestie-authority worden in `app/build.gradle.kts` uit **`namespace`** afgeleid, niet uit `applicationId` (zie ADR-0004). |
+| Identiteit | upstream: `applicationId` = `namespace` = `org.jellyfin.androidtv` (debug `.debug`); `app_id` (accounttype) en de zoeksuggestie-authority werden uit **`namespace`** afgeleid. **Fork (JLC-0003):** `applicationId` **`org.jellyfin.androidtv.jellyleon`** (debug `….jellyleon.debug`); `app_id`, `app_search_suggest_authority` en `app_search_suggest_intent_data` volgen de applicationId; `namespace` blijft. Gemeten met `aapt2` (debug + release): pakket = `app_id` = accounttype, zoek-authority `<pakket>.content` bestaat als provider. Appnaam `Jellyfin` / `Jellyfin Debug` ongewijzigd. |
 | Server-API | jellyfin-sdk-kotlin **1.7.1** (API 10.10.7); app-minimum `Jellyfin.minimumVersion` = 10.10.0, met aangekondigd minimum 10.11.0 en een 10.11-specifiek apparaatprofiel → past bij 10.11.11 |
 | Tests | 4 testklassen met 15 testgevallen (Kotest `FunSpec`): `TimeUtilsTests` (2), `CustomSeekProviderTests` (3), `VideoSpeedControllerTests` (8), `PreferenceStoreTests` (2). **Lokaal gedraaid:** 15/15 geslaagd in `testDebugUnitTest` én 15/15 in `testReleaseUnitTest` (JUnit-XML); de vier `playback`-modules hebben geen tests (`NO-SOURCE`). |
 | Submodules | geen |
-| Lokaal gebouwd? | **Ja (2026-11-09)**: `./gradlew --no-daemon --max-workers=4 assembleDebug test` → BUILD SUCCESSFUL; debug-APK pakket `org.jellyfin.androidtv.debug` met `app_id` en zoek-authority consistent op `.debug` (`aapt2`). Ook groen op GitHub (run 42608527671). Niet geïnstalleerd/gestart → gebruik NIET GEVALIDEERD (hardware). |
+| Lokaal gebouwd? | **Ja (2026-11-09)**: P0 upstream (`org.jellyfin.androidtv.debug`, run 42608527671); met JLC-0003 opnieuw `assembleDebug assembleRelease test` → BUILD SUCCESSFUL, 15/15 tests per variant, `aapt2`-controle 0 overtredingen (`test-evidence/contract-1.2-app-identiteit.json`). Niet geïnstalleerd/gestart → gebruik NIET GEVALIDEERD (hardware). |
 
 ### 2.3 `desktop/` — Jellyfin Desktop 2.0.0 (Windows / macOS / Linux)
 
@@ -71,7 +71,7 @@ nagemeten (upstream-tag opgehaald, tree-hashes gelijk, `test-evidence/p0-review-
 | Taal / build | Swift 5 (+ macro's), Xcode-project `Swiftfin.xcodeproj` met schema's `Swiftfin` en `Swiftfin tvOS`; Swift Package Manager (39 gepinde pakketten in `Package.resolved`), **Carthage** voor binaire VLCKit 3.7.2 (`MobileVLCKit`, `TVVLCKit` van `code.videolan.org`); build-fasen roepen `swiftgen`, `swiftformat`, `swiftlint` aan (Brewfile) |
 | Toolchain | macOS 26 + **Xcode 26.6** (upstream-CI `macos-26`) |
 | OS-minimum | **iOS 18.6**, **tvOS 26.1** (`*_DEPLOYMENT_TARGET`) |
-| Identiteit | bundle-id **`org.jellyfin.swiftfin`** (`XcodeConfig/Shared.xcconfig`, ook in het project); `XcodeConfig/DevelopmentTeam.xcconfig` wordt optioneel ingevoegd en staat in `.gitignore` |
+| Identiteit | upstream bundle-id `org.jellyfin.swiftfin` (`XcodeConfig/Shared.xcconfig` + doelinstelling *Swiftfin iOS*/Release in het project). **Fork (JLC-0004):** **`org.jellyfin.swiftfin.jellyleon`** op beide plekken; NIET GEVALIDEERD (Mac/Xcode, account). `XcodeConfig/DevelopmentTeam.xcconfig` wordt optioneel ingevoegd en staat in `.gitignore` |
 | Server-API | **jellyfin-sdk-swift 3.0.0 → gegenereerd tegen Jellyfin API 12.0.0.** Swiftfin markeert een server met major.minor < 12.0 als niet compatibel ("Update to Jellyfin 12.0 for the best experience"). Jelly Leon draait 10.11.11 → **waarschuwing en mogelijk ontbrekende functies** (ADR-0009). Ter vergelijking: Swiftfin **1.5** gebruikte SDK 2.1.0 (API 10.11.8). |
 | Tests | **geen** testtargets in het project (2 native targets, beide `application`) |
 | Submodules | geen |
@@ -98,7 +98,7 @@ Smart-tv-apps (Samsung/LG), Chromecast en AirPlay: **unknown** tot D15 bekend is
 
 | Eis (B03-003 / B03 §1) | Stand na P0 | Toelichting |
 |---|---|---|
-| Upstream-protocol behouden | **bestaand** | Geen enkele codewijziging; technische identiteit "Jellyfin" ongewijzigd (ADR-0004) |
+| Upstream-protocol behouden | **bestaand** | Geen codewijziging (alleen build-configuratie/XML voor de app-identiteit); technische identiteit "Jellyfin" ongewijzigd (ADR-0004) |
 | Web / PWA-shell | buiten deze repo | `jelly-leon-web` (web-client) en Hub-UI in `ai-server-manager` |
 | Android-telefoon | **bestaand (upstream)**, build **gemeten** | lokaal en op GitHub: assemble + unit-tests (`NO-SOURCE`) groen; niet op een apparaat |
 | Android TV | **bestaand (upstream)**, build **gemeten** | lokaal en op GitHub: assemble + 15/15 unit-tests per variant; niet op een apparaat |
@@ -106,9 +106,10 @@ Smart-tv-apps (Samsung/LG), Chromecast en AirPlay: **unknown** tot D15 bekend is
 | Desktop | **bestaand (upstream)**, Linux-build **gemeten** | Windows/macOS-builds ontbreken in onze CI |
 | Tv-browser, smart-tv, Chromecast/AirPlay | **ontbrekend / unknown** | afhankelijk van D15; Chromecast alleen in android *proprietary* |
 | Geteste matrix op echte apparaten (ondertitels, hervatten, afspelen) | **ontbrekend** | acceptatie B03-003 vraagt echte apparaten → Geblokkeerd |
-| Branding "Jelly Leon" (zichtbare naam) | **ontbrekend (bewust)** | P0 wijzigt niets; besluit: eigen applicationId/bundle-id naast de officiële apps, patch in P4 (ADR-0004) |
+| Eigen app-identiteit naast de officiële apps | **bestaand (nieuw, contract 1.2)** | JLC-0002/0003/0004; android/androidtv met `aapt2` gemeten, Swiftfin via build-instellingen; installeren naast de officiële app NIET GEVALIDEERD (hardware) |
+| Branding "Jelly Leon" (zichtbare naam) | **ontbrekend (bewust)** | aparte stap na de app-identiteit (ADR-0004 punt 5) |
 | Distributie naar apparaten (APK/IPA/installers) | **ontbrekend** | geen TrueNAS-app (ADR-0008); kanaal is een gebruikersbesluit |
-| Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 115 tests (Sim-getest) |
+| Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 159 tests (Sim-getest) |
 
 ## 5. Bekende afhankelijkheden van derden (relevant voor licentie en distributie)
 
