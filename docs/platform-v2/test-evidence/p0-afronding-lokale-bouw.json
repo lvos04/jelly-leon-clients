@@ -16,7 +16,7 @@
   },
   "android": {
     "client": "android (jellyfin-android v2.7.3, forkversie 2.7.3-jl.0)",
-    "commando": "cd android && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock /home/transcode/truenas-v2/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test",
+    "commando": "cd android && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock <WERKMAP>/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test",
     "resultaat": "BUILD SUCCESSFUL in 3m 3s, 97 taken, exitcode 0 (Gradle 9.6.1 gedownload van services.gradle.org, checksum door de wrapper gecontroleerd)",
     "unit_tests": "testLibreDebugUnitTest en testProprietaryDebugUnitTest: NO-SOURCE — upstream v2.7.3 heeft geen unit-tests; er is dus niets getest behalve compileren en verpakken",
     "artefacten": [
@@ -28,7 +28,7 @@
   },
   "androidtv": {
     "client": "androidtv (jellyfin-androidtv v0.19.10, forkversie 0.19.10-jl.0)",
-    "commando": "cd androidtv && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock /home/transcode/truenas-v2/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test",
+    "commando": "cd androidtv && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock <WERKMAP>/.lokaal/gradle.lock ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test",
     "resultaat": "BUILD SUCCESSFUL in 2m 48s, 317 taken, exitcode 0 (Gradle 9.1.0, AGP 8.11.1)",
     "unit_tests": {
       "bron": "JUnit-XML in */build/test-results/",
@@ -47,7 +47,7 @@
   },
   "desktop": {
     "client": "desktop (jellyfin-desktop v2.0.0 + mpvqt 2ebbd38, forkversie 2.0.0-jl.0)",
-    "commando": "nice -n 10 flock /home/transcode/truenas-v2/.lokaal/docker-build.lock bash -c 'docker buildx build -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev --load desktop/ && JOBS=4 tools/clients/bouwverificatie/desktop_bouw.sh'",
+    "commando": "nice -n 10 flock <WERKMAP>/.lokaal/docker-build.lock bash -c 'docker buildx build -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev --load desktop/ && JOBS=4 tools/clients/bouwverificatie/desktop_bouw.sh'",
     "base_image_digest_gecontroleerd": "docker buildx imagetools inspect docker.io/library/ubuntu:24.04 → sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852, gelijk aan desktop.Dockerfile",
     "bouwimage": "zonder proxy en zonder CA-secret (optionele ca_bundle-secret leeg); apt via archive.ubuntu.com; image a4bcd5539c0d, 2,21 GB (na afloop verwijderd)",
     "versies": "g++-13 13.3.0-6ubuntu2~24.04.1, cmake 3.28.3-1build7, ninja-build 1.11.1-2, qt6-base-dev 6.4.2+dfsg-21.1build5, qt6-webengine-dev 6.4.2-final+dfsg-12ubuntu9, libmpv-dev 0.37.0-1ubuntu4",
