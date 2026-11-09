@@ -24,6 +24,8 @@ def test_echte_repo_voldoet_aan_forkregels():
         "androidtv/app/build.gradle.kts": "M",  # JLC-0003
         "androidtv/app/src/main/res/xml/backup_content.xml": "M",  # JLC-0003
         "androidtv/app/src/main/res/xml/backup_rules.xml": "M",  # JLC-0003
+        "swiftfin/Swiftfin.xcodeproj/project.pbxproj": "M",  # JLC-0004
+        "swiftfin/XcodeConfig/Shared.xcconfig": "M",  # JLC-0004
     }
 
 

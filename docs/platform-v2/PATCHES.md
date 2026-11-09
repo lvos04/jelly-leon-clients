@@ -27,6 +27,7 @@ een patch in de client. Branding is in P0 bewust **niet** gewijzigd (ADR-0004).
 | JLC-0001 | Submodule `external/mpvqt` als geneste subtree | desktop | bronvolledigheid (geen codewijziging) | actief |
 | JLC-0002 | Eigen applicationId `org.jellyfin.mobile.jellyleon` | android | app-identiteit (build-configuratie + back-upregels) | actief |
 | JLC-0003 | Eigen applicationId `org.jellyfin.androidtv.jellyleon` met `app_id` en zoek-authority | androidtv | app-identiteit (build-configuratie + back-upregels) | actief |
+| JLC-0004 | Eigen bundle-id `org.jellyfin.swiftfin.jellyleon` | swiftfin | app-identiteit (build-instellingen) | actief |
 
 Appcode (Kotlin, C++, Swift): **geen** patches — de app-identiteitspatches (JLC-0002 e.v.) wijzigen alleen
 build-configuratie en XML-resources (contract 1.2 §2.3 regel 6, besluit van de gebruiker 2026-11-09, ADR-0004).
@@ -83,3 +84,19 @@ controleren ze.
 | Upstream-PR-kans | Middel — afleiden van `applicationId` in plaats van `namespace` is ook upstream correcter (geldt voor elke afgeleide build); de vaste eigen ID zelf blijft fork-eigen. |
 | Test | `tools/clients/app_identiteit.py bron` en `tools/clients/tests/test_app_identiteit.py` (Sim-getest); `app_identiteit.py bouwmap androidtv androidtv/app/build` met de echte `aapt2` op de debug-APK en de release-`.ap_` in CI (lokaal ook op de release-APK): pakketnaam, `string/app_id` = pakketnaam, zoek-authority = pakketnaam + `.content` en bestaat als provider, accounttype in `xml/authenticator` en authority/data in `xml/searchable` verwijzen naar die waarden, alle authorities en eigen permissies met de pakketnaam als prefix, sharedpref-namen; unit-tests van upstream (15 per variant). Naast de officiële app installeren, accounts en zoeken op een tv: NIET GEVALIDEERD (hardware). |
 | Bij upstream-sync | Zoals JLC-0002: conflict → sync faalt bewust; de bron-controle faalt als een `resValue` weer `namespace` gebruikt. |
+
+## JLC-0004 — Eigen bundle-id `org.jellyfin.swiftfin.jellyleon`
+
+| Veld | Waarde |
+|---|---|
+| Status | actief |
+| Client | swiftfin |
+| Soort | app-identiteit: build-instellingen (xcconfig + één doelinstelling in het project); geen Swift-code |
+| Sinds | 2026-11-09 (forkversie 1.6.1-jl.1) |
+| Doel | Eigen bundle-id voor iOS en tvOS naast de officiële Swiftfin-app (zelfde patroon als JLC-0002/0003). |
+| Bestanden | `swiftfin/XcodeConfig/Shared.xcconfig`, `swiftfin/Swiftfin.xcodeproj/project.pbxproj` |
+| Wijziging | `Shared.xcconfig`: `PRODUCT_BUNDLE_IDENTIFIER = org.jellyfin.swiftfin.jellyleon`. `project.pbxproj`: de doelinstelling `PRODUCT_BUNDLE_IDENTIFIER` van *Swiftfin iOS* / Release (de enige configuratie zonder `Shared.xcconfig` als basis; een doelinstelling wint van de xcconfig) krijgt dezelfde waarde. Alleen de xcconfig wijzigen (zoals `CONTRACT_1.2_CONFORMITEIT.md` JC2 noemt) zou iOS-Release op `org.jellyfin.swiftfin` laten. |
+| Waarom nodig | Twee apps met dezelfde bundle-id kunnen niet naast elkaar op één apparaat; de eigen build zou de officiële app vervangen. Keychain-items (KeychainSwift), Spotlight-items en caches zijn per app en volgen zonder codewijziging. `fastlane/Fastfile.swift` (upstream-publicatiepad, door onze CI nooit gebruikt) noemt nog de officiële ID en blijft ongewijzigd. |
+| Upstream-PR-kans | Geen — fork-eigen identiteit. |
+| Test | `tools/clients/app_identiteit.py bron` (elke `PRODUCT_BUNDLE_IDENTIFIER` in xcconfig en project = de eigen ID) en `tools/clients/tests/test_app_identiteit.py`; workflow *Clients / Swiftfin*: `xcodebuild -showBuildSettings` voor beide schema's en beide configuraties + `CFBundleIdentifier` in de gebouwde simulator-app. Ondertekenen, registratie van de bundle-id bij Apple en installeren op een apparaat: **NIET GEVALIDEERD (Mac/Xcode)** en **NIET GEVALIDEERD (account)** (Apple Developer-account van de gebruiker nodig). |
+| Bij upstream-sync | Zoals JLC-0002; een nieuwe doelinstelling met de officiële ID laat de bron-controle falen. |

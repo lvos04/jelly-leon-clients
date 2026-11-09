@@ -7,6 +7,7 @@
 //
 
 DEVELOPMENT_TEAM = 
-PRODUCT_BUNDLE_IDENTIFIER = org.jellyfin.swiftfin
+// Jelly Leon (JLC-0004): eigen bundle-id naast de officiële app
+PRODUCT_BUNDLE_IDENTIFIER = org.jellyfin.swiftfin.jellyleon
 
 #include? "DevelopmentTeam.xcconfig"

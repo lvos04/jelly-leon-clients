@@ -64,7 +64,7 @@
       "upstream_commit": "5b794d2b7d4b54db89b041b8d6355461de7110db",
       "upstream_tree": "66547a91f4958bb44441a35484524e2c77b6db01",
       "tag_patroon": "^(\\d+)\\.(\\d+)(?:\\.(\\d+))?$",
-      "forkversie": "1.6.1-jl.0",
+      "forkversie": "1.6.1-jl.1",
       "licentie": "MPL-2.0",
       "beschermde_bestanden": ["LICENSE.md"],
       "geneste_subtrees": {}
