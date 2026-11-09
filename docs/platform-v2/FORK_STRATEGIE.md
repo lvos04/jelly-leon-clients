@@ -84,7 +84,7 @@ de forkversie staat in de basislijn (en later in release-metadata).
 | androidtv | `clients-androidtv.yml` (JDK 21, `assembleDebug test`) | **gebouwd** (`make androidtv-bouw`), 15/15 tests per variant; CI groen | Unit-getest; app-gebruik NIET GEVALIDEERD (hardware) |
 | desktop | `clients-desktop.yml` (Ubuntu 24.04, `ctest`) | **gebouwd**, ctest 1/1 (container, `make desktop-bouw`); CI groen | Unit-getest (Linux); app-gebruik NIET GEVALIDEERD (hardware) |
 | swiftfin | `clients-swiftfin.yml` (macOS 26, Xcode 26.6, simulator) | onmogelijk (geen Mac); CI-simulatorbuild zonder signing groen | NIET GEVALIDEERD (Mac/Xcode) |
-| fork-tooling | `clients-forkregels.yml` | 107/107 tests (58 tooling + 44 workflowregels + 5 bouwcontainerregels), forkregels in orde, actionlint/shellcheck | Sim-getest |
+| fork-tooling | `clients-forkregels.yml` | 115/115 tests (58 tooling + 44 workflowregels + 5 bouwcontainer- + 8 EVIDENCE-regels), forkregels in orde, actionlint/shellcheck | Sim-getest |
 
 Lokale zware builds op een gedeelde machine: `GRADLE_LOCK=<bestand>` / `DOCKER_LOCK=<bestand>` laten `make` de stap
 onder `flock` draaien (standaard `--max-workers=4`, Gradle-heap 2 GiB).
