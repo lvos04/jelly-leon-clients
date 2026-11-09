@@ -49,3 +49,7 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
   bedoeld.
 - ADR-0010 (contract 1.2 in deze repo); ADR-0004 met de vastgezette ID's; ADR-0008 getoetst aan 1.2 (§13 N.v.t.).
 - JC3 (clients tegen de 12.x-server) niet uitgevoerd: de server staat nog op 10.11.11 (wacht op JL1).
+- Review contract 1.2: nieuwe test dat elke identiteitspatch minimaal blijft (vaste omvang per bestand t.o.v. de
+  upstream-basis, alleen regels over de app-identiteit); syncproef met `upstream_sync.py` op de upstream-hoofdbranches
+  (android schoon, gebouwd en `aapt2` 0 overtredingen; androidtv en Swiftfin falen bewust en draaien terug); upstream
+  `detekt lint` zonder bevinding op een patchregel. 168 tests.
