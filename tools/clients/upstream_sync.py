@@ -12,9 +12,11 @@ Subcommando's
 
 Veiligheid
   * Weigert te starten met een vuile werkboom of als de syncbranch al bestaat (exitcode 3).
-  * Elk conflict, een nieuwe/verdwenen submodule of een overtreding van de forkregels → alles terugdraaien
-    (oorspronkelijke branch terug, syncbranch weg, werkboom schoon) en exitcode 2 (EX48: incompatibele
-    upstream-update faalt, geen deploy).
+  * Elk conflict, een nieuwe/verdwenen submodule, een overtreding van de forkregels of elke andere fout tijdens
+    de sync → alles terugdraaien (oorspronkelijke branch terug, syncbranch weg, werkboom schoon) en exitcode 2
+    (EX48: incompatibele upstream-update faalt, geen deploy).
+  * Legt naast de upstream-commit ook de tree-hash vast (`upstream_tree`), zodat check_clients.py de inhoud
+    van elke squashcommit kan controleren.
   * Pusht nooit en voegt nooit samen met de hoofdbranch: pushen doet de workflow, samenvoegen een mens na
     review en groene CI (R2).
 
@@ -79,8 +81,13 @@ def status(repo: Path, url_overrides: dict[str, str] | None = None) -> list[dict
     rows = []
     for client in parse_clients(load_baseline_data(repo)):
         url = url_overrides.get(client.key, client.upstream_repo)
-        tags = ls_remote_tags(url)
         row = {"client": client.key, "basislijn_tag": client.upstream_tag, "upstream_repo": url}
+        if version_key(client.upstream_tag, client.tag_pattern) is None:
+            row.update(nieuwste_tag=None, oordeel="unknown",
+                       reden="basislijn-tag past niet bij tag_patroon (basislijn controleren)")
+            rows.append(row)
+            continue
+        tags = ls_remote_tags(url)
         if tags is None:
             row.update(nieuwste_tag=None, oordeel="unknown", reden="upstream niet bereikbaar (git ls-remote faalde)")
         else:
@@ -184,6 +191,9 @@ def sync(repo: Path, client_key: str, tag: str | None = None, url_override: str 
 
     if not _is_clean(repo):
         raise ToolError("werkboom is niet schoon; commit of stash eerst je wijzigingen")
+    old_key = version_key(client.upstream_tag, client.tag_pattern)
+    if old_key is None:
+        raise ToolError(f"basislijn-tag '{client.upstream_tag}' past niet bij tag_patroon {client.tag_pattern}")
 
     tags = ls_remote_tags(url)
     if tags is None:
@@ -197,7 +207,6 @@ def sync(repo: Path, client_key: str, tag: str | None = None, url_override: str 
     new_key = version_key(tag, client.tag_pattern)
     if new_key is None:
         raise ToolError(f"tag '{tag}' past niet bij tag_patroon {client.tag_pattern}")
-    old_key = version_key(client.upstream_tag, client.tag_pattern)
     summary = {"client": client.key, "van_tag": client.upstream_tag, "naar_tag": tag, "branch": None,
                "geneste_updates": [], "opgeloste_gitlinkconflicten": [], "resultaat": None}
     if new_key == old_key:
@@ -275,13 +284,16 @@ def _merge_on_branch(repo: Path, data: dict, client: Client, tag: str, url: str,
             if n_proc.returncode != 0:
                 raise SyncFailure(f"geneste subtree {nested.full_prefix} → {new_pin[:12]}: "
                                   f"{n_proc.stderr.strip() or n_proc.stdout.strip()}")
-            data["clients"][client.key]["geneste_subtrees"][nested.rel_path]["upstream_commit"] = new_pin
+            n_entry = data["clients"][client.key]["geneste_subtrees"][nested.rel_path]
+            n_entry["upstream_commit"] = new_pin
+            n_entry["upstream_tree"] = git_out(repo, "rev-parse", f"{new_pin}^{{tree}}")
             summary["geneste_updates"].append({"pad": nested.full_prefix, "van": nested.upstream_commit,
                                                "naar": new_pin})
 
         entry = data["clients"][client.key]
         entry["upstream_tag"] = tag
         entry["upstream_commit"] = new_commit
+        entry["upstream_tree"] = git_out(repo, "rev-parse", f"{new_commit}^{{tree}}")
         entry["forkversie"] = fork_version_for(tag)
         (repo / BASELINE_REL).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         run_git(repo, "add", BASELINE_REL)
@@ -295,6 +307,10 @@ def _merge_on_branch(repo: Path, data: dict, client: Client, tag: str, url: str,
     except (SyncFailure, ToolError) as exc:
         _rollback(repo, original, branch)
         raise SyncFailure(str(exc)) from exc
+    except BaseException as exc:
+        # Ook bij een onverwachte fout of onderbreking nooit een halve sync achterlaten.
+        _rollback(repo, original, branch)
+        raise SyncFailure(f"onverwachte fout tijdens de sync ({type(exc).__name__}: {exc})") from exc
 
 
 def _rollback(repo: Path, original: str, branch: str) -> None:

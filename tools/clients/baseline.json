@@ -1,6 +1,6 @@
 {
   "schema_versie": 1,
-  "toelichting": "Bron van waarheid voor de upstream-basis per client (ADR-0001, ADR-0002). Wordt alleen door tools/clients/upstream_sync.py of in een gereviewde commit gewijzigd; check_clients.py bewaakt de overeenkomst met de git-subtree-commits.",
+  "toelichting": "Bron van waarheid voor de upstream-basis per client (ADR-0001, ADR-0002). Wordt alleen door tools/clients/upstream_sync.py of in een gereviewde commit gewijzigd; check_clients.py bewaakt de overeenkomst met de git-subtree-commits: upstream_commit = git-subtree-split en upstream_tree = tree-hash (inhoud) van de squashcommit. De tree-hashes zijn op 2026-11-09 gemeten door de upstream-tags/-commit op te halen (git fetch --depth 1) en git rev-parse <commit>^{tree}.",
   "peildatum": "2026-11-09",
   "clients": {
     "android": {
@@ -10,6 +10,7 @@
       "upstream_repo": "https://github.com/jellyfin/jellyfin-android.git",
       "upstream_tag": "v2.7.3",
       "upstream_commit": "9a5f9be6a76da47ca07733b982a12dbd0f75539b",
+      "upstream_tree": "b13c64086c604e11050d894d292195ab88d3db2c",
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
       "forkversie": "2.7.3-jl.0",
       "licentie": "GPL-2.0",
@@ -23,6 +24,7 @@
       "upstream_repo": "https://github.com/jellyfin/jellyfin-androidtv.git",
       "upstream_tag": "v0.19.10",
       "upstream_commit": "984181a3d6ab14e9a6d2dcc850c582e1c138bd95",
+      "upstream_tree": "7ca4f4838f49c0aec9c74aff405149d8140aef1c",
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
       "forkversie": "0.19.10-jl.0",
       "licentie": "GPL-2.0",
@@ -36,6 +38,7 @@
       "upstream_repo": "https://github.com/jellyfin/jellyfin-desktop.git",
       "upstream_tag": "v2.0.0",
       "upstream_commit": "1634d3d263b881dccc62bf278d1289b471ec7af1",
+      "upstream_tree": "13e7fbcca10a155915e5c83434cf85b9c421fda9",
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
       "forkversie": "2.0.0-jl.0",
       "licentie": "GPL-2.0",
@@ -46,6 +49,7 @@
           "upstream_repo": "https://github.com/KDE/mpvqt.git",
           "upstream_repo_volgens_gitmodules": "https://invent.kde.org/libraries/mpvqt.git",
           "upstream_commit": "2ebbd38bf65d01be9c55d673ecd43c8bb9a6fc8e",
+          "upstream_tree": "7d1a4c1bcc95262daa35e60cfa010d544a57b953",
           "licentie": "LGPL-2.1-only OR LGPL-3.0-only (plus BSD-3-Clause/MIT/CC0 voor build-bestanden)",
           "beschermde_bestanden": ["LICENSES/LGPL-2.1-only.txt", "LICENSES/LGPL-3.0-only.txt"]
         }
@@ -58,6 +62,7 @@
       "upstream_repo": "https://github.com/jellyfin/Swiftfin.git",
       "upstream_tag": "1.6.1",
       "upstream_commit": "5b794d2b7d4b54db89b041b8d6355461de7110db",
+      "upstream_tree": "66547a91f4958bb44441a35484524e2c77b6db01",
       "tag_patroon": "^(\\d+)\\.(\\d+)(?:\\.(\\d+))?$",
       "forkversie": "1.6.1-jl.0",
       "licentie": "MPL-2.0",

@@ -68,6 +68,7 @@ def test_sync_schone_update_behoudt_patch(simple_setup):
     assert "Jelly Leon" in (fork.path / "app/src/main.txt").read_text()
     data = baseline(fork)["clients"]["app"]
     assert (data["upstream_tag"], data["upstream_commit"], data["forkversie"]) == ("v1.1.0", new, "1.1.0-jl.0")
+    assert data["upstream_tree"] == git(up.path, "rev-parse", "v1.1.0^{tree}")
     assert check_clients.check(fork.path).violations == []
     assert fork.status() == ""
     assert git(fork.path, "for-each-ref", "refs/jlc-sync") == ""
@@ -180,7 +181,9 @@ def test_sync_geneste_pin_gewijzigd_volgt_upstream(nested_setup):
     assert summary["geneste_updates"] == [{"pad": "desk/external/dep", "van": n1, "naar": n2}]
     assert (fork.path / "desk/external/dep/dep.txt").read_text() == "dep 2\n"
     assert (fork.path / "desk/main.cpp").read_text() == "int main(){return 1;}\n"
-    assert baseline(fork)["clients"]["desk"]["geneste_subtrees"]["external/dep"]["upstream_commit"] == n2
+    nested = baseline(fork)["clients"]["desk"]["geneste_subtrees"]["external/dep"]
+    assert nested["upstream_commit"] == n2
+    assert nested["upstream_tree"] == git(_dep.path, "rev-parse", f"{n2}^{{tree}}")
     assert git(fork.path, "ls-files", "-s", "desk/external").count("160000") == 0
     assert check_clients.check(fork.path).violations == []
     assert fork.status() == ""
@@ -236,3 +239,43 @@ def test_echte_basislijn_tagpatronen_kiezen_huidige_tag():
 
     for client in load_clients(Path(DEFAULT_REPO_ROOT)):
         assert version_key(client.upstream_tag, client.tag_pattern) is not None, client.key
+
+
+# ------------------------------------------------------------------------ review P0: robuust terugdraaien
+
+
+def test_sync_onverwachte_fout_draait_alles_terug(simple_setup, monkeypatch):
+    """Ook een onverwachte fout (geen SyncFailure/ToolError) mag geen halve syncbranch achterlaten."""
+    up, fork = simple_setup
+    head_before = fork.head()
+    up.commit({"README.md": "1.1\n"}, "v1.1", tag="v1.1.0")
+
+    def kapot(*_args, **_kwargs):
+        raise RuntimeError("schijf vol (gesimuleerd)")
+
+    monkeypatch.setattr(upstream_sync.check_clients, "check", kapot)
+    with pytest.raises(upstream_sync.SyncFailure, match="onverwachte fout.*RuntimeError"):
+        upstream_sync.sync(fork.path, "app")
+    assert_unchanged(fork, head_before)
+
+
+def test_sync_upstream_verwijdert_licentie_faalt_ex48(simple_setup):
+    """EX48: upstream haalt een beschermd licentiebestand weg → sync faalt (mens beoordeelt), niets gewijzigd."""
+    up, fork = simple_setup
+    head_before = fork.head()
+    up.commit({"LICENSE": None, "COPYING": "GPL\n"}, "licentie hernoemd", tag="v1.1.0")
+    with pytest.raises(upstream_sync.SyncFailure, match="beschermd bestand 'app/LICENSE' ontbreekt"):
+        upstream_sync.sync(fork.path, "app")
+    assert_unchanged(fork, head_before)
+
+
+def test_status_basislijn_tag_buiten_patroon_is_unknown(simple_setup):
+    _up, fork = simple_setup
+    data = fork.baseline_data()
+    data["clients"]["app"]["tag_patroon"] = r"^release-(\d+)$"
+    fork.write_baseline(data)
+    fork.commit_all("patroon past niet")
+    rows = upstream_sync.status(fork.path)
+    assert rows[0]["oordeel"] == "unknown" and "basislijn-tag" in rows[0]["reden"]
+    with pytest.raises(ToolError, match="basislijn-tag"):
+        upstream_sync.sync(fork.path, "app", tag=None)

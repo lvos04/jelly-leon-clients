@@ -145,12 +145,15 @@ class Fork:
                 "upstream_repo": spec.upstream.url,
                 "upstream_tag": spec.tag,
                 "upstream_commit": commit,
+                "upstream_tree": git(spec.upstream.path, "rev-parse", f"{spec.tag}^{{tree}}"),
                 "tag_patroon": spec.tag_pattern,
                 "forkversie": f"{spec.tag.lstrip('v')}-jl.0",
                 "licentie": "GPL-2.0",
                 "beschermde_bestanden": spec.protected,
                 "geneste_subtrees": {
-                    rel: {"upstream_repo": n_up.url, "upstream_commit": n_commit, "beschermde_bestanden": []}
+                    rel: {"upstream_repo": n_up.url, "upstream_commit": n_commit,
+                          "upstream_tree": git(n_up.path, "rev-parse", f"{n_commit}^{{tree}}"),
+                          "beschermde_bestanden": []}
                     for rel, (n_up, n_commit) in spec.nested.items()
                 },
             }

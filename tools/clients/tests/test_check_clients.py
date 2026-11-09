@@ -201,5 +201,88 @@ def test_cli_exitcodes(simple_setup, capsys):
     assert report["in_orde"] is False
     assert report["afwijkingen"] == {"app/src/main.txt": "M"}
     (fork.path / "tools/clients/baseline.json").unlink()
-    git(fork.path, "add", "-A")
-    assert check_clients.main(["--repo-root", str(fork.path)]) == 3
+    fork.commit_all("basislijn weg")
+    assert check_clients.main(["--repo-root", str(fork.path)]) == 3  # niet in de commit en niet in de werkboom
+    assert check_clients.main(["--repo-root", str(fork.path), "--ref", "bestaat-niet"]) == 3
+
+
+# ------------------------------------------------------------------ review P0: inhoud, bronnen, licenties
+
+
+def _forge_squash(fork: Fork, prefix: str, split: str) -> None:
+    """Een commit met kloppende subtree-trailers maar met gewijzigde inhoud, samengevoegd zoals git subtree doet."""
+    message = (f"Squashed '{prefix}/' content from commit {split[:9]}\n\n"
+               f"git-subtree-dir: {prefix}\ngit-subtree-split: {split}\n")
+    forged = git(fork.path, "commit-tree", f"HEAD:{prefix}", "-m", message)
+    merge = git(fork.path, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-p", forged, "-m", "Merge vervalst")
+    git(fork.path, "reset", "-q", "--hard", merge)
+
+
+def test_squashcommit_met_kloppende_trailer_maar_andere_inhoud_faalt(simple_setup):
+    """Zonder tree-controle zou een patch verborgen kunnen worden in een 'squashcommit' met de juiste trailer."""
+    _up, fork = simple_setup
+    split = fork.baseline_data()["clients"]["app"]["upstream_commit"]
+    write_files(fork.path, {"app/src/main.txt": "regel 1\nVERBORGEN PATCH\nregel 3\n"})
+    fork.commit_all("ongeregistreerde patch")
+    _forge_squash(fork, "app", split)
+    squash = find_squash_commit(fork.path, "app")
+    assert squash is not None and squash[1] == split, "de vervalste squashcommit hoort als basis gevonden te worden"
+    result = check_clients.check(fork.path)
+    assert result.changed == {}, "t.o.v. de vervalste basis lijkt er niets te zijn veranderd"
+    assert any("bevat niet exact de upstream-boom" in v for v in result.violations), result.violations
+
+
+def test_basislijn_zonder_upstream_tree_faalt(simple_setup):
+    _up, fork = simple_setup
+    data = fork.baseline_data()
+    del data["clients"]["app"]["upstream_tree"]
+    fork.write_baseline(data)
+    fork.commit_all("basislijn zonder tree")
+    assert any("mist 'upstream_tree'" in v for v in check_clients.check(fork.path).violations)
+
+
+def test_geneste_squash_met_andere_inhoud_faalt(nested_setup):
+    _up, _dep, fork, n1, _n2 = nested_setup
+    fork.write_register(patch_block("JLC-0001", "desk", ["desk/external/dep"]))
+    fork.commit_all("vendoring geregistreerd")
+    assert check_clients.check(fork.path).violations == []
+    write_files(fork.path, {"desk/external/dep/dep.txt": "stiekem anders\n"})
+    fork.commit_all("wijziging in vendored code")
+    _forge_squash(fork, "desk/external/dep", n1)
+    violations = check_clients.check(fork.path).violations
+    assert any("desk/external/dep" in v and "upstream-boom" in v for v in violations), violations
+
+
+def test_beschermd_bestand_dat_ontbreekt_faalt(simple_setup):
+    """Als upstream een licentiebestand hernoemt of weghaalt, mag de bescherming niet stil vervallen."""
+    _up, fork = simple_setup
+    data = fork.baseline_data()
+    data["clients"]["app"]["beschermde_bestanden"] = ["LICENSE", "CONTRIBUTORS.md"]
+    fork.write_baseline(data)
+    fork.commit_all("basislijn noemt een niet-bestaand creditbestand")
+    violations = check_clients.check(fork.path).violations
+    assert any("'app/CONTRIBUTORS.md' ontbreekt" in v for v in violations), violations
+
+
+def test_register_en_basislijn_komen_uit_de_gecontroleerde_commit(simple_setup):
+    """Een niet-gecommitte registratie mag een niet-geregistreerde afwijking in de commit niet goedpraten."""
+    _up, fork = simple_setup
+    write_files(fork.path, {"app/src/main.txt": "anders\n"})
+    bad = fork.commit_all("afwijking zonder registratie")
+    fork.write_register(patch_block("JLC-0001", "app", ["app/src/main.txt"]))  # alleen in de werkboom
+    result = check_clients.check(fork.path, bad)
+    assert result.bronnen == {"basislijn": bad, "patchregister": bad}
+    assert any("niet-geregistreerde afwijking" in v for v in result.violations)
+    good = fork.commit_all("registratie gecommit")
+    assert check_clients.check(fork.path, good).violations == []
+    assert check_clients.check(fork.path, bad).violations, "oudere commit wordt met zijn eigen register gecontroleerd"
+
+
+def test_ref_zonder_basislijn_valt_terug_op_werkboom_en_meldt_dat(simple_setup, capsys):
+    _up, fork = simple_setup
+    first = git(fork.path, "log", "--format=%H", "--grep", "^init$", "HEAD")  # vóór basislijn en subtrees
+    result = check_clients.check(fork.path, first)
+    assert result.bronnen["basislijn"] == "werkboom"
+    assert result.violations, "de eerste commit (zonder clients) voldoet niet"
+    assert check_clients.main(["--repo-root", str(fork.path), "--ref", first]) == 1
+    assert "LET OP: basislijn ontbreekt in" in capsys.readouterr().out

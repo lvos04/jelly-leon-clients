@@ -31,6 +31,7 @@ class NestedSubtree:
     full_prefix: str  # bv. "desktop/external/mpvqt"
     upstream_repo: str
     upstream_commit: str
+    upstream_tree: str | None = None  # tree-hash van upstream_commit: inhoudscontrole van de squashcommit
     protected_files: list[str] = field(default_factory=list)
     raw: dict = field(default_factory=dict)
 
@@ -46,6 +47,7 @@ class Client:
     fork_version: str
     protected_files: list[str]
     nested: list[NestedSubtree]
+    upstream_tree: str | None = None  # tree-hash van upstream_commit: inhoudscontrole van de squashcommit
     raw: dict = field(default_factory=dict)
 
 
@@ -59,6 +61,8 @@ def run_git(repo: Path, *args: str, check: bool = True, input_text: str | None =
         ["git", "-C", str(repo), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
         input=input_text,
         env=full_env,
         check=False,
@@ -73,14 +77,28 @@ def git_out(repo: Path, *args: str) -> str:
     return run_git(repo, *args).stdout.strip()
 
 
-def load_baseline_data(repo: Path) -> dict:
-    path = repo / BASELINE_REL
-    if not path.is_file():
-        raise ToolError(f"basislijn ontbreekt: {path}")
+def read_text_at(repo: Path, ref: str | None, rel: str) -> str | None:
+    """Inhoud van `rel` in commit `ref` (of in de werkboom als `ref` None is); None als het bestand ontbreekt."""
+    if ref is None:
+        path = repo / rel
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+    proc = run_git(repo, "cat-file", "blob", f"{ref}:{rel}", check=False)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def parse_baseline_text(text: str, source: str) -> dict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ToolError(f"basislijn is geen geldige JSON: {exc}") from exc
+        raise ToolError(f"basislijn ({source}) is geen geldige JSON: {exc}") from exc
+
+
+def load_baseline_data(repo: Path) -> dict:
+    """Basislijn uit de werkboom (upstream_sync.py werkt op de werkboom en commit hem zelf)."""
+    text = read_text_at(repo, None, BASELINE_REL)
+    if text is None:
+        raise ToolError(f"basislijn ontbreekt: {repo / BASELINE_REL}")
+    return parse_baseline_text(text, "werkboom")
 
 
 def parse_clients(data: dict) -> list[Client]:
@@ -94,6 +112,7 @@ def parse_clients(data: dict) -> list[Client]:
                     full_prefix=f"{prefix}/{rel.strip('/')}",
                     upstream_repo=n["upstream_repo"],
                     upstream_commit=n["upstream_commit"],
+                    upstream_tree=n.get("upstream_tree"),
                     protected_files=list(n.get("beschermde_bestanden", [])),
                     raw=n,
                 )
@@ -110,6 +129,7 @@ def parse_clients(data: dict) -> list[Client]:
                     fork_version=raw["forkversie"],
                     protected_files=list(raw.get("beschermde_bestanden", [])),
                     nested=nested,
+                    upstream_tree=raw.get("upstream_tree"),
                     raw=raw,
                 )
             )
