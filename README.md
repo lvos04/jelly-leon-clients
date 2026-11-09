@@ -50,8 +50,8 @@ Lokaal voor ontwikkelaars (Linux): `make help`. `make android-bouw` / `make andr
 met platform 36) bouwen de debug-APK's, draaien de unit-tests en controleren met `aapt2` de eigen app-identiteit
 (debug en release); `make check` controleert die ook in de bron; de desktop-client is in een container te bouwen met
 `make desktop-bouw` (alleen ontwikkeling; geen installatiemethode). Op een gedeelde machine: `GRADLE_LOCK=<bestand>` en
-`DOCKER_LOCK=<bestand>` serialiseren de zware stappen met `flock`. Debug-APK's hebben de upstream-suffix `.debug` en
-(`org.jellyfin.*.jellyleon.debug`) zijn alleen bedoeld om te testen.
+`DOCKER_LOCK=<bestand>` serialiseren de zware stappen met `flock`. Debug-APK's houden de upstream-suffix `.debug`
+(`org.jellyfin.*.jellyleon.debug`) en zijn alleen bedoeld om te testen.
 
 **Validatie:** android, androidtv (15/15 unit-tests per variant) en desktop-Linux (ctest 1/1) zijn lokaal gebouwd en
 getest en de vier client-workflows zijn groen op GitHub; Swiftfin bouwt in CI voor de simulator maar is **NIET
