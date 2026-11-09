@@ -49,8 +49,12 @@ jobs:
           java-version: 21
       - name: Gradle-wrapper valideren (checksum tegen gradle.org)
         uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
-      - name: Gradle instellen
+      - name: Gradle instellen (cache alleen schrijven vanaf de standaardbranch, nooit vanuit een syncbranch)
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          # Een syncbranch bevat nog niet beoordeelde upstream-code; die draait hier in de scope van de
+          # aanroepende branch en mag daar geen cache vergiftigen.
+          cache-read-only: ${{ inputs.ref != '' || github.ref_name != github.event.repository.default_branch }}
       - name: Debug-APK bouwen en unit tests draaien
         run: ./gradlew --no-daemon --max-workers=2 assembleDebug test
       - name: APK's verzamelen

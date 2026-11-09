@@ -65,8 +65,15 @@ jobs:
           xcodebuild -version
       - name: Hulpmiddelen uit de upstream-Brewfile (carthage, swiftgen, swiftformat, swiftlint)
         run: brew bundle --file Brewfile
-      - name: Carthage-cache
+      - name: Carthage-cache (lezen en schrijven; niet voor een syncbranch)
+        if: inputs.ref == ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: swiftfin/Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('swiftfin/Cartfile') }}
+      - name: Carthage-cache (alleen lezen voor een syncbranch met nog niet beoordeelde upstream-code)
+        if: inputs.ref != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: swiftfin/Carthage
           key: ${{ runner.os }}-carthage-${{ hashFiles('swiftfin/Cartfile') }}

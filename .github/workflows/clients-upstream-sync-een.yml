@@ -3,6 +3,8 @@
 # in branch sync/<client>-<tag>, inclusief geneste subtrees (ADR-0005), basislijn en forkregels.
 # Conflict of overtreding → job rood (EX48), er wordt niets gepusht. Gelukt → alleen de syncbranch pushen;
 # nooit samenvoegen met de hoofdbranch, nooit een release of image (R2: mens beoordeelt).
+# Het token staat tijdens de sync níet in de git-config (persist-credentials: false); alleen de laatste stap
+# gebruikt het, en alleen om de nieuwe branch sync/<client>-<tag> te maken (geen force, nooit overschrijven).
 name: Clients / Upstream-sync (één client)
 
 on:
@@ -36,10 +38,11 @@ jobs:
       CLIENT: ${{ inputs.client }}
       TAG: ${{ inputs.tag }}
     steps:
-      - name: Repository ophalen (volledige historie)
+      - name: Repository ophalen (volledige historie, zonder opgeslagen token)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Python 3.12
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -72,15 +75,24 @@ jobs:
           fi
           branch="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("branch") or "")' "$RUNNER_TEMP/sync.json")"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-      - name: Syncbranch pushen (alleen de syncbranch)
+      - name: Syncbranch pushen (alleen de syncbranch, nooit overschrijven)
         if: steps.sync.outputs.branch != ''
         env:
           BRANCH: ${{ steps.sync.outputs.branch }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           case "$BRANCH" in sync/*) ;; *) echo "::error::onverwachte branchnaam $BRANCH"; exit 3 ;; esac
-          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null; then
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          gitauth=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth")
+          rc=0
+          git "${gitauth[@]}" ls-remote --exit-code --heads origin "refs/heads/$BRANCH" > /dev/null || rc=$?
+          if [ "$rc" -eq 0 ]; then
             echo "::notice::$BRANCH bestaat al op origin (eerdere sync nog niet beoordeeld); niet overschreven."
+          elif [ "$rc" -eq 2 ]; then
+            git "${gitauth[@]}" push origin "HEAD:refs/heads/$BRANCH"
           else
-            git push origin "HEAD:refs/heads/$BRANCH"
+            echo "::error::origin niet te controleren (git ls-remote exitcode $rc); niets gepusht."
+            exit "$rc"
           fi
