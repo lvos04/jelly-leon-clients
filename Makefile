@@ -16,11 +16,11 @@ help:
 	@echo "make venv          - ontwikkelomgeving (pytest, ruff, actionlint, shellcheck) in $(VENV)"
 	@echo "make test          - tests van de fork-tooling (nep-upstreams)"
 	@echo "make lint          - ruff op tools/clients"
-	@echo "make check         - forkregels: basislijn, subtrees, patchregister"
+	@echo "make check         - forkregels (basislijn, subtrees, patchregister) en eigen app-identiteit in de bron"
 	@echo "make actionlint    - workflows controleren"
 	@echo "make sync-status   - upstream-tags per client vergelijken"
-	@echo "make android-bouw  - android: debug-APK's + unit-tests (vereist JDK 21 en ANDROID_HOME)"
-	@echo "make androidtv-bouw - androidtv: debug-APK + unit-tests (vereist JDK 21 en ANDROID_HOME)"
+	@echo "make android-bouw  - android: debug-APK's + unit-tests + aapt2-controle app-identiteit (JDK 21, ANDROID_HOME)"
+	@echo "make androidtv-bouw - androidtv: debug-APK + unit-tests + aapt2-controle app-identiteit (JDK 21, ANDROID_HOME)"
 	@echo "make desktop-bouw  - desktop-client bouwen en testen in een container (2 CPU's, JOBS=n voor meer)"
 	@echo "                     optioneel: GRADLE_LOCK=<bestand> / DOCKER_LOCK=<bestand> (flock)"
 	@echo "make opruimen      - bouwmappen (.bouw, Gradle) en bouwimage verwijderen"
@@ -39,6 +39,7 @@ lint: venv
 
 check:
 	python3 tools/clients/check_clients.py
+	python3 tools/clients/app_identiteit.py bron
 
 actionlint: venv
 	PATH="$(abspath $(VENV))/bin:$$PATH" $(VENV)/bin/actionlint .github/workflows/*.yml
@@ -46,9 +47,14 @@ actionlint: venv
 sync-status:
 	python3 tools/clients/upstream_sync.py status
 
+# Release-resources linken (manifest + resources, geen release-APK) zodat aapt2 ook de release-ID controleert.
+RELEASE_RES_android = processLibreReleaseResources processProprietaryReleaseResources
+RELEASE_RES_androidtv = processReleaseResources
+
 android-bouw androidtv-bouw: %-bouw:
 	@test -n "$$ANDROID_HOME" || { echo "ANDROID_HOME is niet gezet (Android SDK met platform 36)"; exit 2; }
-	cd $* && $(GRADLE) assembleDebug test
+	cd $* && $(GRADLE) assembleDebug test $(RELEASE_RES_$*)
+	python3 tools/clients/app_identiteit.py bouwmap $* $*/app/build --verwacht debug,release
 
 desktop-image:
 	nice -n 10 $(if $(DOCKER_LOCK),flock $(DOCKER_LOCK)) docker buildx build --load \
