@@ -1,0 +1,33 @@
+{
+  "schema_versie": 1,
+  "toelichting": "Eigen app-identiteit van de forks naast de officiële Jellyfin-apps (besluit gebruiker 2026-11-09, ADR-0004; patches JLC-0002/0003/0004). Gecontroleerd door tools/clients/app_identiteit.py: 'bron' (zonder SDK, in Clients / Forkregels) en 'bouwmap'/'apk' met aapt2 (in Clients / Android en Clients / Android TV). Een applicationId/bundle-id is na verspreiding praktisch permanent: alleen wijzigen vóór de eerste verspreiding en met een besluit van de gebruiker.",
+  "android": {
+    "patch": "JLC-0002",
+    "namespace": "org.jellyfin.mobile",
+    "application_id": "org.jellyfin.mobile.jellyleon",
+    "debug_suffix": ".debug",
+    "officieel": ["org.jellyfin.mobile", "org.jellyfin.mobile.debug"],
+    "gradle": "android/app/build.gradle.kts",
+    "backup_xml": ["android/app/src/main/res/xml/backup_content.xml"]
+  },
+  "androidtv": {
+    "patch": "JLC-0003",
+    "namespace": "org.jellyfin.androidtv",
+    "application_id": "org.jellyfin.androidtv.jellyleon",
+    "debug_suffix": ".debug",
+    "officieel": ["org.jellyfin.androidtv", "org.jellyfin.androidtv.debug"],
+    "gradle": "androidtv/app/build.gradle.kts",
+    "backup_xml": [
+      "androidtv/app/src/main/res/xml/backup_content.xml",
+      "androidtv/app/src/main/res/xml/backup_rules.xml"
+    ],
+    "res_waarden": ["app_id", "app_search_suggest_authority", "app_search_suggest_intent_data"]
+  },
+  "swiftfin": {
+    "patch": "JLC-0004",
+    "bundle_id": "org.jellyfin.swiftfin.jellyleon",
+    "officieel": ["org.jellyfin.swiftfin"],
+    "xcconfig": "swiftfin/XcodeConfig/Shared.xcconfig",
+    "pbxproj": "swiftfin/Swiftfin.xcodeproj/project.pbxproj"
+  }
+}
