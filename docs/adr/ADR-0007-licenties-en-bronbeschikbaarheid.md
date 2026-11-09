@@ -1,6 +1,6 @@
 # ADR-0007 — Licenties, credits en bronbeschikbaarheid
 
-- **Status:** Aanvaard (P0, 2026-11-09); één **open gebruikersbesluit** (zichtbaarheid)
+- **Status:** Aanvaard (P0, 2026-11-09); zichtbaarheid **besloten door de gebruiker** (2026-11-09, STATUS.md besluit 3), nog niet uitgevoerd
 - **Context:** B03-001 vraagt GPL-2.0-naleving. De clients hebben verschillende licenties: android, androidtv en desktop
   **GPL-2.0**, Swiftfin **MPL-2.0**, mpvqt **LGPL-2.1-only/LGPL-3.0-only**. Daarnaast zitten er componenten van derden in
   builds (Google Play Services/Cast in android *proprietary*, VLCKit LGPL-2.1 in Swiftfin, Qt/libmpv op desktop).
@@ -19,8 +19,10 @@
   Jellyfin-release (ADR-0004).
 - Voor verspreiding buiten het eigen huishouden de *libre*-flavor van android overwegen (geen Google-binaries).
 
-## Open gebruikersbesluit
+## Zichtbaarheid (besluit gebruiker 2026-11-09)
 
-- Zichtbaarheid van `lvos04/jelly-leon-clients` (publiek/privé) vóór de eerste verspreide build: met een privé-repo is
-  "bron beschikbaar" alleen voor de gebruiker zelf geregeld; bij verspreiding aan anderen moet de bron hen ook
-  bereiken (zelfde vraag als bij `jelly-leon`, ADR-0004 daar).
+- Alle repos en GHCR-images worden **publiek**, maar pas **na een scan van de volledige historie** op geheimen en
+  privégegevens; bevindingen gaan eerst naar de gebruiker. Daarmee is "bron beschikbaar" ook voor anderen geregeld.
+- Stand 2026-11-09: `lvos04/jelly-leon-clients` is nog **privé**; scan en omzetting zijn een aparte, programmabrede
+  stap en zijn in deze ronde niet uitgevoerd. Tot dan geen verspreiding van eigen builds buiten het eigen huishouden.
+- Voor deze repo betekent "volledige historie" ook de geïmporteerde upstream-squashcommits (vier clients + mpvqt).

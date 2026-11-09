@@ -28,6 +28,12 @@ een patch in de client. Branding is in P0 bewust **niet** gewijzigd (ADR-0004).
 
 Appcode (Kotlin, C++, Swift): **geen** patches in P0.
 
+**Gepland (nog géén patch, dus nog niet in de tabel):** in P4 de eigen app-identiteit naast de officiële apps
+(besluit gebruiker 2026-11-09, ADR-0004) — voorlopig JLC-0002 (android: `android/app/build.gradle.kts`,
+`android/app/src/main/res/xml/backup_content.xml`) en JLC-0003 (androidtv: `androidtv/app/build.gradle.kts`,
+`androidtv/app/src/main/res/xml/backup_content.xml`, `androidtv/app/src/main/res/xml/backup_rules.xml`). Pas bij de
+echte wijziging krijgen ze een eigen sectie met alle verplichte velden.
+
 ## JLC-0001 — Submodule `external/mpvqt` als geneste subtree
 
 | Veld | Waarde |
