@@ -120,8 +120,10 @@ Zware stappen één tegelijk, onder `flock` met de andere bouwers op de machine,
 
 **GitHub Actions** (branch `ccr-c133d7a0-kuz1cv`, vóór deze ronde al gedraaid, nu nagekeken): Clients / Android
 `42608527216`, Android TV `42608527671`, Swiftfin `42608527121` (iOS- en tvOS-simulatorbuild zonder signing),
-Forkregels `42608527247` — alle groen op commit `f9daf172`; Desktop `42600307251` groen op `92373ce9`. De runs van
-deze ronde staan in `EVIDENCE.json`.
+Forkregels `42608527247` — alle groen op commit `f9daf172`; Desktop `42600307251` groen op `92373ce9`. Deze ronde:
+Forkregels `42620416191` groen op `5ee6d91` (99 passed) en een handmatig gestarte **Clients / Upstream-sync**
+`42620559306` (client `alle`): groen, alle vier `actueel`, geen syncbranch gepusht — het eerste echte draaien van de
+sync-workflow (alleen het pad zonder update; de foutpaden blijven Sim-getest). Overige runs in `EVIDENCE.json`.
 
 **12.x-voorbereiding (ADR-0009):** statische routevergelijking server v10.11.11 ↔ v12.4 tegen de endpoints van
 jellyfin-sdk-kotlin 1.7.1 — 6 routes weg, geen ervan door android/androidtv gebruikt
