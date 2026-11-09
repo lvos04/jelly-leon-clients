@@ -1,0 +1,75 @@
+{
+  "id": "p0-afronding-review-qa",
+  "datum": "2026-11-09",
+  "soort": "onafhankelijke review/QA van de P0-afronding (jelly-leon-clients)",
+  "uitgangspunt_commit": "65a4c7fb",
+  "omgeving": "eigen Ubuntu 26.04-machine van de gebruiker, geen proxy en geen eigen CA; Gradle onder flock <werkmap>/.lokaal/gradle.lock (--max-workers=4, -Xmx2g, nice -n 10), image-build en compile onder flock <werkmap>/.lokaal/docker-build.lock; één zware build tegelijk",
+  "opnieuw_uitgevoerd": [
+    {
+      "wat": "forkregels zoals de CI (verse venv uit requirements-dev.txt)",
+      "commando": "python3.12 -m venv <tmp>; pip install -r tools/clients/requirements-dev.txt; ruff check --config tools/clients/ruff.toml tools/clients; python -m pytest -q tools/clients/tests; python tools/clients/check_clients.py; actionlint -color .github/workflows/*.yml",
+      "resultaat": "op 65a4c7fb: ruff geen meldingen, 99 passed, forkregels in orde (afwijkingen android 0, androidtv 0, desktop 1 = JLC-0001, swiftfin 0), actionlint geen meldingen; na de reparaties van deze review: 115 passed"
+    },
+    {
+      "wat": "androidtv opnieuw gebouwd en getest",
+      "commando": "cd androidtv && ANDROID_HOME=$HOME/android-sdk nice -n 10 flock <gradle.lock> ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx2g assembleDebug test",
+      "resultaat": "BUILD SUCCESSFUL in 1m 7s, 317 taken uitgevoerd; JUnit-XML: app 13/13 + preference 2/2 in testDebugUnitTest én in testReleaseUnitTest, 0 fouten, 0 overgeslagen",
+      "apk_sha256": "79e2e02ff9dd21ad3fcf44745f215b5b4078c7aba4a70a50f244355c3b9b3670 (byte-gelijk aan de meting in p0-afronding-lokale-bouw.json)",
+      "aapt2": "package org.jellyfin.androidtv.debug; string/app_id = org.jellyfin.androidtv.debug; app_search_suggest_authority = org.jellyfin.androidtv.debug.content"
+    },
+    {
+      "wat": "android opnieuw gebouwd via het make-doel",
+      "commando": "ANDROID_HOME=$HOME/android-sdk make android-bouw GRADLE_LOCK=<gradle.lock>",
+      "resultaat": "BUILD SUCCESSFUL in 1m; testLibreDebugUnitTest en testProprietaryDebugUnitTest NO-SOURCE (upstream heeft geen unit-tests: alleen compileren en verpakken)",
+      "apk_sha256": {
+        "libre-debug": "d84fe1391c16e913f3521cb8998a5635ab2f85ccb8c03b27936d7b93485232b5",
+        "proprietary-debug": "1370359c9accb4d6e559b51f134d4f3e11a3784c1fa248002dcf67e5c85d1f14",
+        "vergelijking": "beide byte-gelijk aan de vorige meting"
+      },
+      "aapt2": "package org.jellyfin.mobile.debug, targetSdk 36"
+    },
+    {
+      "wat": "desktop opnieuw gebouwd via het aangepaste make-doel (zonder proxy en zonder hostnetwerk)",
+      "commando": "JOBS=4 make desktop-bouw DOCKER_LOCK=<docker-build.lock>  (= nice -n 10 flock … docker buildx build --load … desktop.Dockerfile + desktop_bouw.sh)",
+      "resultaat": "image gebouwd; 62/62 bouwstappen, 0 compilerwaarschuwingen, ctest 1/1 (test_systemcomponent); binary src/jellyfin-desktop 22 880 216 bytes, sha256 f7aa2298ac9bef1cc82120175fbf749e995978be80a15e320dad879d2187aded (gelijk aan de vorige meting)",
+      "tweede_bouw": "na het pinnen van de Dockerfile-frontend op digest: image-lagen uit cache, incrementeel 7/7 stappen, ctest 1/1, binary-sha256 ongewijzigd"
+    },
+    {
+      "wat": "digests en pins nagemeten",
+      "resultaat": "docker buildx imagetools inspect docker.io/library/ubuntu:24.04 → sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 (gelijk aan desktop.Dockerfile); docker/dockerfile:1.7 én 1.7.1 → sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e; alle 8 gepinde actie-SHA's in de workflows gelijk aan hun tag (git ls-remote)"
+    },
+    {
+      "wat": "invent.kde.org opnieuw geprobeerd (in de oude omgeving geblokkeerd)",
+      "commando": "git ls-remote https://invent.kde.org/libraries/mpvqt.git; git fetch --filter=blob:none … 2ebbd38bf65d01be9c55d673ecd43c8bb9a6fc8e en master; git rev-parse 2ebbd38^{tree}; git merge-base --is-ancestor 2ebbd38 master",
+      "resultaat": "bereikbaar; tree 7d1a4c1bcc95262daa35e60cfa010d544a57b953 = upstream_tree in de basislijn; 2ebbd38 is voorouder van master 8a4d1ae9d1a1 (2026-10-23)"
+    },
+    {
+      "wat": "GitHub-instellingen en eerdere runs nagekeken",
+      "resultaat": "standaardbranch = ccr-c133d7a0-kuz1cv, repo privé (gh api repos/lvos04/jelly-leon-clients); laatste run per workflow groen: Android 42608527216, Android TV 42608527671 (testtaken in de log), Swiftfin 42608527121 (beide jobs '** BUILD SUCCEEDED **'), Desktop 42600307251, Forkregels 42620737949, Upstream-sync 42620559306 (sync-jobs groen, CI-jobs terecht overgeslagen: geen syncbranch); sindsdien geen wijziging onder android/, androidtv/ of desktop/"
+    },
+    {
+      "wat": "geheimen en privégegevens (beperkte controle, geen volledige historiescan)",
+      "resultaat": "geen sleutel-/keystore-/google-services-bestanden en geen bekende tokenpatronen in de huidige boom (git ls-files, git grep); fork-eigen historie (alles buiten de vier clientmappen, git log -p) zonder tokens of LAN-adressen. Testbewijzen bevatten lokale paden met de gebruikersnaam van de bouwmachine; beoordelen bij de historiescan (besluit 3)"
+    },
+    {
+      "wat": "GitHub Actions na de push van de reparaties (commit 14e591d)",
+      "commando": "gh run watch <id> --exit-status; gh run view <id> --log | grep 'BUILD SUCCEEDED'",
+      "resultaat": "Clients / Forkregels 42622191685 success; Clients / Swiftfin 42622191631 success (beide jobs '** BUILD SUCCEEDED **': iOS- en tvOS-simulatorbuild zonder signing, app niet gestart). Android/Android TV/Desktop niet opnieuw gestart: niets veranderd onder hun pad-filters (wel lokaal herbouwd, zie boven)"
+    }
+  ],
+  "gevonden_en_gerepareerd": [
+    "desktop.Dockerfile: `# syntax=docker/dockerfile:1.7` was een verschuivende tag zonder digest → docker/dockerfile:1.7.1@sha256:a57df69d… (commit eb8f46d)",
+    "Makefile desktop-image: restant van de proxyomgeving (`--network host --build-arg HTTPS_PROXY`) → weg; gebruikstekst in de Dockerfile en BOUWVERIFICATIE_P0.md §3 zonder proxy-instructies (JC4; commits eb8f46d, 14e591d)",
+    "Ontbrekende negatieve tests: onbereikbare bron van een geneste subtree ná een al opgelost gitlink-conflict, ophalen van de tag faalt na ls-remote, time-out van ls-remote (commit c11cbe6; mutatiecontrole: zonder _rollback faalt de test)",
+    "Geen automatische bewaking van de bouwcontainer (digests, isolatie, geen Docker-socket, geen proxy) en van EVIDENCE.json (§11) → tests/test_bouwverificatie.py (5) en tests/test_evidence.py (8) (commits eb8f46d, 9fd9e66)",
+    "Verouderde of te sterke teksten: clients-swiftfin.yml ('nog nooit gedraaid'), ADR-0006 ('op GitHub nog nooit gedraaid', 'android geblokkeerd'), ADR-0002 (schedule pas na standaardbranch — de branch ís de standaardbranch), ADR-0005 (invent.kde.org geblokkeerd), FORK_STRATEGIE.md (android 'Unit-getest' terwijl er geen tests zijn) (commit 14e591d)",
+    "ADR-0008 had geen toetsing per contractparagraaf → tabel §1–§12 met N.v.t./bewaking (commit 9fd9e66)"
+  ],
+  "niet_gedaan": [
+    "Geen APK geïnstalleerd of gestart (geen apparaat of emulator): inloggen, afspelen, ondertitels, hervatten NIET GEVALIDEERD (hardware).",
+    "Swiftfin lokaal: geen Mac/Xcode → NIET GEVALIDEERD (Mac/Xcode); alleen de CI-simulatorbuild zonder signing.",
+    "Geen echte upstream-sync met een nieuwe tag op GitHub (alle clients actueel); foutpaden alleen Sim-getest.",
+    "Geen volledige historiescan (programmabrede stap, besluit 3)."
+  ],
+  "opruimen": "Gradle-bouwmappen van android en androidtv, .bouw/ en de bouwimage jelly-leon-clients/desktop-bouw:dev verwijderd; docker image prune -f; tijdelijke venv en clone in /tmp verwijderd"
+}

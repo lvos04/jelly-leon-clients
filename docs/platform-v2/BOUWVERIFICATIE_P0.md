@@ -135,3 +135,28 @@ geen compatibiliteitsbewijs.
 **Niet gedaan:** APK's installeren of starten (geen apparaat/emulator), desktop-app starten, Windows/macOS-builds,
 release-builds of ondertekening, iets publiceren. Swiftfin lokaal: **NIET GEVALIDEERD (Mac/Xcode)**; gebruik op
 apparaten: **NIET GEVALIDEERD (hardware)**. Bouwmappen en bouwimage na afloop verwijderd (`make opruimen`).
+
+## 10. Onafhankelijke review van de P0-afronding (2026-11-09)
+
+Bewijs: [`test-evidence/p0-afronding-review-qa.json`](test-evidence/p0-afronding-review-qa.json). Opnieuw uitgevoerd
+op dezelfde machine, onder dezelfde locks, één zware build tegelijk.
+
+| Controle | Resultaat |
+|---|---|
+| Forkregels zoals de CI (verse venv) | ruff en actionlint zonder meldingen, 99 passed, forkregels in orde; na de reparaties **115 passed** |
+| androidtv `assembleDebug test` | BUILD SUCCESSFUL; 15/15 per variant (JUnit-XML); debug-APK **byte-gelijk** aan §9 |
+| android `make android-bouw` | BUILD SUCCESSFUL; tests `NO-SOURCE`; beide debug-APK's **byte-gelijk** aan §9 |
+| desktop `make desktop-bouw` (nieuw: zonder proxy en hostnetwerk) | 62/62, 0 waarschuwingen, `ctest` 1/1; binary-sha256 gelijk aan §9 |
+| Digests en pins | `ubuntu:24.04` en `docker/dockerfile:1.7.1` nagemeten; alle actie-SHA's gelijk aan hun tag |
+| `invent.kde.org` (was geblokkeerd) | bereikbaar; mpvqt `2ebbd38` heeft daar dezelfde tree als de basislijn |
+| Laatste GitHub-run per workflow | alle groen; op commit `14e591d` opnieuw: Forkregels `42622191685` en Swiftfin `42622191631` (simulatorbuild zonder signing) groen |
+
+**Gevonden en gerepareerd:** (1) Dockerfile-frontend `docker/dockerfile:1.7` zonder digest → `1.7.1@sha256:…`;
+(2) proxyrestanten in de Makefile (`--network host --build-arg HTTPS_PROXY`) en in de gebruikstekst → weg (JC4);
+(3) drie ontbrekende negatieve sync-tests (bron van een geneste subtree onbereikbaar ná een opgelost gitlink-conflict,
+ophalen faalt na `ls-remote`, time-out van `ls-remote`); (4) bouwcontainer- en EVIDENCE-regels (§11) nu als tests;
+(5) verouderde teksten in `clients-swiftfin.yml`, ADR-0002, ADR-0005, ADR-0006 en `FORK_STRATEGIE.md` (android was
+"Unit-getest" zonder tests); (6) ADR-0008 kreeg een toetsing per contractparagraaf.
+
+**Blijft open:** niets op een apparaat (**NIET GEVALIDEERD (hardware)**), Swiftfin lokaal **NIET GEVALIDEERD
+(Mac/Xcode)**, een echte sync met een nieuwe upstream-tag op GitHub (foutpaden alleen Sim-getest), de historiescan.
