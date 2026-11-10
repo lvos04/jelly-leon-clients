@@ -28,7 +28,13 @@ def herhaal(server: TestServer, soort: str, apks: dict[str, Any], bediend: str, 
     doel = apks[app]["fork" if bediend == "fork" else "officieel"]
     emu = Emulator(soort, Path(apks[app]["fork"]["pad"]).parent)
     volger = Volger(jf, CLIENTNAAM[app])
-    uit: dict[str, Any] = {"emulator": soort, "bediend": bediend, "pakket": doel["pakket"], "pogingen": []}
+    uit: dict[str, Any] = {
+        "emulator": soort,
+        "bediend": bediend,
+        "pakket": doel["pakket"],
+        "gevraagd": n,
+        "pogingen": [],
+    }
     try:
         uit["boot_s"] = round(emu.start(), 1)
         emu.installeer(Path(apks[app]["officieel"]["pad"]))
@@ -37,30 +43,36 @@ def herhaal(server: TestServer, soort: str, apks: dict[str, Any], bediend: str, 
             emu, doel["pakket"], f"http://10.0.2.2:{server.poort}"
         )
         uit["inloggen"] = login["uitkomst"]
-        if login["uitkomst"] != sc.GESLAAGD:
-            return uit
         knop_patroon = r"^Resume$" if app == "android" else r"^Resume from"
-        for i in range(n):
-            jf.zet_userdata(server.kijker_id, it.hervat["Id"], {"PlaybackPositionTicks": int(server.HERVAT_S * TICKS)})
-            jf.toon(volger.id(), it.hervat)
-            knop = emu.wacht_op(knop_patroon, timeout=30)
-            if knop is None:
-                uit["pogingen"].append({"poging": i + 1, "uitkomst": sc.MISLUKT, "reden": "geen hervatknop"})
-                continue
-            if app == "android":
-                emu.tik(knop)
-            else:
-                dpad_kies(emu, knop_patroon)
-            monsters = volger.volg(it.hervat["Id"], 25, minimaal_s=6)
-            uit["pogingen"].append(
-                {"poging": i + 1, **sc.beoordeel_hervatten(monsters, it.hervat["Id"], server.HERVAT_S)}
-            )
-            stop(emu, app, jf, {}, volger)
+        for i in range(n if login["uitkomst"] == sc.GESLAAGD else 0):
+            try:
+                jf.zet_userdata(
+                    server.kijker_id, it.hervat["Id"], {"PlaybackPositionTicks": int(server.HERVAT_S * TICKS)}
+                )
+                jf.toon(volger.id(), it.hervat)
+                knop = emu.wacht_op(knop_patroon, timeout=30)
+                if knop is None:
+                    uit["pogingen"].append({"poging": i + 1, "uitkomst": sc.MISLUKT, "reden": "geen hervatknop"})
+                    continue
+                if app == "android":
+                    emu.tik(knop)
+                else:
+                    dpad_kies(emu, knop_patroon)
+                monsters = volger.volg(it.hervat["Id"], 25, minimaal_s=6)
+                uit["pogingen"].append(
+                    {"poging": i + 1, **sc.beoordeel_hervatten(monsters, it.hervat["Id"], server.HERVAT_S)}
+                )
+                stop(emu, app, jf, {}, volger)
+            except Exception as fout:  # noqa: BLE001 - een harnas- of appfout telt als mislukte poging, nooit stil
+                uit["pogingen"].append(
+                    {"poging": i + 1, "uitkomst": sc.MISLUKT, "reden": f"{type(fout).__name__}: {str(fout)[:300]}"}
+                )
             time.sleep(2)
             log(f"hervatproef {soort} poging {i + 1}: {uit['pogingen'][-1]['uitkomst']}")
     finally:
         uit["geheugen"] = emu.geheugen()
         emu.stop()
+    # n = het gevraagde aantal: een niet uitgevoerde poging (bv. inloggen mislukt) telt nooit als geslaagd.
     uit["geslaagd"] = sum(p["uitkomst"] == sc.GESLAAGD for p in uit["pogingen"])
-    uit["n"] = len(uit["pogingen"])
+    uit["n"] = n
     return uit

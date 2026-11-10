@@ -257,3 +257,74 @@ def test_aanvullen_bewaart_de_metingen_en_de_juiste_sessie_van_een_vervangen_run
     assert cli.vervangen_mislukt({"vervangen": [{"server": "a", "emulator": "b",
                                                  "oordeel": {"validatie": "Sim-geslaagd"}}]}) == []
     assert cli.vervangen_mislukt({}) == []
+
+
+# --- hervatproef (review P4-0) ------------------------------------------------------------------------------------
+
+class _NepEmulator:
+    def __init__(self, *a, **k) -> None:
+        self.gestopt = False
+
+    def start(self) -> float:
+        return 1.0
+
+    def installeer(self, pad) -> str:
+        return "Success"
+
+    def wacht_op(self, *a, **k):
+        return emulator.Knoop("Resume from 5:00", "", "TextView", "", (0, 0, 10, 10), True, True)
+
+    def geheugen(self) -> dict:
+        return {"oom_kill": 0}
+
+    def stop(self) -> None:
+        self.gestopt = True
+
+
+class _NepVolger:
+    def __init__(self, reeksen) -> None:
+        self.reeksen = list(reeksen)
+
+    def id(self) -> str:
+        return "sessie"
+
+    def volg(self, item_id, *a, **k):
+        reeks = self.reeksen.pop(0)
+        if isinstance(reeks, Exception):
+            raise reeks
+        return [sc.Monster(t=t, sessie="s", item_id=item_id, positie_s=p, gepauzeerd=False, methode="DirectPlay",
+                           ondertitel=None, audio=None, transcode=None, client="c", versie="v") for t, p in reeks]
+
+
+def _nep_server():
+    jf = SimpleNamespace(zet_userdata=lambda *a, **k: None, toon=lambda *a, **k: None)
+    return SimpleNamespace(jf=jf, items=SimpleNamespace(hervat={"Id": "tos", "Name": "tos"}), kijker_id="k",
+                           HERVAT_S=300.0, poort=1)
+
+
+def _apks():
+    return {"androidtv": {"fork": {"pad": "/x/fork.apk", "pakket": "f"}, "officieel": {"pad": "/x/off.apk",
+                                                                                     "pakket": "o"}}}
+
+
+@pytest.mark.parametrize(("login", "reeksen", "geslaagd", "uitkomsten"), [
+    # goed, begint bij 0, appfout halverwege (telt als mislukt, de proef gaat door), weer goed
+    ("geslaagd", [[(0, 300.0), (1, 301.0), (3, 303.0)], [(1, 1.0), (2, 2.0), (4, 4.0)], RuntimeError("sessie weg"),
+                  [(0, 300.0), (2, 302.0), (3, 303.0)]], 2, ["geslaagd", "mislukt", "mislukt", "geslaagd"]),
+    ("mislukt", [], 0, []),  # niet ingelogd: geen poging, en 0 van de gevraagde 4 — nooit geslaagd
+])
+def test_hervatproef_telt_elke_gevraagde_poging(monkeypatch, login, reeksen, geslaagd, uitkomsten):
+    from compat import hervatproef
+
+    monkeypatch.setattr(hervatproef, "Emulator", _NepEmulator)
+    monkeypatch.setattr(hervatproef, "Volger", lambda jf, client: _NepVolger(reeksen))
+    monkeypatch.setattr(hervatproef, "inloggen_tv", lambda *a, **k: {"uitkomst": login})
+    monkeypatch.setattr(hervatproef, "dpad_kies", lambda *a, **k: True)
+    monkeypatch.setattr(hervatproef, "stop", lambda *a, **k: True)
+    monkeypatch.setattr(hervatproef.time, "sleep", lambda s: None)
+    uit = hervatproef.herhaal(_nep_server(), "tv", _apks(), "officieel", 4)
+    assert (uit["geslaagd"], uit["n"], uit["gevraagd"]) == (geslaagd, 4, 4)
+    assert [p["uitkomst"] for p in uit["pogingen"]] == uitkomsten
+    assert uit["pakket"] == "o" and uit["inloggen"] == login
+    if reeksen:
+        assert "RuntimeError: sessie weg" in uit["pogingen"][2]["reden"]
