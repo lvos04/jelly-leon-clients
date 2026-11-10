@@ -340,3 +340,123 @@ def test_hervatproef_telt_elke_gevraagde_poging(monkeypatch, login, reeksen, ges
     assert uit["pakket"] == "o" and uit["inloggen"] == login
     if reeksen:
         assert "RuntimeError: sessie weg" in uit["pogingen"][2]["reden"]
+
+
+# --- android.run en de geheugenregel (review P4-0) ----------------------------------------------------------------
+
+class _KapotteEmulator(_NepEmulator):
+    """Emulator die niet opstart; ``geheugen`` levert wat de test opgeeft."""
+
+    meting: dict = {"oom_kill": 0}
+
+    def __init__(self, soort="tv", *a, **k) -> None:
+        super().__init__()
+        self.soort = soort
+
+    def start(self) -> float:
+        raise RuntimeError("emulator startte niet")
+
+    def geheugen(self) -> dict:
+        return dict(self.meting)
+
+
+def _android_apks():
+    fork = {"bestand": "f.apk", "sha256": "1" * 64, "pakket": "org.jellyfin.androidtv.jellyleon",
+            "versionName": "0.19.10-jl.1", "certificaat": "CN=test", "pad": "/x/f.apk"}
+    off = {"bestand": "o.apk", "sha256": "2" * 64, "pakket": "org.jellyfin.androidtv", "versionName": "0.19.10",
+           "pad": "/x/o.apk"}
+    return {"androidtv": {"fork": fork, "officieel": off}}
+
+
+@pytest.mark.parametrize(("meting", "geheugenstap"), [
+    ({"oom_kill": 0}, None),
+    ({"oom_kill": 1}, "OOM-kill"),
+    ({"fout": "memory.events ontbreekt"}, "niet meetbaar"),  # fail-closed: geen meting = geen bewijs
+])
+def test_android_run_die_afbreekt_is_nooit_geslaagd(monkeypatch, tmp_path, meting, geheugenstap):
+    monkeypatch.setattr(_KapotteEmulator, "meting", meting)
+    monkeypatch.setattr(android, "Emulator", _KapotteEmulator)
+    srv = SimpleNamespace(jf=SimpleNamespace(), items=SimpleNamespace())
+    res = android.run(srv, "tv", _android_apks(), tmp_path, "jelly-leon")
+    assert res["fout"] == "RuntimeError: emulator startte niet"
+    assert res["oordeel"]["validatie"] == "Sim-mislukt"
+    assert set(android.VEREIST) <= set(res["oordeel"]["mislukte_stappen"])  # elke ontbrekende stap telt als mislukt
+    if geheugenstap:
+        assert geheugenstap in res["stappen"]["geheugen"]["reden"] and "geheugen" in res["oordeel"]["mislukte_stappen"]
+    else:
+        assert "geheugen" not in res["stappen"]
+
+
+def test_android_cmd_herhaalt_alleen_na_een_oom_kill_met_5_gib_en_bewaart_beide(monkeypatch, tmp_path):
+    """B03 §10.14: eerst binnen 4 GiB; alleen na een OOM-kill één herhaling met 5 GiB, als afwijking zichtbaar; de
+    runs draaien via een_android_run (stack.lock + gradle.lock)."""
+    aanroepen = []
+
+    def nep_run(label, image, soort, apks, uitmap, gib, migratie_van=None, bediend="fork"):
+        aanroepen.append((label, soort, gib))
+        oom = 1 if (soort == "tablet" and gib == 4) else 0
+        ok = soort != "tablet"
+        return {"oordeel": {"validatie": "Sim-geslaagd" if ok else "Sim-mislukt", "mislukte_stappen": [] if ok
+                            else ["bladeren"]}, "geheugen": {"oom_kill": oom},
+                "stappen": {"hervatten": {"uitkomst": "geslaagd" if ok else "mislukt"}}}
+
+    geschreven = {}
+    monkeypatch.setattr(cli.apk, "bereid_voor", lambda *a, **k: {})
+    monkeypatch.setattr(cli, "een_android_run", nep_run)
+    monkeypatch.setattr(cli, "image_herkomst", lambda img: {"image": img})
+    monkeypatch.setattr(cli, "corpus_herkomst", lambda: [])
+    monkeypatch.setattr(cli.bewijs, "comprimeer_schermafdrukken", lambda m: [])
+    monkeypatch.setattr(cli.bewijs, "schrijf", lambda pad, doc, geheimen=None: geschreven.update(doc))
+    a = SimpleNamespace(soorten="telefoon,tablet", vergelijk_soorten="telefoon", uit=tmp_path / "b.json",
+                        image="jl", stock_image="stock", migratie_van=None, bediend="fork", aanvullen=False)
+    assert cli.android_cmd(a) == 0
+    assert aanroepen == [("jelly-leon", "telefoon", 4), ("jelly-leon", "tablet", 4), ("jelly-leon", "tablet", 5),
+                         ("stock", "telefoon", 4)]
+    tablet = geschreven["resultaten"]["jelly-leon"]["tablet"]
+    assert "afwijking" in tablet["geheugen_afwijking"] and tablet["eerdere_poging_4gib"]["geheugen"]["oom_kill"] == 1
+    assert "geheugen_afwijking" not in geschreven["resultaten"]["jelly-leon"]["telefoon"]
+    assert geschreven["validatie"] == "Sim-mislukt"  # één client mislukt = geheel mislukt
+    assert geschreven["samenvatting"] == {"jelly-leon/telefoon": "Sim-geslaagd", "jelly-leon/tablet": "Sim-mislukt",
+                                          "stock/telefoon": "Sim-geslaagd"}
+    assert geschreven["regressies"] == [] and geschreven["vervangen_mislukt"] == []
+
+
+def test_een_android_run_neemt_stack_en_gradle_lock(monkeypatch, tmp_path):
+    sloten = []
+
+    class NepSlot:
+        def __init__(self, naam, log=None):
+            self.naam = naam
+
+        def __enter__(self):
+            sloten.append(self.naam)
+            return 0.0
+
+        def __exit__(self, *a):
+            return False
+
+    class NepServer:
+        def __init__(self, image):
+            self.info = {"Version": "12.4.0"}
+
+        def start(self):
+            assert sloten == ["stack.lock", "gradle.lock"], "server pas starten binnen beide sloten"
+            return self
+
+        def inrichten(self):
+            return {}
+
+        def image_id(self):
+            return "sha256:x"
+
+        def verwijder(self):
+            pass
+
+        def logs(self, n):
+            return ""
+
+    monkeypatch.setattr(cli.bewijs, "slot", NepSlot)
+    monkeypatch.setattr(cli, "TestServer", NepServer)
+    monkeypatch.setattr(cli.android, "run", lambda *a, **k: {"oordeel": {"validatie": "Sim-geslaagd"}})
+    r = cli.een_android_run("jelly-leon", "img", "telefoon", {}, tmp_path, 4)
+    assert sloten == ["stack.lock", "gradle.lock"] and r["server"]["versie"] == "12.4.0"

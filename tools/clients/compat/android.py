@@ -313,6 +313,13 @@ def run(
             "uitkomst": sc.MISLUKT,
             "reden": f"OOM-kill van de emulator binnen {geheugen_gib} GiB",
         }
+    elif "oom_kill" not in res["geheugen"]:
+        # Fail-closed (review P4-0): zonder meting is niet aangetoond dat de run binnen de geheugengrens bleef.
+        res["stappen"]["geheugen"] = {
+            "uitkomst": sc.MISLUKT,
+            "reden": f"geheugengebruik van de emulator niet meetbaar ({res['geheugen'].get('fout', 'onbekend')}); "
+            f"zonder meting geen bewijs dat de run binnen {geheugen_gib} GiB bleef",
+        }
     res["stappen"].update(extra_stappen or {})
     vereist = VEREIST + list(extra_stappen or {}) + (["geheugen"] if "geheugen" in res["stappen"] else [])
     res["oordeel"] = sc.eindoordeel(res["stappen"], vereist)
