@@ -122,9 +122,18 @@ def een_android_run(
     return r
 
 
+def sessie_van(oud: dict[str, Any], label: str, soort: str) -> str | None:
+    """Begin van de sessie die het huidige resultaat ``label/soort`` schreef: de laatste aanvulling met dat resultaat,
+    anders de eerste sessie van het document."""
+    for sessie in reversed(oud.get("sessies", [])):
+        if f"{label}/{soort}" in (sessie.get("aangevuld") or []):
+            return sessie.get("begin")
+    return oud.get("begin")
+
+
 def aanvullen(oud: dict[str, Any], nieuw: dict[str, Any]) -> dict[str, Any]:
-    """Nieuwe resultaten in een bestaand bewijs zetten; een vervangen resultaat blijft met zijn oordeel en fout
-    zichtbaar onder ``vervangen`` (nooit stil overschreven)."""
+    """Nieuwe resultaten in een bestaand bewijs zetten; een vervangen resultaat blijft met zijn oordeel, fout en alle
+    stapgegevens (de gemelde posities) zichtbaar onder ``vervangen`` (nooit stil overschreven of ingekort)."""
     uit = {**oud, "resultaten": {k: dict(v) for k, v in oud.get("resultaten", {}).items()}}
     vervangen = list(oud.get("vervangen", []))
     for label, rr in nieuw["resultaten"].items():
@@ -135,10 +144,13 @@ def aanvullen(oud: dict[str, Any], nieuw: dict[str, Any]) -> dict[str, Any]:
                     {
                         "server": label,
                         "emulator": soort,
-                        "sessie": oud.get("begin"),
+                        "sessie": sessie_van(oud, label, soort),
                         "oordeel": vorig.get("oordeel"),
                         "fout": vorig.get("fout"),
                         "mislukte_stappen": vorig.get("oordeel", {}).get("mislukte_stappen"),
+                        "stappen": vorig.get("stappen"),
+                        "geheugen": vorig.get("geheugen"),
+                        **{k: vorig[k] for k in ("geheugen_afwijking", "eerdere_poging_4gib") if k in vorig},
                     }
                 )
             uit["resultaten"][label][soort] = r
@@ -151,6 +163,18 @@ def aanvullen(oud: dict[str, Any], nieuw: dict[str, Any]) -> dict[str, Any]:
         },
     ]
     return uit
+
+
+def vervangen_mislukt(document: dict[str, Any]) -> list[str]:
+    """``server/emulator`` van elke vervangen run die niet Sim-geslaagd was (B03-019: elke afwijking telt, een
+    uitzondering alleen met een ADR) — zo blijft zo'n run ook in de samenvatting zichtbaar."""
+    return sorted(
+        {
+            f"{v.get('server')}/{v.get('emulator')}"
+            for v in document.get("vervangen", [])
+            if (v.get("oordeel") or {}).get("validatie") != "Sim-geslaagd"
+        }
+    )
 
 
 def android_cmd(a: argparse.Namespace) -> int:
@@ -231,8 +255,13 @@ def android_cmd(a: argparse.Namespace) -> int:
         and not document["regressies"]
         else "Sim-mislukt"
     )
+    # B03-019: een afwijking telt als Sim-mislukt, een uitzondering alleen met een ADR. Een vervangen mislukte run
+    # blijft daarom ook in de samenvatting zichtbaar; het eindoordeel erover staat in de ADR, niet in dit document.
+    document["vervangen_mislukt"] = vervangen_mislukt(document)
     bewijs.schrijf(a.uit, document, geheimen=[KIJKER_WW, BEHEER_WW])
-    log(f"bewijs geschreven: {a.uit} — {document['validatie']}")
+    log(f"bewijs geschreven: {a.uit} — {document['validatie']}"
+        + (f" (vervangen mislukte runs: {', '.join(document['vervangen_mislukt'])})"
+           if document["vervangen_mislukt"] else ""))
     return 0
 
 

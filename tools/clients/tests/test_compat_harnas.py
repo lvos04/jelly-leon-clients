@@ -232,5 +232,28 @@ def test_aanvullen_vervangt_zichtbaar_en_houdt_de_rest():
     assert uit["resultaten"]["jelly-leon"]["tv"]["oordeel"]["validatie"] == "Sim-geslaagd"
     assert uit["vervangen"] == [{"server": "jelly-leon", "emulator": "tablet", "sessie": "t0",
                                  "oordeel": {"validatie": "Sim-mislukt", "mislukte_stappen": ["bladeren"]},
-                                 "fout": "x", "mislukte_stappen": ["bladeren"]}]
+                                 "fout": "x", "mislukte_stappen": ["bladeren"], "stappen": None, "geheugen": None}]
     assert uit["sessies"][-1]["aangevuld"] == ["jelly-leon/tablet"]
+
+
+def test_aanvullen_bewaart_de_metingen_en_de_juiste_sessie_van_een_vervangen_run():
+    """Review P4-0: de gemelde posities van een vervangen (mislukte) hervatrun moeten in het bewijs blijven, en bij een
+    tweede aanvulling hoort het vervangen resultaat bij de sessie die het schreef (niet bij de eerste sessie)."""
+    hervat = {"uitkomst": "mislukt", "meldingen": [[0.0, 300.0, "s"], [1.0, 1.0, "s"], [2.0, 2.0, "s"]]}
+    oud = {"begin": "t0", "eind": "t1", "resultaten": {"jelly-leon": {"tv": {
+        "oordeel": {"validatie": "Sim-mislukt", "mislukte_stappen": ["hervatten"]}, "stappen": {"hervatten": hervat},
+        "geheugen": {"oom_kill": 0}, "geheugen_afwijking": "5 GiB"}}}}
+    eerste = cli.aanvullen(oud, {"begin": "t2", "resultaten": {"jelly-leon": {"tv": {
+        "oordeel": {"validatie": "Sim-mislukt"}, "stappen": {"hervatten": {"uitkomst": "mislukt"}}}}}})
+    v = eerste["vervangen"][0]
+    assert v["sessie"] == "t0" and v["stappen"]["hervatten"]["meldingen"][1] == [1.0, 1.0, "s"]
+    assert v["geheugen"] == {"oom_kill": 0} and v["geheugen_afwijking"] == "5 GiB"
+    tweede = cli.aanvullen(eerste, {"begin": "t3", "resultaten": {"jelly-leon": {"tv": {
+        "oordeel": {"validatie": "Sim-geslaagd"}}}}})
+    assert [x["sessie"] for x in tweede["vervangen"]] == ["t0", "t2"]
+    assert cli.sessie_van(tweede, "jelly-leon", "tv") == "t3"
+    assert cli.sessie_van(tweede, "stock", "tv") == "t0"
+    assert cli.vervangen_mislukt(tweede) == ["jelly-leon/tv"]  # beide vervangen runs waren Sim-mislukt
+    assert cli.vervangen_mislukt({"vervangen": [{"server": "a", "emulator": "b",
+                                                 "oordeel": {"validatie": "Sim-geslaagd"}}]}) == []
+    assert cli.vervangen_mislukt({}) == []
