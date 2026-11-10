@@ -74,3 +74,14 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
 - `server_api_compat.py --sdk-taal swift` (jellyfin-sdk-swift) en de CI-workflow *Clients / Compat 12.x (statisch)*.
 - ADR-0011 (harnas en meetregels); ADR-0009 herbeoordeeld tegen 12.4 (Swiftfin: versiecontrole slaagt, protocol gelijk
   aan stock; serverlog met `api_key` → 401). `BOUWVERIFICATIE_P4-0.md`, INVENTARIS §3, README.
+
+## Review P4-0 — 2026-11-10 (ontwikkelstand, niets gepubliceerd)
+
+- Onafhankelijke herhaling: jelly-leon-image opnieuw gebouwd uit dezelfde bron, release-APK's byte-gelijk opnieuw
+  gebouwd, telefoon-emulator (fork-app naast de officiële app) tegen Jelly Leon en stock Sim-geslaagd met hervatten op
+  300 s, hervatproef officiële tv-app 5/5 en 5/5 (`BOUWVERIFICATIE_P4-0.md` §8).
+- Harnas: schijnfout bij een 0-melding vóór het hervatpunt gerepareerd (spelende staart); vervangen runs bewaren al hun
+  metingen; een ontbrekende stap op Jelly Leon telt als regressie; migratievergelijking eist eerst de gezaaide
+  kijkgeschiedenis; geheugen fail-closed; hervatproef telt elke gevraagde poging.
+- Drifttest contractkopie vergelijkt met de bron op de bron-commit (contract 1.3 in de bron = waarschuwing).
+- Docs: tablet-emulator overal als Sim-mislukt; telling van de tabletpogingen uit het bewijs. 251 tests.

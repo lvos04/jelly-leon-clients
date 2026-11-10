@@ -1,0 +1,733 @@
+{
+ "schema": "jelly-leon-clients/p4-0-jc3-hervatproef/1",
+ "begin": "2026-11-10T09:01:01Z",
+ "doel": "hervatten op het juiste punt n keer herhaald, op Jelly Leon en stock (wie veroorzaakt een afwijking?)",
+ "servers": {
+  "jelly-leon": {
+   "image": "jelly-leon-clients/jelly-leon-server:12.4.0-jl.0-e294f84-review",
+   "image_id": "sha256:ccd8de58f155f5a7dac90e50855917e367e46822983ce47675d2746740c029f3",
+   "version": "12.4.0-jl.0",
+   "revision": "e294f84eaede2bcf16ea2e40f60fc81c7a701511",
+   "web_revisie": "5ced8a24601e30038cafae5dab2f0520b3325427",
+   "name": "docker.io/jellyfin/jellyfin:12.4"
+  },
+  "stock": {
+   "image": "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "image_id": "sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "version": "12.4"
+  }
+ },
+ "resultaten": {
+  "jelly-leon": {
+   "emulator": "tv",
+   "bediend": "officieel",
+   "pakket": "org.jellyfin.androidtv",
+   "gevraagd": 5,
+   "pogingen": [
+    {
+     "poging": 1,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 0.02,
+     "geschatte_startpositie_s": 299.98,
+     "afwijking_s": -0.02,
+     "opgelopen_s": 6.64,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.64,
+      303.64,
+      304.64,
+      305.64,
+      306.64
+     ],
+     "meldingen": [
+      [
+       0.02,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       1.03,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       2.04,
+       301.0,
+       "99736a2c"
+      ],
+      [
+       3.04,
+       302.0,
+       "99736a2c"
+      ],
+      [
+       4.06,
+       302.64,
+       "99736a2c"
+      ],
+      [
+       5.06,
+       303.64,
+       "99736a2c"
+      ],
+      [
+       6.08,
+       304.64,
+       "99736a2c"
+      ],
+      [
+       7.08,
+       305.64,
+       "99736a2c"
+      ],
+      [
+       8.09,
+       306.64,
+       "99736a2c"
+      ]
+     ],
+     "eerst_een_melding_op_0": false
+    },
+    {
+     "poging": 2,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 0.02,
+     "geschatte_startpositie_s": 299.98,
+     "afwijking_s": -0.02,
+     "opgelopen_s": 6.56,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.57,
+      303.57,
+      304.57,
+      305.57,
+      306.56
+     ],
+     "meldingen": [
+      [
+       0.02,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       1.04,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       2.04,
+       301.0,
+       "99736a2c"
+      ],
+      [
+       3.05,
+       302.0,
+       "99736a2c"
+      ],
+      [
+       4.06,
+       302.57,
+       "99736a2c"
+      ],
+      [
+       5.07,
+       303.57,
+       "99736a2c"
+      ],
+      [
+       6.08,
+       304.57,
+       "99736a2c"
+      ],
+      [
+       7.09,
+       305.57,
+       "99736a2c"
+      ],
+      [
+       8.1,
+       306.56,
+       "99736a2c"
+      ]
+     ],
+     "eerst_een_melding_op_0": false
+    },
+    {
+     "poging": 3,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 1.02,
+     "geschatte_startpositie_s": 298.98,
+     "afwijking_s": -1.02,
+     "opgelopen_s": 6.6,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.6,
+      304.6,
+      305.6,
+      306.6
+     ],
+     "meldingen": [
+      [
+       0.01,
+       0.0,
+       "99736a2c"
+      ],
+      [
+       1.02,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       2.03,
+       301.0,
+       "99736a2c"
+      ],
+      [
+       3.04,
+       302.0,
+       "99736a2c"
+      ],
+      [
+       4.05,
+       302.6,
+       "99736a2c"
+      ],
+      [
+       5.06,
+       304.6,
+       "99736a2c"
+      ],
+      [
+       6.07,
+       305.6,
+       "99736a2c"
+      ],
+      [
+       7.08,
+       306.6,
+       "99736a2c"
+      ]
+     ],
+     "eerst_een_melding_op_0": true
+    },
+    {
+     "poging": 4,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 0.01,
+     "geschatte_startpositie_s": 299.99,
+     "afwijking_s": -0.01,
+     "opgelopen_s": 6.67,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.66,
+      303.66,
+      304.66,
+      305.67,
+      306.67
+     ],
+     "meldingen": [
+      [
+       0.01,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       1.02,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       2.03,
+       301.0,
+       "99736a2c"
+      ],
+      [
+       3.04,
+       302.0,
+       "99736a2c"
+      ],
+      [
+       4.05,
+       302.66,
+       "99736a2c"
+      ],
+      [
+       5.06,
+       303.66,
+       "99736a2c"
+      ],
+      [
+       6.07,
+       304.66,
+       "99736a2c"
+      ],
+      [
+       7.08,
+       305.67,
+       "99736a2c"
+      ],
+      [
+       8.09,
+       306.67,
+       "99736a2c"
+      ]
+     ],
+     "eerst_een_melding_op_0": false
+    },
+    {
+     "poging": 5,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 0.01,
+     "geschatte_startpositie_s": 299.99,
+     "afwijking_s": -0.01,
+     "opgelopen_s": 6.58,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.57,
+      303.57,
+      304.57,
+      305.58,
+      306.58
+     ],
+     "meldingen": [
+      [
+       0.01,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       1.02,
+       300.0,
+       "99736a2c"
+      ],
+      [
+       2.03,
+       301.0,
+       "99736a2c"
+      ],
+      [
+       3.04,
+       302.0,
+       "99736a2c"
+      ],
+      [
+       4.05,
+       302.57,
+       "99736a2c"
+      ],
+      [
+       5.06,
+       303.57,
+       "99736a2c"
+      ],
+      [
+       6.07,
+       304.57,
+       "99736a2c"
+      ],
+      [
+       7.08,
+       305.58,
+       "99736a2c"
+      ],
+      [
+       8.08,
+       306.58,
+       "99736a2c"
+      ]
+     ],
+     "eerst_een_melding_op_0": false
+    }
+   ],
+   "boot_s": 24.2,
+   "inloggen": "geslaagd",
+   "geheugen": {
+    "limiet_bytes": 4294967296,
+    "piek_bytes": 3922747392,
+    "oom": 0,
+    "oom_kill": 0
+   },
+   "geslaagd": 5,
+   "n": 5
+  },
+  "stock": {
+   "emulator": "tv",
+   "bediend": "officieel",
+   "pakket": "org.jellyfin.androidtv",
+   "gevraagd": 5,
+   "pogingen": [
+    {
+     "poging": 1,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 0.01,
+     "geschatte_startpositie_s": 299.99,
+     "afwijking_s": -0.01,
+     "opgelopen_s": 6.59,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      303.0,
+      303.59,
+      304.59,
+      305.59,
+      306.59
+     ],
+     "meldingen": [
+      [
+       0.01,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       1.02,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       2.03,
+       301.0,
+       "a06c8086"
+      ],
+      [
+       3.04,
+       302.0,
+       "a06c8086"
+      ],
+      [
+       4.05,
+       303.0,
+       "a06c8086"
+      ],
+      [
+       5.06,
+       303.59,
+       "a06c8086"
+      ],
+      [
+       6.07,
+       304.59,
+       "a06c8086"
+      ],
+      [
+       7.08,
+       305.59,
+       "a06c8086"
+      ],
+      [
+       8.09,
+       306.59,
+       "a06c8086"
+      ]
+     ],
+     "eerst_een_melding_op_0": false
+    },
+    {
+     "poging": 2,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 1.02,
+     "geschatte_startpositie_s": 298.98,
+     "afwijking_s": -1.02,
+     "opgelopen_s": 6.62,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.62,
+      303.62,
+      304.62,
+      305.62,
+      306.62
+     ],
+     "meldingen": [
+      [
+       0.01,
+       0.0,
+       "a06c8086"
+      ],
+      [
+       1.02,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       2.03,
+       301.0,
+       "a06c8086"
+      ],
+      [
+       3.04,
+       302.0,
+       "a06c8086"
+      ],
+      [
+       4.05,
+       302.62,
+       "a06c8086"
+      ],
+      [
+       5.06,
+       303.62,
+       "a06c8086"
+      ],
+      [
+       6.07,
+       304.62,
+       "a06c8086"
+      ],
+      [
+       7.08,
+       305.62,
+       "a06c8086"
+      ],
+      [
+       8.09,
+       306.62,
+       "a06c8086"
+      ]
+     ],
+     "eerst_een_melding_op_0": true
+    },
+    {
+     "poging": 3,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 0.01,
+     "geschatte_startpositie_s": 299.99,
+     "afwijking_s": -0.01,
+     "opgelopen_s": 6.64,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.65,
+      303.65,
+      304.65,
+      305.64,
+      306.64
+     ],
+     "meldingen": [
+      [
+       0.01,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       1.02,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       2.03,
+       301.0,
+       "a06c8086"
+      ],
+      [
+       3.04,
+       302.0,
+       "a06c8086"
+      ],
+      [
+       4.05,
+       302.65,
+       "a06c8086"
+      ],
+      [
+       5.06,
+       303.65,
+       "a06c8086"
+      ],
+      [
+       6.07,
+       304.65,
+       "a06c8086"
+      ],
+      [
+       7.07,
+       305.64,
+       "a06c8086"
+      ],
+      [
+       8.08,
+       306.64,
+       "a06c8086"
+      ]
+     ],
+     "eerst_een_melding_op_0": false
+    },
+    {
+     "poging": 4,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 0.01,
+     "geschatte_startpositie_s": 299.99,
+     "afwijking_s": -0.01,
+     "opgelopen_s": 6.67,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.66,
+      303.66,
+      304.66,
+      305.67,
+      306.67
+     ],
+     "meldingen": [
+      [
+       0.01,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       1.02,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       2.03,
+       301.0,
+       "a06c8086"
+      ],
+      [
+       3.04,
+       302.0,
+       "a06c8086"
+      ],
+      [
+       4.05,
+       302.66,
+       "a06c8086"
+      ],
+      [
+       5.06,
+       303.66,
+       "a06c8086"
+      ],
+      [
+       6.06,
+       304.66,
+       "a06c8086"
+      ],
+      [
+       7.07,
+       305.67,
+       "a06c8086"
+      ],
+      [
+       8.08,
+       306.67,
+       "a06c8086"
+      ]
+     ],
+     "eerst_een_melding_op_0": false
+    },
+    {
+     "poging": 5,
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 1.02,
+     "geschatte_startpositie_s": 298.98,
+     "afwijking_s": -1.02,
+     "opgelopen_s": 6.62,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      302.62,
+      303.62,
+      304.62,
+      305.62,
+      306.62
+     ],
+     "meldingen": [
+      [
+       0.01,
+       0.0,
+       "a06c8086"
+      ],
+      [
+       1.02,
+       300.0,
+       "a06c8086"
+      ],
+      [
+       2.03,
+       301.0,
+       "a06c8086"
+      ],
+      [
+       3.04,
+       302.0,
+       "a06c8086"
+      ],
+      [
+       4.05,
+       302.62,
+       "a06c8086"
+      ],
+      [
+       5.06,
+       303.62,
+       "a06c8086"
+      ],
+      [
+       6.07,
+       304.62,
+       "a06c8086"
+      ],
+      [
+       7.08,
+       305.62,
+       "a06c8086"
+      ],
+      [
+       8.09,
+       306.62,
+       "a06c8086"
+      ]
+     ],
+     "eerst_een_melding_op_0": true
+    }
+   ],
+   "boot_s": 29.4,
+   "inloggen": "geslaagd",
+   "geheugen": {
+    "limiet_bytes": 4294967296,
+    "piek_bytes": 4297715712,
+    "oom": 0,
+    "oom_kill": 0
+   },
+   "geslaagd": 5,
+   "n": 5
+  }
+ },
+ "eind": "2026-11-10T09:06:59Z"
+}

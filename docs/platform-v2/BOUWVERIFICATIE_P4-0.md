@@ -215,9 +215,10 @@ Clients / Compat 12.x 42782635849, beide groen.
 | `python3 tools/clients/check_clients.py`; `python3 tools/clients/app_identiteit.py bron` | in orde |
 | `JLC_CONTRACT_BRON=<kopie van ai-server-manager 8b54f39> pytest tools/clients/tests/test_contract_kopie.py` | 5 passed (de kopie is byte-gelijk aan de vastgezette bron-commit) |
 
-De byte-vergelijking met de **actuele** bron faalt lokaal bewust: ai-server-manager staat sinds 2026-11-10 op contract
+De byte-vergelijking met de **actuele** bron faalde lokaal bewust: ai-server-manager staat sinds 2026-11-10 op contract
 1.3 (`02b119c`). Deze taak volgt 1.2; een nieuwe kopie overnemen is een stap van de orkestratie (C1.3-ALG-01/JLC-01).
-In CI wordt die laag overgeslagen (bron niet naast de repo).
+In CI wordt die laag overgeslagen (bron niet naast de repo). *Stand vóór de review; sinds de review vergelijkt de test
+met de bron op de bron-commit en is een nieuwere bron een waarschuwing (§8).*
 
 ## 7. Wat NIET gevalideerd is of ontbreekt
 
@@ -228,3 +229,62 @@ In CI wordt die laag overgeslagen (bron niet naast de repo).
 - Echte NAS: **NIET GEVALIDEERD (echte NAS)**. De jelly-leon-image is lokaal gebouwd; een gepubliceerde image met
   digest volgt met de release 12.4.0-jl.1 (gebruiker, BG-02).
 - Het dynamische deel draait niet in CI: het mediacorpus komt nooit in een repo of CI-image (BG-37/BG-38).
+
+## 8. Onafhankelijke review P4-0 (2026-11-10)
+
+Een tweede agent heeft het werk hierboven nagelopen: alle CI-stappen opnieuw gedraaid, het bewijs nagerekend en een
+deel van de emulatortests **zelf opnieuw uitgevoerd** op dezelfde machine. Niets daarvan is op een echt apparaat:
+**Sim-getest**; echte apparaten **NIET GEVALIDEERD (hardware)**, Swiftfin **NIET GEVALIDEERD (Mac/Xcode)**.
+
+### 8.1 Opnieuw gebouwd en gedraaid
+
+| Stap | Uitkomst |
+|---|---|
+| jelly-leon-image uit `git archive` van jelly-leon `e294f84ea` + jelly-leon-web `5ced8a246` (productie-Dockerfile, `BUILD_JOBS=2`, `WEB_BUILD_JOBS=2`, onder `docker-build.lock`, standaard-builder met gedeelde cache) | gebouwd; image-ID `sha256:ccd8de58f155…` (een andere ID dan `4671a48a…` van de bouwer: tijdstempels in de lagen), labels `12.4.0-jl.0`, revisies `e294f84…`/`5ced8a2…`; na de proef verwijderd |
+| `make release-apks GRADLE_LOCK=…/gradle.lock` | BUILD SUCCESSFUL (2 min 9 s en 1 min 29 s); de ongetekende release-APK's zijn **byte-gelijk** aan die van de bouwer (`07b9e65f…742511a`, `f3b6bf39…a083334c`); `aapt2`: `org.jellyfin.mobile.jellyleon` 2070301 en `org.jellyfin.androidtv.jellyleon` 191001 |
+| `client_compat.py android --soorten telefoon --vergelijk-soorten telefoon` (fork-app, `test-evidence/p4-0-review-android-telefoon.json` + schermafdrukken) | Jelly Leon en stock 12.4 beide **Sim-geslaagd**, 0 regressies: `org.jellyfin.mobile` 2.7.3 en `org.jellyfin.mobile.jellyleon` 2.7.3-jl.1 naast elkaar geïnstalleerd, sessie `Jellyfin for Android 2.7.3-jl.1`; hervatten met de eigen knop: eerste melding 300,0 s na 0,02 s (geschat 299,98 s), bewaard 306,97 s; Direct Play, transcode (AVI), ondertitels voorkeur en extern geslaagd; `memory.peak` op de 4 GiB-limiet zonder OOM-kill |
+| `client_compat.py hervatproef --soort tv --bediend officieel -n 4` (harnas vóór reparatie, `…-hervatproef-tv-officieel-voor-reparatie.json`) | Jelly Leon 2/4, stock 2/4 — zie 8.2: een **schijnfout van het harnas**, op beide servers gelijk |
+| idem `-n 5` na de reparatie (`49ca9d4`, `test-evidence/p4-0-review-hervatproef-tv-officieel.json`) | Jelly Leon **5/5**, stock **5/5**; start 298,98–299,99 s |
+
+### 8.2 Gevonden en gerepareerd
+
+1. **Hervatten: schijnfout bij een 0-melding (harnas).** De officiële tv-app 0.19.10 meldt bij hervatten soms eerst
+   positie 0 en een seconde later 300,0 s (de speler staat dan al op het hervatpunt: 300,0 → 301,0 → 302,0 …). Het
+   stopcriterium van het volgen telde die sprong als "opgelopen" en stopte na 3 meldingen; het oordeel zag dan maar 2
+   positieve meldingen en gaf *positie liep niet op*. Gemeten in de review op **Jelly Leon én stock** (2/4 en 2/4 vóór de
+   reparatie; na de reparatie 1 van 5 en 2 van 5 pogingen met zo'n 0-melding, alle geslaagd). Gerepareerd in `49ca9d4`
+   (alleen de spelende staart telt; de 0-melding blijft zichtbaar als `eerst_een_melding_op_0`). Vanaf het begin spelen
+   of terugspringen blijft mislukt. Het geval uit §2a (300,0 → 1,0 → 2,0 → 302,6: de speler speelde echt even vanaf 0)
+   is een ander patroon; dat is in de review niet teruggezien (10 van 10 pogingen geslaagd).
+2. **`--aanvullen` bewaarde van een vervangen run alleen oordeel en fout** — de gemelde posities van de mislukte
+   tv-run uit §2a zijn daardoor niet meer in het bewijs (alleen als tekst hierboven) en de geheugenmeting van de eerste
+   tabletrun ontbreekt. Nu blijven stappen en geheugen bewaard, hoort elk vervangen resultaat bij de juiste sessie en
+   noemt het document de vervangen mislukte runs (`vervangen_mislukt`, `81ac69f`).
+3. **Regressie telde een ontbrekende stap op Jelly Leon niet mee** (`1dfe0e8`): nu is "geslaagd op stock, níet
+   geslaagd op Jelly Leon" een regressie. Het bestaande bewijs blijft op 0 regressies (herberekend).
+4. **Migratievergelijking (JLT-60) kon leeg = leeg als geslaagd tellen** (`38511cd`): nu eerst de gezaaide
+   kijkgeschiedenis op de oude server aantonen (hervatpunt tick-exact, hervatlijst, gezien 2×, favoriet). Het bestaande
+   bewijs voldoet (offline herberekend uit de opgeslagen vóór/na-gegevens).
+5. **Geheugen fail-closed** (`1143b21`): zonder leesbare geheugenmeting is de stap `geheugen` mislukt.
+6. **Hervatproef** (`97a39a7`): n = gevraagd aantal; een fout per poging telt als mislukt en de proef gaat door.
+7. **Drifttest contractkopie** (`d451087`): vergelijkt met de bron op de bron-commit; contract 1.3 in de bron is een
+   waarschuwing, geen rode test.
+8. **Docs:** de tablet werd in INVENTARIS §3, README en ADR-0009 als geslaagd meegeteld; dat is rechtgezet (tablet
+   **Sim-mislukt**), en de telling van de tabletpogingen in §2 komt nu uit het bewijs (`39889ce`).
+
+Nieuwe tests: 251 passed lokaal (was 224 + 2 failed), zie §8.3.
+
+### 8.3 Controles van de review
+
+| Commando | Uitkomst |
+|---|---|
+| `.venv/bin/ruff check --config tools/clients/ruff.toml tools/clients` | All checks passed |
+| `.venv/bin/python -m pytest -q tools/clients/tests` | 251 passed, 2 waarschuwingen (contract 1.3 in de bron, bewust) |
+| `JLC_CONTRACT_BRON=/bestaat-niet pytest -q tools/clients/tests/test_contract_kopie.py` | 4 passed, 2 skipped (zoals in CI) |
+| `python tools/clients/check_clients.py`; `python tools/clients/app_identiteit.py bron` | in orde |
+| `actionlint -color .github/workflows/*.yml`; `shellcheck` op de fork-eigen scripts | geen meldingen |
+
+Niet opnieuw gedaan in de review (tijd en geheugen op de gedeelde machine): tablet, Android TV API 34/36 met de
+fork-app, de migratieproef 10.11.11 → 12.4, de desktop onder Xvfb en het Swiftfin-protocol; daarvoor geldt het bewijs
+van de bouwer (§2–§4), nagerekend maar niet herhaald.
+

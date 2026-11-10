@@ -1,0 +1,854 @@
+{
+ "schema": "jelly-leon-clients/p4-0-jc3-android/1",
+ "bediend": "fork",
+ "begin": "2026-11-10T08:47:51Z",
+ "doel": "JC3 / P4-0: fork-apps android 2.7.3 en androidtv 0.19.10 (eigen applicationId) tegen de Jelly Leon 12.x-server, met stock 12.x op dezelfde upstream-digest als controlegroep",
+ "servers": {
+  "jelly-leon": {
+   "image": "jelly-leon-clients/jelly-leon-server:12.4.0-jl.0-e294f84-review",
+   "image_id": "sha256:ccd8de58f155f5a7dac90e50855917e367e46822983ce47675d2746740c029f3",
+   "version": "12.4.0-jl.0",
+   "revision": "e294f84eaede2bcf16ea2e40f60fc81c7a701511",
+   "web_revisie": "5ced8a24601e30038cafae5dab2f0520b3325427",
+   "name": "docker.io/jellyfin/jellyfin:12.4"
+  },
+  "stock": {
+   "image": "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "image_id": "sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "version": "12.4"
+  }
+ },
+ "corpus": [
+  {
+   "in_container": "/media/films/hero/hero.mp4",
+   "corpus": "bron/blender/hero/hero.mp4",
+   "sha256": "1a2d85e9a0303c1c0eb320b2b755705551a5344b3c60dc3ced8166d93d329800"
+  },
+  {
+   "in_container": "/media/films/tears_of_steel/tears_of_steel_1080p.mov",
+   "corpus": "bron/blender/tos/uitgepakt/tears_of_steel_1080p.mov",
+   "sha256": "99486359be7e3681168a0fe94e1cbb0284c48b57b2a3ce7df4fa75e185987a15"
+  },
+  {
+   "in_container": "/media/films/tears_of_steel/tears_of_steel_1080p.nl.srt",
+   "corpus": "bron/blender/tos/subs/TOS-nl.srt",
+   "sha256": "1146fe8a924306d680d9b7c82cf652e56e9f1ed28c81142fa477daee04b45b58"
+  },
+  {
+   "in_container": "/media/films/tears_of_steel/tears_of_steel_1080p.en.srt",
+   "corpus": "bron/blender/tos/subs/TOS-en.srt",
+   "sha256": "ce9578f6fe098a5821045a38884b229160f9e7ba27890448a92f5be330c6e6fe"
+  },
+  {
+   "in_container": "/media/films/sintel-60s-referentie/sintel-60s-referentie.mkv",
+   "corpus": "afgeleid/kwaliteit/sintel-60s-referentie.mkv",
+   "sha256": "33c02db9818f00fb8a917838c0f6b52ee33b85b9ca9ea415bd5516805c5182dd"
+  },
+  {
+   "in_container": "/media/films/sintel-30s-mpeg2-ac3/sintel-30s-mpeg2-ac3.ts",
+   "corpus": "afgeleid/formaten/sintel-30s-mpeg2-ac3.ts",
+   "sha256": "557e50fc57e243719840040ab75fc5e35c4f15c130ac8a7055390e10249c3a22"
+  },
+  {
+   "in_container": "/media/films/sintel-30s-mpeg4-mp3/sintel-30s-mpeg4-mp3.avi",
+   "corpus": "afgeleid/formaten/sintel-30s-mpeg4-mp3.avi",
+   "sha256": "e62acbffa14d64b293dde32642a44e1f03df769e19d6a8d8e5529fec37840e31"
+  },
+  {
+   "in_container": "/media/series/B03 Testserie/Season 01/B03 Testserie S01E01.mkv",
+   "corpus": "afgeleid/series/B03 Testserie/Season 01/B03 Testserie S01E01.mkv",
+   "sha256": "82bd39fca7138322012481ed586a616961ebf12b4143111e9b75d22907aaa278"
+  },
+  {
+   "in_container": "/media/series/B03 Testserie/Season 01/B03 Testserie S01E02.mkv",
+   "corpus": "afgeleid/series/B03 Testserie/Season 01/B03 Testserie S01E02.mkv",
+   "sha256": "6a475eaf012618398c962d2ecdad2ebbe1d351df1282922964626152ad539414"
+  },
+  {
+   "in_container": "/media/series/B03 Testserie/Season 01/B03 Testserie S01E03.mkv",
+   "corpus": "afgeleid/series/B03 Testserie/Season 01/B03 Testserie S01E03.mkv",
+   "sha256": "98a94625bfb0cd633d0ef5e50152e5d11cddc6a2338a5b05622cccc4073e1cad"
+  },
+  {
+   "in_container": "/media/series/B03 Testserie/Season 02/B03 Testserie S02E01.mkv",
+   "corpus": "afgeleid/series/B03 Testserie/Season 02/B03 Testserie S02E01.mkv",
+   "sha256": "b94dde9038a9f15e897fe001c5d1853288090f9474cec3d65b87a8d0d48fb1aa"
+  },
+  {
+   "in_container": "/media/series/B03 Testserie/Season 02/B03 Testserie S02E02.mkv",
+   "corpus": "afgeleid/series/B03 Testserie/Season 02/B03 Testserie S02E02.mkv",
+   "sha256": "8643c8b6d6c65facd7c6ceac1ba90b06245cb07b194ef83afc1f7b80520499b3"
+  }
+ ],
+ "apks": {
+  "android": {
+   "fork": {
+    "bestand": "jellyfin-android-v2.7.3-jl.1-libre-release-testsleutel.apk",
+    "sha256": "032477005963a781b48adb35a2a332b705b782bcc76314f4c2ef064c9b3a6696",
+    "pakket": "org.jellyfin.mobile.jellyleon",
+    "versionName": "2.7.3-jl.1"
+   },
+   "officieel": {
+    "bestand": "jellyfin-android-v2.7.3-libre-release.apk",
+    "sha256": "f9f4b3ab46cc9434df811194c2d4351417f4db83a4c1a0facd0a662d69533f7f",
+    "pakket": "org.jellyfin.mobile",
+    "versionName": "2.7.3"
+   }
+  },
+  "androidtv": {
+   "fork": {
+    "bestand": "jellyfin-androidtv-v0.19.10-jl.1-release-testsleutel.apk",
+    "sha256": "9f68b48719438888ec7c6972a401abbab9141ab895e7cf993ad625cc423da238",
+    "pakket": "org.jellyfin.androidtv.jellyleon",
+    "versionName": "0.19.10-jl.1"
+   },
+   "officieel": {
+    "bestand": "jellyfin-androidtv-v0.19.10-release.apk",
+    "sha256": "8510a517c99927076082917f41bf306dd7a2546c59d492dd11bde18d6e2e4628",
+    "pakket": "org.jellyfin.androidtv",
+    "versionName": "0.19.10"
+   }
+  }
+ },
+ "regels": "emulator in een container met --device /dev/kvm, 4 GiB (geheugen = swap), --cap-drop ALL, headless, onder stack.lock en gradle.lock, één tegelijk; per client een verse wegwerpserver op 127.0.0.1",
+ "resultaten": {
+  "jelly-leon": {
+   "telefoon": {
+    "client": "android 2.7.3-jl.1 (fork, org.jellyfin.mobile.jellyleon)",
+    "bediend": "fork",
+    "emulator": "telefoon",
+    "systeemimage": "system-images;android-35;google_apis;x86_64",
+    "apparaat": "pixel_6",
+    "scherm": {
+     "hw.lcd.width": "720",
+     "hw.lcd.height": "1600",
+     "hw.lcd.density": "280"
+    },
+    "apk": {
+     "bestand": "jellyfin-android-v2.7.3-jl.1-libre-release-testsleutel.apk",
+     "sha256": "032477005963a781b48adb35a2a332b705b782bcc76314f4c2ef064c9b3a6696",
+     "pakket": "org.jellyfin.mobile.jellyleon",
+     "versionName": "2.7.3-jl.1",
+     "certificaat": "CN=Jelly Leon emulatortest"
+    },
+    "officiele_apk": {
+     "bestand": "jellyfin-android-v2.7.3-libre-release.apk",
+     "sha256": "f9f4b3ab46cc9434df811194c2d4351417f4db83a4c1a0facd0a662d69533f7f",
+     "pakket": "org.jellyfin.mobile",
+     "versionName": "2.7.3"
+    },
+    "stappen": {
+     "naast_officieel": {
+      "uitkomst": "geslaagd",
+      "pakketten": [
+       "org.jellyfin.mobile",
+       "org.jellyfin.mobile.jellyleon"
+      ],
+      "versies": {
+       "org.jellyfin.mobile": "2.7.3",
+       "org.jellyfin.mobile.jellyleon": "2.7.3-jl.1"
+      },
+      "installatie": {
+       "officieel": "Performing Streamed Install\nSuccess",
+       "fork": "Performing Streamed Install\nSuccess"
+      }
+     },
+     "inloggen": {
+      "uitkomst": "geslaagd",
+      "stappen": [
+       "serveradres ingevuld (Connect to Server)",
+       "ingelogd met gebruikersnaam en wachtwoord in de web-client van de server"
+      ],
+      "sessie": {
+       "client": "Jellyfin for Android",
+       "versie": "2.7.3-jl.1",
+       "apparaat": "sdk_gphone64_x86_64"
+      }
+     },
+     "bladeren": {
+      "uitkomst": "geslaagd",
+      "gezien": {
+       "films_tegel": true,
+       "series_tegel": true,
+       "verder_kijken_rij": true,
+       "hervatitem_op_startscherm": true,
+       "films_in_bibliotheek": [
+        "hero",
+        "sintel-30s-mpeg2-ac3",
+        "sintel-30s-mpeg4-mp3",
+        "sintel-60s-referentie",
+        "tears_of_steel"
+       ],
+       "serie_pagina": {
+        "ok": true,
+        "seizoenen": [
+         "Season 1",
+         "Season 1",
+         "Season 1",
+         "Season 2",
+         "Season 2",
+         "Season 2"
+        ],
+        "tv_telling": false
+       }
+      },
+      "verwacht_films": [
+       "hero",
+       "sintel-30s-mpeg2-ac3",
+       "sintel-30s-mpeg4-mp3",
+       "sintel-60s-referentie",
+       "tears_of_steel"
+      ]
+     },
+     "hervatten": {
+      "uitkomst": "geslaagd",
+      "hervatpunt_s": 300.0,
+      "eerste_positie_s": 300.0,
+      "eerste_melding_na_s": 0.02,
+      "geschatte_startpositie_s": 299.98,
+      "afwijking_s": -0.02,
+      "opgelopen_s": 6.0,
+      "posities_s": [
+       300.0,
+       300.02,
+       301.02,
+       302.02,
+       303.02,
+       304.02,
+       305.02,
+       306.02
+      ],
+      "meldingen": [
+       [
+        0.02,
+        300.0,
+        "bd634598"
+       ],
+       [
+        1.03,
+        300.02,
+        "bd634598"
+       ],
+       [
+        2.04,
+        301.02,
+        "bd634598"
+       ],
+       [
+        3.07,
+        302.02,
+        "bd634598"
+       ],
+       [
+        4.08,
+        303.02,
+        "bd634598"
+       ],
+       [
+        5.09,
+        304.02,
+        "bd634598"
+       ],
+       [
+        6.1,
+        305.02,
+        "bd634598"
+       ],
+       [
+        7.11,
+        306.02,
+        "bd634598"
+       ]
+      ],
+      "knop": "Resume"
+     },
+     "hervatpunt_bewaard": {
+      "uitkomst": "geslaagd",
+      "bewaard_s": 306.97,
+      "laatste_gemelde_positie_s": 306.02,
+      "tolerantie_s": 15.0
+     },
+     "direct_play": {
+      "uitkomst": "geslaagd",
+      "methode": "DirectPlay",
+      "opgelopen_s": 6.0,
+      "posities_s": [
+       0.04,
+       1.04,
+       2.04,
+       3.04,
+       4.04,
+       5.04,
+       6.04
+      ],
+      "transcode": null,
+      "client": "Jellyfin for Android",
+      "versie": "2.7.3-jl.1",
+      "item": "hero"
+     },
+     "transcode": {
+      "uitkomst": "geslaagd",
+      "methode": "Transcode",
+      "opgelopen_s": 6.0,
+      "posities_s": [
+       0.0,
+       0.08,
+       1.08,
+       2.08,
+       3.08,
+       4.08,
+       6.08
+      ],
+      "transcode": {
+       "VideoCodec": "h264",
+       "AudioCodec": "mp3",
+       "Container": "ts",
+       "IsVideoDirect": false,
+       "IsAudioDirect": true,
+       "TranscodeReasons": [
+        "ContainerNotSupported",
+        "VideoCodecNotSupported",
+        "AudioCodecNotSupported"
+       ],
+       "HardwareAccelerationType": "none"
+      },
+      "client": "Jellyfin for Android",
+      "versie": "2.7.3-jl.1",
+      "item": "sintel-30s-mpeg4-mp3",
+      "pogingen": [
+       {
+        "item": "sintel-30s-mpeg4-mp3",
+        "methode": "Transcode",
+        "uitkomst": "geslaagd",
+        "reden": null
+       }
+      ]
+     },
+     "ondertitel_voorkeur": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 2,
+      "gemeld": [
+       2,
+       2,
+       2,
+       2,
+       2,
+       2
+      ],
+      "eerst_gemeld_na_s": 1.02,
+      "nl_spoor": 2,
+      "server_standaard": 2,
+      "item": "sintel-60s-referentie",
+      "afspeelmethode": "DirectPlay"
+     },
+     "ondertitel_extern": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 1,
+      "gemeld": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "eerst_gemeld_na_s": 1.02,
+      "route": "PlayNow met subtitleStreamIndex"
+     },
+     "ondertitel_wisselen_op_afstand": {
+      "uitkomst": "mislukt",
+      "verwacht_index": 0,
+      "gemeld": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "reden": "client meldde het verwachte ondertitelspoor niet",
+      "informatief": true
+     },
+     "skip_segmenten": {
+      "uitkomst": "niet_aanwezig",
+      "aantallen": {
+       "B03 Testserie S01E01": 0,
+       "B03 Testserie S01E02": 0,
+       "B03 Testserie S01E03": 0,
+       "B03 Testserie S02E01": 0,
+       "B03 Testserie S02E02": 0
+      },
+      "reden": "capability_unavailable: de server levert geen mediasegmenten (Jellyfin 12.4 heeft geen ingebouwde segmentprovider en de Jelly Leon-plugin 12.4.0-jl.0 implementeert er geen; F6 volgt in P4) — skipknoppen niet beproefd"
+     }
+    },
+    "boot_s": 33.1,
+    "bestuurbare_sessies_gezien": 1,
+    "geheugen": {
+     "limiet_bytes": 4294967296,
+     "piek_bytes": 4295614464,
+     "oom": 0,
+     "oom_kill": 0
+    },
+    "oordeel": {
+     "validatie": "Sim-geslaagd",
+     "mislukte_stappen": [],
+     "niet_aanwezig": [
+      "skip_segmenten"
+     ]
+    },
+    "server": {
+     "versie": "12.4.0",
+     "product": "Jellyfin Server",
+     "image_id": "sha256:ccd8de58f155f5a7dac90e50855917e367e46822983ce47675d2746740c029f3",
+     "inrichting": {
+      "scan_s": 7.3,
+      "items": 10,
+      "kijkgeschiedenis": {
+       "hervatpunt": {
+        "item": "tears_of_steel",
+        "positie_s": 300.0
+       },
+       "gezien": {
+        "item": "hero",
+        "aantal": 2
+       },
+       "favoriet": {
+        "item": "sintel-60s-referentie"
+       },
+       "controle_na_zaaien": {
+        "hervatlijst": [
+         "tears_of_steel"
+        ],
+        "hervat_ticks": 3000000000,
+        "gezien_aantal": 2,
+        "favoriet": true
+       }
+      }
+     }
+    }
+   }
+  },
+  "stock": {
+   "telefoon": {
+    "client": "android 2.7.3-jl.1 (fork, org.jellyfin.mobile.jellyleon)",
+    "bediend": "fork",
+    "emulator": "telefoon",
+    "systeemimage": "system-images;android-35;google_apis;x86_64",
+    "apparaat": "pixel_6",
+    "scherm": {
+     "hw.lcd.width": "720",
+     "hw.lcd.height": "1600",
+     "hw.lcd.density": "280"
+    },
+    "apk": {
+     "bestand": "jellyfin-android-v2.7.3-jl.1-libre-release-testsleutel.apk",
+     "sha256": "032477005963a781b48adb35a2a332b705b782bcc76314f4c2ef064c9b3a6696",
+     "pakket": "org.jellyfin.mobile.jellyleon",
+     "versionName": "2.7.3-jl.1",
+     "certificaat": "CN=Jelly Leon emulatortest"
+    },
+    "officiele_apk": {
+     "bestand": "jellyfin-android-v2.7.3-libre-release.apk",
+     "sha256": "f9f4b3ab46cc9434df811194c2d4351417f4db83a4c1a0facd0a662d69533f7f",
+     "pakket": "org.jellyfin.mobile",
+     "versionName": "2.7.3"
+    },
+    "stappen": {
+     "naast_officieel": {
+      "uitkomst": "geslaagd",
+      "pakketten": [
+       "org.jellyfin.mobile",
+       "org.jellyfin.mobile.jellyleon"
+      ],
+      "versies": {
+       "org.jellyfin.mobile": "2.7.3",
+       "org.jellyfin.mobile.jellyleon": "2.7.3-jl.1"
+      },
+      "installatie": {
+       "officieel": "Performing Streamed Install\nSuccess",
+       "fork": "Performing Streamed Install\nSuccess"
+      }
+     },
+     "inloggen": {
+      "uitkomst": "geslaagd",
+      "stappen": [
+       "serveradres ingevuld (Connect to Server)",
+       "ingelogd met gebruikersnaam en wachtwoord in de web-client van de server"
+      ],
+      "sessie": {
+       "client": "Jellyfin for Android",
+       "versie": "2.7.3-jl.1",
+       "apparaat": "sdk_gphone64_x86_64"
+      }
+     },
+     "bladeren": {
+      "uitkomst": "geslaagd",
+      "gezien": {
+       "films_tegel": true,
+       "series_tegel": true,
+       "verder_kijken_rij": true,
+       "hervatitem_op_startscherm": true,
+       "films_in_bibliotheek": [
+        "hero",
+        "sintel-30s-mpeg2-ac3",
+        "sintel-30s-mpeg4-mp3",
+        "sintel-60s-referentie",
+        "tears_of_steel"
+       ],
+       "serie_pagina": {
+        "ok": true,
+        "seizoenen": [
+         "Season 1",
+         "Season 1",
+         "Season 1",
+         "Season 2",
+         "Season 2",
+         "Season 2"
+        ],
+        "tv_telling": false
+       }
+      },
+      "verwacht_films": [
+       "hero",
+       "sintel-30s-mpeg2-ac3",
+       "sintel-30s-mpeg4-mp3",
+       "sintel-60s-referentie",
+       "tears_of_steel"
+      ]
+     },
+     "hervatten": {
+      "uitkomst": "geslaagd",
+      "hervatpunt_s": 300.0,
+      "eerste_positie_s": 300.02,
+      "eerste_melding_na_s": 1.03,
+      "geschatte_startpositie_s": 298.99,
+      "afwijking_s": -1.01,
+      "opgelopen_s": 6.0,
+      "posities_s": [
+       300.02,
+       301.02,
+       302.02,
+       303.02,
+       304.02,
+       305.02,
+       306.02
+      ],
+      "meldingen": [
+       [
+        1.03,
+        300.02,
+        "cbc6ace1"
+       ],
+       [
+        2.04,
+        301.02,
+        "cbc6ace1"
+       ],
+       [
+        3.05,
+        302.02,
+        "cbc6ace1"
+       ],
+       [
+        4.06,
+        303.02,
+        "cbc6ace1"
+       ],
+       [
+        5.07,
+        304.02,
+        "cbc6ace1"
+       ],
+       [
+        6.08,
+        305.02,
+        "cbc6ace1"
+       ],
+       [
+        7.09,
+        306.02,
+        "cbc6ace1"
+       ]
+      ],
+      "knop": "Resume"
+     },
+     "hervatpunt_bewaard": {
+      "uitkomst": "geslaagd",
+      "bewaard_s": 306.77,
+      "laatste_gemelde_positie_s": 306.02,
+      "tolerantie_s": 15.0
+     },
+     "direct_play": {
+      "uitkomst": "geslaagd",
+      "methode": "DirectPlay",
+      "opgelopen_s": 6.0,
+      "posities_s": [
+       0.01,
+       1.01,
+       2.01,
+       3.01,
+       4.01,
+       5.01,
+       6.01
+      ],
+      "transcode": null,
+      "client": "Jellyfin for Android",
+      "versie": "2.7.3-jl.1",
+      "item": "hero"
+     },
+     "transcode": {
+      "uitkomst": "geslaagd",
+      "methode": "Transcode",
+      "opgelopen_s": 6.0,
+      "posities_s": [
+       0.08,
+       1.08,
+       2.08,
+       3.08,
+       4.08,
+       5.08,
+       6.08
+      ],
+      "transcode": {
+       "VideoCodec": "h264",
+       "AudioCodec": "mp3",
+       "Container": "ts",
+       "IsVideoDirect": false,
+       "IsAudioDirect": true,
+       "TranscodeReasons": [
+        "ContainerNotSupported",
+        "VideoCodecNotSupported",
+        "AudioCodecNotSupported"
+       ],
+       "HardwareAccelerationType": "none"
+      },
+      "client": "Jellyfin for Android",
+      "versie": "2.7.3-jl.1",
+      "item": "sintel-30s-mpeg4-mp3",
+      "pogingen": [
+       {
+        "item": "sintel-30s-mpeg4-mp3",
+        "methode": "Transcode",
+        "uitkomst": "geslaagd",
+        "reden": null
+       }
+      ]
+     },
+     "ondertitel_voorkeur": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 2,
+      "gemeld": [
+       2,
+       2,
+       2,
+       2,
+       2,
+       2
+      ],
+      "eerst_gemeld_na_s": 1.02,
+      "nl_spoor": 2,
+      "server_standaard": 2,
+      "item": "sintel-60s-referentie",
+      "afspeelmethode": "DirectPlay"
+     },
+     "ondertitel_extern": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 1,
+      "gemeld": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "eerst_gemeld_na_s": 1.02,
+      "route": "PlayNow met subtitleStreamIndex"
+     },
+     "ondertitel_wisselen_op_afstand": {
+      "uitkomst": "mislukt",
+      "verwacht_index": 0,
+      "gemeld": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "reden": "client meldde het verwachte ondertitelspoor niet",
+      "informatief": true
+     },
+     "skip_segmenten": {
+      "uitkomst": "niet_aanwezig",
+      "aantallen": {
+       "B03 Testserie S01E01": 0,
+       "B03 Testserie S01E02": 0,
+       "B03 Testserie S01E03": 0,
+       "B03 Testserie S02E01": 0,
+       "B03 Testserie S02E02": 0
+      },
+      "reden": "capability_unavailable: de server levert geen mediasegmenten (Jellyfin 12.4 heeft geen ingebouwde segmentprovider en de Jelly Leon-plugin 12.4.0-jl.0 implementeert er geen; F6 volgt in P4) — skipknoppen niet beproefd"
+     }
+    },
+    "boot_s": 24.3,
+    "bestuurbare_sessies_gezien": 1,
+    "geheugen": {
+     "limiet_bytes": 4294967296,
+     "piek_bytes": 4295294976,
+     "oom": 0,
+     "oom_kill": 0
+    },
+    "oordeel": {
+     "validatie": "Sim-geslaagd",
+     "mislukte_stappen": [],
+     "niet_aanwezig": [
+      "skip_segmenten"
+     ]
+    },
+    "server": {
+     "versie": "12.4.0",
+     "product": "Jellyfin Server",
+     "image_id": "sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+     "inrichting": {
+      "scan_s": 7.2,
+      "items": 10,
+      "kijkgeschiedenis": {
+       "hervatpunt": {
+        "item": "tears_of_steel",
+        "positie_s": 300.0
+       },
+       "gezien": {
+        "item": "hero",
+        "aantal": 2
+       },
+       "favoriet": {
+        "item": "sintel-60s-referentie"
+       },
+       "controle_na_zaaien": {
+        "hervatlijst": [
+         "tears_of_steel"
+        ],
+        "hervat_ticks": 3000000000,
+        "gezien_aantal": 2,
+        "favoriet": true
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "niet_hier": [
+  {
+   "client": "Swiftfin 1.6.1 (iOS/tvOS), Safari, Apple TV",
+   "rol": "stock-native / fork-app",
+   "status": "NIET GEVALIDEERD (Mac/Xcode)",
+   "reden": "geen Mac/Xcode; statische herbeoordeling in ADR-0009"
+  },
+  {
+   "client": "echte telefoons, tablets, tv's, Chromecast, DLNA",
+   "rol": "alle",
+   "status": "NIET GEVALIDEERD (hardware)",
+   "reden": "geen echte apparaten; D15 onbekend (JLT-69)"
+  }
+ ],
+ "vergelijking_met_stock": {
+  "telefoon": [
+   {
+    "stap": "bladeren",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "direct_play",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "hervatpunt_bewaard",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "hervatten",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "inloggen",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "naast_officieel",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "ondertitel_extern",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "ondertitel_voorkeur",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "ondertitel_wisselen_op_afstand",
+    "jelly_leon": "mislukt",
+    "stock": "mislukt",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "skip_segmenten",
+    "jelly_leon": "niet_aanwezig",
+    "stock": "niet_aanwezig",
+    "regressie": false,
+    "gelijk": true
+   },
+   {
+    "stap": "transcode",
+    "jelly_leon": "geslaagd",
+    "stock": "geslaagd",
+    "regressie": false,
+    "gelijk": true
+   }
+  ]
+ },
+ "regressies": [],
+ "schermafdrukken": [
+  "jelly-leon-telefoon-bladeren.jpg",
+  "jelly-leon-telefoon-direct_play.jpg",
+  "jelly-leon-telefoon-hervatten.jpg",
+  "jelly-leon-telefoon-ondertitel-extern.jpg",
+  "jelly-leon-telefoon-ondertitel-voorkeur.jpg",
+  "jelly-leon-telefoon-startscherm.jpg",
+  "jelly-leon-telefoon-transcode.jpg"
+ ],
+ "eind": "2026-11-10T08:53:42Z",
+ "samenvatting": {
+  "jelly-leon/telefoon": "Sim-geslaagd",
+  "stock/telefoon": "Sim-geslaagd"
+ },
+ "validatie": "Sim-geslaagd",
+ "vervangen_mislukt": []
+}

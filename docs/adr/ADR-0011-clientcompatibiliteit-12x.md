@@ -63,6 +63,12 @@
     en 6/6 op stock; de fork-app met dezelfde code 3/3) en passend bij een race in de app. Geaccepteerd als
     intermitterend clientgedrag, níet als serverregressie; de run blijft in het bewijs (`vervangen`) en de herhaalproef
     draait bij elke volgende module-oplevering mee.
+    *Review P4-0 (2026-11-10):* opnieuw gemeten met een opnieuw gebouwde jelly-leon-image uit dezelfde bron: de
+    officiële tv-app meldt bij hervatten op **beide** servers soms eerst positie 0 en een seconde later 300 s (de speler
+    staat dan al op het hervatpunt). Dat gaf in het harnas een schijnfout (gerepareerd); daarna 5/5 op Jelly Leon en 5/5
+    op stock. Het patroon uit de eerste run (echt even vanaf 0 spelen) is niet teruggezien. De uitzondering blijft staan
+    tot de plan-eigenaar haar bevestigt (B03-019); het is clientgedrag dat op stock net zo voorkomt, geen regressie.
+    Vervangen runs bewaren voortaan al hun metingen (`vervangen`, `vervangen_mislukt`).
 14. **CI:** de statische controle draait als workflow *Clients / Compat 12.x (statisch)*; de SDK-versies komen uit de
     clientbronnen. Het dynamische deel draait alleen lokaal: het mediacorpus komt nooit in een repo of CI-image
     (BG-37/BG-38) en de jelly-leon-image wordt (nog) niet gepubliceerd.
