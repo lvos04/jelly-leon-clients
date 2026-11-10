@@ -12,11 +12,17 @@
 #     -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-bouw:dev desktop/
 #   (of: make desktop-image)
 #
+# Doel `test` (alleen voor de compatibiliteitstest P4-0/JC3, tools/clients/compat/desktop.py): dezelfde omgeving plus
+# Xvfb en de QML-runtimemodules uit desktop/debian/control (Depends), om de gebouwde app headless te starten:
+#   docker buildx build --load --target test \
+#     -f tools/clients/bouwverificatie/desktop.Dockerfile -t jelly-leon-clients/desktop-test:dev desktop/
+# Zonder `--target` blijft het resultaat de bouwomgeving (laatste doel `bouwomgeving`).
+#
 # Geen proxy en geen eigen CA nodig. De BuildKit-secret `ca_bundle` in de RUN-stap is optioneel en blijft hier leeg;
 # als hij ooit gezet wordt, komt hij nooit in een laag terecht.
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
-FROM ${UBUNTU_IMAGE}
+FROM ${UBUNTU_IMAGE} AS bouw
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -45,3 +51,22 @@ RUN --mount=type=secret,id=ca_bundle,required=false \
 RUN useradd --uid 568 --create-home --shell /usr/sbin/nologin bouwer
 USER 568:568
 WORKDIR /home/bouwer
+
+# ---------------------------------------------------------------- test: de gebouwde app headless starten (JC3)
+FROM bouw AS test
+USER root
+RUN --mount=type=secret,id=ca_bundle,required=false \
+    set -eu; \
+    if [ -s /run/secrets/ca_bundle ]; then \
+      install -m 0644 /run/secrets/ca_bundle /tmp/ca_bundle.crt; \
+      echo 'Acquire::https::CAInfo "/tmp/ca_bundle.crt";' > /etc/apt/apt.conf.d/99-bouwverificatie; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends xvfb xauth x11-apps fonts-dejavu-core mesa-va-drivers \
+      qml6-module-qtwebengine qml6-module-qtwebchannel qml6-module-qtquick-controls qml6-module-qtquick-window \
+      qml6-module-qtqml-workerscript qml6-module-qtquick-templates; \
+    rm -rf /var/lib/apt/lists/* /tmp/ca_bundle.crt /etc/apt/apt.conf.d/99-bouwverificatie
+USER 568:568
+
+# ---------------------------------------------------------------- standaarddoel: de bouwomgeving (ongewijzigd)
+FROM bouw AS bouwomgeving
