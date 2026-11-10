@@ -201,6 +201,51 @@ def beoordeel_segmenten(per_item: dict[str, list[dict[str, Any]]]) -> dict[str, 
     return {"uitkomst": GESLAAGD, "aantallen": aantallen}
 
 
+def beoordeel_migratie(
+    voor: dict[str, Any], na: dict[str, Any], gezaaid: dict[str, Any]
+) -> dict[str, Any]:
+    """JLT-60, clientdeel: kijkgegevens vóór (oude server) = na (gemigreerde server), per veld.
+
+    Een vergelijking van twee lege of niet-gezaaide momentopnamen is géén bewijs: eerst moet ``voor`` de gezaaide
+    kijkgeschiedenis echt bevatten (hervatpunt in ticks, gezien met aantal, favoriet, het item in de hervatlijst);
+    anders is de uitkomst mislukt — nooit een verkapt "0 verschillen = geslaagd".
+    ``gezaaid``: ``{"hervat": (naam, ticks), "gezien": (naam, aantal), "favoriet": naam}``.
+    """
+    items = voor.get("items") or {}
+    hervat_naam, hervat_ticks = gezaaid["hervat"]
+    gezien_naam, gezien_aantal = gezaaid["gezien"]
+    ontbreekt = []
+    if (items.get(hervat_naam) or {}).get("PlaybackPositionTicks") != hervat_ticks:
+        ontbreekt.append(f"hervatpunt {hervat_naam}")
+    if hervat_naam not in (voor.get("hervatlijst") or []):
+        ontbreekt.append(f"{hervat_naam} in de hervatlijst")
+    g = items.get(gezien_naam) or {}
+    if not (g.get("Played") is True and g.get("PlayCount") == gezien_aantal):
+        ontbreekt.append(f"gezien {gezien_naam} ({gezien_aantal}×)")
+    if (items.get(gezaaid["favoriet"]) or {}).get("IsFavorite") is not True:
+        ontbreekt.append(f"favoriet {gezaaid['favoriet']}")
+    verschillen = [
+        {"waar": f"{item}.{veld}", "voor": waarde, "na": (na.get("items") or {}).get(item, {}).get(veld)}
+        for item, rij in items.items()
+        for veld, waarde in rij.items()
+        if (na.get("items") or {}).get(item, {}).get(veld) != waarde
+    ]
+    verschillen += [
+        {"waar": k, "voor": voor.get(k), "na": na.get(k)}
+        for k in ("hervatlijst", "voorkeuren")
+        if voor.get(k) != na.get(k)
+    ]
+    uit: dict[str, Any] = {
+        "uitkomst": MISLUKT if ontbreekt or verschillen else GESLAAGD,
+        "verschillen": verschillen,
+    }
+    if ontbreekt:
+        uit["reden"] = "de gezaaide kijkgeschiedenis staat niet op de oude server: " + ", ".join(ontbreekt)
+    elif verschillen:
+        uit["reden"] = f"{len(verschillen)} verschil(len) in de kijkgegevens na de migratie"
+    return uit
+
+
 def serie_seizoenen(teksten: list[str], serie: str, aantal: int) -> dict[str, Any]:
     """Seriepagina: de naam staat er en de seizoenen zijn zichtbaar ('Season 1'… in de web-client, 'SEASONS' + het
     aantal in de tv-app)."""

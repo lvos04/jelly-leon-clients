@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from .jfapi import TICKS, Jellyfin, wacht_klaar
+from .scenario import beoordeel_migratie
 
 STOCK_12_4 = "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771"
 CORPUS = Path(os.environ.get("JLC_CORPUS", "/home/transcode/truenas-v2/.lokaal/media-corpus"))
@@ -199,23 +200,22 @@ class TestServer:
         self.jf.login_admin(BEHEERDER, BEHEER_WW)
         self.items_opzoeken()
         na = self.kijkgegevens()
-        verschillen = [
-            {"waar": f"{item}.{veld}", "voor": waarde, "na": na["items"].get(item, {}).get(veld)}
-            for item, rij in voor["items"].items()
-            for veld, waarde in rij.items()
-            if na["items"].get(item, {}).get(veld) != waarde
-        ]
-        verschillen += [
-            {"waar": k, "voor": voor[k], "na": na[k]} for k in ("hervatlijst", "voorkeuren") if voor[k] != na[k]
-        ]
+        oordeel = beoordeel_migratie(
+            voor,
+            na,
+            {
+                "hervat": (self.items.hervat["Name"], int(self.HERVAT_S * TICKS)),
+                "gezien": (self.items.direct_play["Name"], 2),
+                "favoriet": self.items.ondertitel_ingebed["Name"],
+            },
+        )
         return {
             "oude_server": oud,
             "nieuwe_server": {"versie": self.info.get("Version"), "image_id": self.image_id()},
             "inrichting_op_oude_server": inrichting,
             "voor": voor,
             "na": na,
-            "verschillen": verschillen,
-            "uitkomst": "geslaagd" if not verschillen else "mislukt",
+            **oordeel,
         }
 
     HERVAT_S = 300.0  # gezaaid hervatpunt in Tears of Steel (734 s)

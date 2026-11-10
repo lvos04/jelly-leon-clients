@@ -100,6 +100,7 @@ def een_android_run(
                     "verschillen": inrichting["verschillen"],
                     "oude_server": inrichting["oude_server"]["versie"],
                     "nieuwe_server": inrichting["nieuwe_server"]["versie"],
+                    **({"reden": inrichting["reden"]} if inrichting.get("reden") else {}),
                 }
             else:
                 server.start()

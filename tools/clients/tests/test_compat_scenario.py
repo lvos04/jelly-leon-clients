@@ -120,3 +120,41 @@ def test_eindoordeel_ontbrekende_stap_is_mislukt_en_niet_aanwezig_telt_niet_mee(
 ])
 def test_seriepagina(teksten, ok):
     assert sc.serie_seizoenen(teksten, "B03 Testserie", 2)["ok"] is ok
+
+
+def _kijk(ticks=3_000_000_000, aantal=2, fav=True, lijst=("tos",), taal="nld"):
+    return {"items": {"tos": {"Played": False, "PlayCount": 0, "PlaybackPositionTicks": ticks, "IsFavorite": False},
+                      "hero": {"Played": aantal > 0, "PlayCount": aantal, "PlaybackPositionTicks": 0,
+                               "IsFavorite": False},
+                      "sintel": {"Played": False, "PlayCount": 0, "PlaybackPositionTicks": 0, "IsFavorite": fav}},
+            "hervatlijst": list(lijst), "voorkeuren": {"SubtitleLanguagePreference": taal}}
+
+
+GEZAAID = {"hervat": ("tos", 3_000_000_000), "gezien": ("hero", 2), "favoriet": "sintel"}
+
+
+def test_migratie_gelijk_na_upgrade_is_geslaagd():
+    assert sc.beoordeel_migratie(_kijk(), _kijk(), GEZAAID) == {"uitkomst": sc.GESLAAGD, "verschillen": []}
+
+
+@pytest.mark.parametrize(("na", "waar"), [
+    (_kijk(ticks=0), "tos.PlaybackPositionTicks"),          # hervatpunt kwijt (HARDE EIS)
+    (_kijk(ticks=2_990_000_000), "tos.PlaybackPositionTicks"),  # ticks niet exact
+    (_kijk(aantal=1), "hero.PlayCount"),
+    (_kijk(fav=False), "sintel.IsFavorite"),
+    (_kijk(lijst=()), "hervatlijst"),
+    (_kijk(taal="eng"), "voorkeuren"),
+])
+def test_migratie_met_een_verschil_is_mislukt(na, waar):
+    uit = sc.beoordeel_migratie(_kijk(), na, GEZAAID)
+    assert uit["uitkomst"] == sc.MISLUKT and waar in [v["waar"] for v in uit["verschillen"]]
+
+
+@pytest.mark.parametrize("voor", [
+    {"items": {}, "hervatlijst": [], "voorkeuren": {}},  # niets gezaaid: twee lege kanten zijn geen bewijs
+    _kijk(ticks=0), _kijk(aantal=0), _kijk(fav=False), _kijk(lijst=()),
+])
+def test_migratie_zonder_gezaaide_geschiedenis_is_nooit_geslaagd(voor):
+    uit = sc.beoordeel_migratie(voor, voor, GEZAAID)  # vóór = na, toch mislukt
+    assert uit["uitkomst"] == sc.MISLUKT and uit["verschillen"] == []
+    assert uit["reden"].startswith("de gezaaide kijkgeschiedenis staat niet op de oude server")
