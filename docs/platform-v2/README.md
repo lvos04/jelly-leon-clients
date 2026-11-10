@@ -71,4 +71,14 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `BOUWVERIFICATIE_P0.md` en `test-evidence/` — wat echt gebouwd/getest is en wat geblokkeerd was
 - `EVIDENCE.json` — status per Excel-taak (contract §11)
 - `test-evidence/contract-1.2-app-identiteit.json` — lokale builds en `aapt2`-metingen van de eigen app-identiteit
-- Besluiten: `../adr/ADR-0001…0010` (ADR-0010: contract 1.2 in deze repo); B03 2.0-besluiten van jelly-leon die de clients raken: `../adr/README.md`
+- Besluiten: `../adr/ADR-0001…0011` (ADR-0010: contract 1.2 in deze repo; ADR-0011: clientcompatibiliteit met 12.x);
+  B03 2.0-besluiten van jelly-leon die de clients raken: `../adr/README.md`
+
+## P4-0 — clients tegen de Jelly Leon 12.x-server (JC3, 2026-11-10)
+
+- `BOUWVERIFICATIE_P4-0.md` — wat echt gebouwd en gedraaid is: release-APK's met de eigen applicationId op telefoon-,
+  tablet- en Android TV-emulators, desktop 2.0.0 onder Xvfb, de serverkant van het Swiftfin-protocol en de statische
+  routevergelijking, telkens tegen de jelly-leon-image 12.4.0-jl.0 met stock 12.4 als controlegroep
+- `test-evidence/p4-0-jc3-*` — het bewijs (JSON en schermafdrukken van de Jelly Leon-runs)
+- Harnas: `tools/clients/compat/` (`tools/clients/client_compat.py`, `make compat-android|compat-desktop|compat-swiftfin`);
+  statische CI: `.github/workflows/clients-compat.yml`

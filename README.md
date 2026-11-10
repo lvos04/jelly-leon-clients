@@ -3,13 +3,16 @@
 Apparaat-apps voor het universele mediaplatform van **TrueNAS Home Platform V2** (bouwplan B03): forks van de officiële
 Jellyfin-clients, bijgehouden met upstream en later met de zichtbare naam **"Jelly Leon"**. De technische identiteit en
 het protocol blijven "Jellyfin", zodat alles blijft werken met de server [`jelly-leon`](https://github.com/lvos04/jelly-leon)
-(Jellyfin 10.11.11) en met gewone Jellyfin-servers.
+(Jellyfin 12.4 sinds P4-0) en met gewone Jellyfin-servers.
 
-> **Stand contract 1.2 (2026-11-09):** inventaris, bouw- en syncbasis (P0); android, androidtv en desktop lokaal
-> gebouwd en getest. **Eigen app-identiteit naast de officiële apps** (besluit van de gebruiker, ADR-0004): android
-> `org.jellyfin.mobile.jellyleon`, androidtv `org.jellyfin.androidtv.jellyleon`, Swiftfin
-> `org.jellyfin.swiftfin.jellyleon` (geregistreerde patches JLC-0002…0004, alleen build-configuratie). Zichtbare naam,
-> pictogram, protocol en Kotlin-/Swift-code zijn ongewijzigd. Niets is op een echt apparaat getest.
+> **Stand P4-0 (2026-11-10, JC3):** de fork-apps zijn tegen de Jelly Leon 12.x-server (12.4.0-jl.0) getest:
+> release-builds van android en androidtv met de eigen applicationId (`org.jellyfin.mobile.jellyleon`,
+> `org.jellyfin.androidtv.jellyleon`), naast de officiële apps, op telefoon-, tablet- en twee Android TV-emulators, en
+> desktop 2.0.0 onder Xvfb: inloggen, bladeren met de kijkgeschiedenis, hervatten op het juiste punt, Direct Play,
+> transcode en ondertitels; stock 12.4 als controlegroep, 0 regressies (`docs/platform-v2/BOUWVERIFICATIE_P4-0.md`,
+> ADR-0011). Swiftfin 1.6.1 is herbeoordeeld (ADR-0009). Alles **Sim-getest**; niets op een echt apparaat
+> (**NIET GEVALIDEERD (hardware)**), Swiftfin **NIET GEVALIDEERD (Mac/Xcode)**. Zichtbare naam, pictogram, protocol en
+> Kotlin-/Swift-code zijn ongewijzigd.
 
 ## Inhoud
 
@@ -57,6 +60,18 @@ met platform 36) bouwen de debug-APK's, draaien de unit-tests en controleren met
 getest en de vier client-workflows zijn groen op GitHub; Swiftfin bouwt in CI voor de simulator maar is **NIET
 GEVALIDEERD (Mac/Xcode)**; niets is op een apparaat gestart (**NIET GEVALIDEERD (hardware)**). Zie
 `BOUWVERIFICATIE_P0.md`.
+
+## Compatibiliteit met de server testen (alleen ontwikkeling)
+
+```
+make release-apks emulator-image desktop-test-image GRADLE_LOCK=… DOCKER_LOCK=…
+make compat-android  JL_IMAGE=<jelly-leon-image>      # emulators (KVM), stock 12.4 als controlegroep
+make compat-desktop  JL_IMAGE=<jelly-leon-image> DESKTOP_BUILD=<map met build/src/jellyfin-desktop>
+make compat-swiftfin JL_IMAGE=<jelly-leon-image>      # serverkant van het Swiftfin-protocol
+```
+
+Het harnas staat in `tools/clients/compat/`; het mediacorpus komt uit `.lokaal/media-corpus` en nooit in de repo. De
+statische routecontrole draait in CI (*Clients / Compat 12.x (statisch)*).
 
 ## Upstream bijhouden
 

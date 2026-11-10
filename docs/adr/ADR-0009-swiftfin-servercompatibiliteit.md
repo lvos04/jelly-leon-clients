@@ -2,6 +2,7 @@
 
 - **Status:** Aanvaard — **besluit van de gebruiker 2026-11-09** (STATUS.md, besluit 2). De serverupgrade is een
   **aparte fase vóór P4** in `jelly-leon` en `jelly-leon-web`; in deze repo en in deze ronde wordt niets geüpgraded.
+  **Herbeoordeeld op 2026-11-10 (P4-0, JC3)** tegen de Jelly Leon-server 12.4.0-jl.0: zie het slot van dit document.
 - **Context (gemeten in de broncode, P0):** Swiftfin 1.6.1 pint `jellyfin-sdk-swift` **3.0.0** (`Package.resolved`),
   gegenereerd tegen **Jellyfin API 12.0.0** (`Sources/Extensions/Info.swift`). Swiftfin noemt een server met
   major.minor lager dan de SDK-versie niet compatibel (`isVersionCompatible`) en toont dan
@@ -62,3 +63,34 @@ servercode, niet met de SDK-specificatie.
 - Risico verschuift naar de Android-clients (SDK 1.7.1 tegen API 12.x): bewust geaccepteerd, met de controle hierboven
   als gate vóór P4.
 - `INVENTARIS.md` §3 krijgt een kolom voor de verwachting met 12.x; alles blijft NIET GEVALIDEERD tot echte tests.
+
+## Herbeoordeling 2026-11-10 (P4-0, JC3) — tegen de Jelly Leon-server 12.4.0-jl.0
+
+De server staat nu op Jellyfin 12.4 (`jelly-leon` 12.4.0-jl.0, commit `e294f84`; web `jelly-leon-web` `5ced8a246`).
+Uitgevoerd volgens het recept hierboven (ADR-0011 van deze repo; bewijs in `docs/platform-v2/test-evidence/p4-0-jc3-*`):
+
+| Recept | Uitkomst | Validatie |
+|---|---|---|
+| 1. `server_api_compat.py` met de gekozen 12.x-tag | Kotlin (SDK 1.7.1): 5 van 408 SDK-endpoints ontbreken in 12.4, **geen** ervan gebruikt door android (24 SDK-functies) of androidtv (76). Swift (SDK 3.0.0, API 12.0): **alle 364** endpoints bestaan; Swiftfin gebruikt er 85. Nieuw: Swift-modus (`--sdk-taal swift`) en de CI-workflow *Clients / Compat 12.x (statisch)* | statisch |
+| 2. android- en androidtv-CI | ongewijzigd groen (geen codewijziging in de clients) | CI |
+| 3. Stock-client-smoketest van jelly-leon tegen 12.x | gedaan in jelly-leon P4-0 (25/25, compat-API 5/5) | Sim-getest (jelly-leon) |
+| 4. APK's op een emulator tegen de 12.x-server | release-builds van de fork-apps (eigen applicationId, naast de officiële app) op telefoon-, tablet- en twee Android TV-emulators: inloggen, bladeren met de gezaaide kijkgeschiedenis, hervatten op 300 s, Direct Play, transcode, ondertitels (voorkeur en extern); stock 12.4 als controlegroep | Sim-getest — zie `BOUWVERIFICATIE_P4-0.md` |
+| 5. Echte apparaten (D15), Swiftfin op iPhone/Apple TV | niet mogelijk | **NIET GEVALIDEERD (hardware)**; **NIET GEVALIDEERD (Mac/Xcode)** |
+| 6. Upstream-Android-release op SDK 1.9.x | nog niet uitgebracht (upstream-sync meldt "actueel") | — |
+
+**Swiftfin 1.6.1 tegen 12.x (herbeoordeeld, de app zelf NIET GEVALIDEERD (Mac/Xcode)):**
+
+- De versiecontrole `isVersionCompatible` (major.minor van de server ≥ 12.0) slaagt voor 12.4: de melding *"Update to
+  Jellyfin 12.0 for the best experience."* verdwijnt naar verwachting (code gelezen; niet op een apparaat gezien).
+- Serverkant van het protocol nagebootst met de exacte vormen uit de bron (`client_compat.py swiftfin`), tegen de
+  Jelly Leon-image én stock 12.4 — beide gelijk, 0 regressies: aanmelden met de **ongequote** `MediaBrowser`-kop van
+  jellyfin-sdk-swift 3.0.0 werkt; de websocket (`/socket?api_key=…` mét `Authorization`-kop) geeft 101 (alleen
+  `api_key` → 403); de statische stream zonder token 200; de `TranscodingUrl` van de server bevat `ApiKey` (niet
+  `api_key`) en geeft 200.
+- **Bevinding (bron + meting):** Swiftfin opent een serverlog in de beheerweergave met `?api_key=<token>`
+  (`Swiftfin/Extensions/LogFile.swift`, `queryAPIKey: true`). In 12.x telt `api_key` niet meer
+  (`EnableLegacyAuthorization` uit, BG-01): 401 — op stock 12.4 precies zo. Alleen die beheerfunctie; kijken en afspelen
+  gebruiken de kop. Geen patch in Swiftfin (ADR-0019 jelly-leon: geen patches in Swiftfin in v1); melden bij upstream
+  is een vervolgpunt.
+- Conclusie: geen reden om van besluit 1 (Swiftfin 1.6.1 blijft) af te wijken. In de matrix: **"past bij 12.x
+  (statisch en protocol gemeten); NIET GEVALIDEERD (Mac/Xcode)"**, nooit "compatibel".

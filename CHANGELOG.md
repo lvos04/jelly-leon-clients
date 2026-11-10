@@ -53,3 +53,24 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
   upstream-basis, alleen regels over de app-identiteit); syncproef met `upstream_sync.py` op de upstream-hoofdbranches
   (android schoon, gebouwd en `aapt2` 0 overtredingen; androidtv en Swiftfin falen bewust en draaien terug); upstream
   `detekt lint` zonder bevinding op een patchregel. 168 tests.
+
+## P4-0 / JC3 — 2026-11-10 (ontwikkelstand, niets gepubliceerd)
+
+- Compatibiliteitsharnas `tools/clients/compat/` (`tools/clients/client_compat.py`, `make compat-*`): wegwerpserver
+  (jelly-leon-image of stock 12.4 op digest) met vrije corpusbestanden alleen-lezen en gezaaide kijkgeschiedenis;
+  Android-/Android TV-emulator in een container (KVM, 4 GiB, onder `stack.lock` + `gradle.lock`); desktop onder Xvfb
+  met ruwe CDP; serverkant van het Swiftfin-protocol; bewijs zonder geheimen, met stock als controlegroep.
+- Fork-apps als release-build met de eigen applicationId, ondertekend met een wegwerp-testsleutel, naast de officiële
+  APK op telefoon, tablet, Android TV API 34 en API 36: inloggen, bladeren, hervatten op 300 s, hervatpunt bewaard,
+  Direct Play, transcode, ondertitels (voorkeur en extern) Sim-getest; 0 regressies tegen stock 12.4. Skipknoppen niet
+  beproefd (geen segmentprovider in 12.4/plugin). Tablet alleen met 5 GiB (binnen 4 GiB OOM-kill, gemeld).
+- Desktop 2.0.0 onder Xvfb werkt tegen de Jelly Leon-server: de blokkade van de spike in jelly-leon kwam door de
+  standaard `/dev/shm` van Docker (`net::ERR_INSUFFICIENT_RESOURCES`); met `--shm-size 1g` opgelost. Doel `test` in
+  `bouwverificatie/desktop.Dockerfile` (Xvfb, xwd, QML-runtime).
+- Officiële apps als stock-native client (`--bediend officieel`) tegen Jelly Leon en stock: 0 regressies; één
+  intermitterende hervatafwijking van de officiële tv-app, daarna `hervatproef` 6/6 op Jelly Leon en 6/6 op stock
+  (ADR-0011 punt 13). Upgrade 10.11.11 → 12.4 van dezelfde datamap (`--migratie-van`): kijkgegevens per veld gelijk,
+  telefoon en tv hervatten op 300 s (JLT-60, clientdeel).
+- `server_api_compat.py --sdk-taal swift` (jellyfin-sdk-swift) en de CI-workflow *Clients / Compat 12.x (statisch)*.
+- ADR-0011 (harnas en meetregels); ADR-0009 herbeoordeeld tegen 12.4 (Swiftfin: versiecontrole slaagt, protocol gelijk
+  aan stock; serverlog met `api_key` → 401). `BOUWVERIFICATIE_P4-0.md`, INVENTARIS §3, README.

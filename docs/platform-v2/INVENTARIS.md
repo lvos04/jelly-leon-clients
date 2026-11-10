@@ -77,22 +77,31 @@ nagemeten (upstream-tag opgehaald, tree-hashes gelijk, `test-evidence/p0-review-
 | Submodules | geen |
 | Lokaal gebouwd? | **Nee — NIET GEVALIDEERD (Mac/Xcode)**: geen macOS/Xcode in deze bouwomgeving. Wel: de CI-workflow bouwt op een GitHub-macOS-runner voor de iOS- en tvOS-simulator zonder signing en is groen (run 42608527121); de app is daar niet gestart, niet getest en niet op een apparaat gezet. |
 
-## 3. Servercompatibiliteit (verwachting, niet getest op apparaten)
+## 3. Servercompatibiliteit
 
-| Client | Praat met | Verwacht met Jelly Leon 10.11.11 (nu) | Verwacht met Jellyfin 12.x (vóór P4, ADR-0009) | Validatie |
-|---|---|---|---|---|
-| android 2.7.3 | web-client van de server + REST via SDK 1.7.1 | compatibel (SDK ≥ 10.10, web-client 10.11.11) | onbekend: SDK 1.7.1 (API 10.10.7) laat 12.x door; geen gebruikte route weg (statisch), web-client/brug niet beoordeeld | NIET GEVALIDEERD (hardware) |
-| androidtv 0.19.10 | REST via SDK 1.7.1 | compatibel (minimum 10.10, 10.11-profiel aanwezig) | onbekend: geen gebruikte route weg (statisch); DTO's/gedrag niet beoordeeld | NIET GEVALIDEERD (hardware) |
-| desktop 2.0.0 | web-client van de server | compatibel (zelfde web-client als browser) | volgt de web-client van de server (`jelly-leon-web` 12.x) | Linux-build unit-getest; gebruik NIET GEVALIDEERD (hardware) |
-| swiftfin 1.6.1 | REST via SDK 3.0.0 (API 12.0) | **waarschuwing "Update to Jellyfin 12.0"**, functionele compatibiliteit onbekend | past bij de SDK (API 12.0); waarschuwing naar verwachting weg | NIET GEVALIDEERD (Mac/Xcode) |
+De server staat sinds P4-0 (2026-11-10) op **Jellyfin 12.4** (`jelly-leon` 12.4.0-jl.0 met de web-client van
+`jelly-leon-web` 12.4). Gemeten tegen de lokaal gebouwde jelly-leon-image, met stock 12.4 als controlegroep
+(`BOUWVERIFICATIE_P4-0.md`, ADR-0011; niets op een echt apparaat):
 
-Besluit gebruiker (2026-11-09): Swiftfin 1.6.1 blijft, de server gaat vóór P4 naar de nieuwste stabiele 12.x
-(gemeten 2026-11-09: `v12.4`); de Android-clients worden dan gecontroleerd volgens ADR-0009 (routevergelijking:
-`test-evidence/p0-server-12x-routevergelijking.json`).
+| Client | Praat met | Met Jelly Leon 12.4 (gemeten, JC3) | Validatie |
+|---|---|---|---|
+| android 2.7.3-jl.1 (fork, `org.jellyfin.mobile.jellyleon`) | web-client van de server + REST via SDK 1.7.1; video in de native speler | telefoon- en tablet-emulator: inloggen, bladeren met de gezaaide kijkgeschiedenis, hervatten op 300 s, Direct Play, transcode, ondertitels (voorkeur en extern) geslaagd; 0 regressies tegen stock; naast de officiële app geïnstalleerd. Geen gebruikte route weg (statisch). Tablet alleen met 5 GiB (binnen 4 GiB OOM-kill) | Sim-getest; NIET GEVALIDEERD (hardware) |
+| androidtv 0.19.10-jl.1 (fork, `org.jellyfin.androidtv.jellyleon`) | REST via SDK 1.7.1 | Android TV API 34 (x86) en API 36 (x86_64): zelfde scenario's geslaagd; 0 regressies tegen stock; naast de officiële app | Sim-getest; NIET GEVALIDEERD (hardware) |
+| desktop 2.0.0 | web-client van de server + libmpv | onder Xvfb in een container (`--shm-size 1g`): zie `BOUWVERIFICATIE_P4-0.md` §3 | Sim-getest; NIET GEVALIDEERD (hardware) |
+| swiftfin 1.6.1 | REST via SDK 3.0.0 (API 12.0) | versiecontrole slaagt (geen updatewaarschuwing meer); serverkant van het protocol gelijk aan stock; alle 85 gebruikte SDK-routes bestaan; serverlog openen met `?api_key=` geeft 401 (alleen beheer, ook op stock) | NIET GEVALIDEERD (Mac/Xcode) |
 
-Het **protocol** van stock clients is aan serverkant nagebootst in `jelly-leon` (stock-client-smoketest 17/17,
-`jelly-leon/docs/platform-v2/CLIENT_COMPAT_MATRIX.md`). Dat zegt niets over deze client-builds op echte apparaten.
-Smart-tv-apps (Samsung/LG), Chromecast en AirPlay: **unknown** tot D15 bekend is.
+De **officiële** apps (jellyfin-android 2.7.3, jellyfin-androidtv 0.19.10; rol stock-native) doorlopen dezelfde
+scenario's tegen Jelly Leon en stock zonder regressie (één intermitterende hervatafwijking van de officiële tv-app,
+niet reproduceerbaar: daarna 6/6 op Jelly Leon en 6/6 op stock; ADR-0011 punt 13). **Na een upgrade 10.11.11 → 12.4**
+van dezelfde datamap blijven de kijkgegevens per veld gelijk en hervatten telefoon en tv op 300 s (JLT-60, clientdeel).
+Skipknoppen konden niet beproefd worden: 12.4 en de plugin 12.4.0-jl.0 leveren geen mediasegmenten (F6 volgt).
+De P0-verwachting tegen 10.11.11 staat in de historie van dit bestand en in
+`test-evidence/p0-server-12x-routevergelijking.json`. De matrix van jelly-leon (`CLIENT_COMPAT_MATRIX.md`, alleen
+gelezen) neemt deze stand over als vervolgstap van jelly-leon.
+
+Het **protocol** van stock clients is aan serverkant ook nagebootst in `jelly-leon` (stock-client-smoketest,
+`jelly-leon/docs/platform-v2/CLIENT_COMPAT_MATRIX.md`). Smart-tv-apps (Samsung/LG), Chromecast en AirPlay: **unknown**
+tot D15 bekend is.
 
 ## 4. Delta-matrix B03-003 "Beschikbaarheid van clients" (bestaand / onvolledig / ontbrekend)
 
@@ -105,8 +114,8 @@ Smart-tv-apps (Samsung/LG), Chromecast en AirPlay: **unknown** tot D15 bekend is
 | iOS / tvOS | **bestaand (upstream)**, build **onvolledig** | simulatorbuild zonder signing groen op GitHub-macOS-runner; lokaal NIET GEVALIDEERD (Mac/Xcode); server gaat vóór P4 naar 12.x (ADR-0009) |
 | Desktop | **bestaand (upstream)**, Linux-build **gemeten** | Windows/macOS-builds ontbreken in onze CI |
 | Tv-browser, smart-tv, Chromecast/AirPlay | **ontbrekend / unknown** | afhankelijk van D15; Chromecast alleen in android *proprietary* |
-| Geteste matrix op echte apparaten (ondertitels, hervatten, afspelen) | **ontbrekend** | acceptatie B03-003 vraagt echte apparaten → Geblokkeerd |
-| Eigen app-identiteit naast de officiële apps | **bestaand (nieuw, contract 1.2)** | JLC-0002/0003/0004; android/androidtv met `aapt2` gemeten, Swiftfin via build-instellingen; installeren naast de officiële app NIET GEVALIDEERD (hardware) |
+| Geteste matrix op echte apparaten (ondertitels, hervatten, afspelen) | **ontbrekend** (emulator: **gemeten**) | emulators en desktop onder Xvfb tegen 12.4 Sim-getest (P4-0, JC3); acceptatie B03-003 vraagt echte apparaten → Geblokkeerd |
+| Eigen app-identiteit naast de officiële apps | **bestaand (nieuw, contract 1.2)** | JLC-0002/0003/0004; android/androidtv met `aapt2` gemeten, Swiftfin via build-instellingen; naast de officiële app geïnstalleerd en gebruikt op de emulators (P4-0, Sim-getest); op een apparaat NIET GEVALIDEERD (hardware) |
 | Branding "Jelly Leon" (zichtbare naam) | **ontbrekend (bewust)** | aparte stap na de app-identiteit (ADR-0004 punt 5) |
 | Distributie naar apparaten (APK/IPA/installers) | **ontbrekend** | geen TrueNAS-app (ADR-0008); kanaal is een gebruikersbesluit |
 | Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 159 tests (Sim-getest) |
