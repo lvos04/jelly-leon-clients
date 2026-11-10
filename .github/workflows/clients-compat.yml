@@ -1,0 +1,112 @@
+# Jelly Leon clients — compatibiliteit met de Jelly Leon 12.x-server, statisch deel (P4-0, JC3; ADR-0009, ADR-0011).
+#
+# Vergelijkt de REST-routes die android/androidtv (jellyfin-sdk-kotlin) en Swiftfin (jellyfin-sdk-swift) aanroepen met
+# de routes van de server op de upstream-tag van de Jelly Leon-forkbasis. Een gebruikte route die ontbreekt, laat de job
+# falen (exitcode 1 van server_api_compat.py). De SDK-versies komen uit de clientbronnen zelf (compat/bronnen.py).
+# Het dynamische deel (emulators, desktop onder Xvfb, Swiftfin-protocol) draait alleen lokaal tegen de jelly-leon-image
+# met het mediacorpus, dat nooit in een repo of CI-image komt (BG-37/BG-38): zie BOUWVERIFICATIE_P4-0.md.
+# Deze workflow publiceert niets en heeft geen geheimen nodig; alle bronnen zijn publiek en worden alleen gelezen.
+name: Clients / Compat 12.x (statisch)
+
+on:
+  push:
+    paths:
+      - "android/gradle/libs.versions.toml"
+      - "android/app/src/**"
+      - "androidtv/gradle/libs.versions.toml"
+      - "androidtv/app/src/**"
+      - "androidtv/playback/**"
+      - "androidtv/preference/**"
+      - "swiftfin/**"
+      - "tools/clients/server_api_compat.py"
+      - "tools/clients/compat/bronnen.py"
+      - ".github/workflows/clients-compat.yml"
+  pull_request:
+    paths:
+      - "android/gradle/libs.versions.toml"
+      - "androidtv/gradle/libs.versions.toml"
+      - "swiftfin/**"
+      - "tools/clients/server_api_compat.py"
+      - ".github/workflows/clients-compat.yml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git-ref om te controleren (bv. een syncbranch); leeg = de ref van de aanroep"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clients-compat-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  routes:
+    name: Routes van de clients tegen de 12.x-server (Kotlin en Swift)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Server-tag en SDK-versies uit de clientbronnen
+        id: bronnen
+        run: python3 tools/clients/client_compat.py bronnen | tee -a "$GITHUB_OUTPUT"
+      - name: Publieke bronnen ophalen (ondiep, alleen de nodige mappen)
+        env:
+          SERVER_TAG: ${{ steps.bronnen.outputs.server_tag }}
+          VORIGE_SERVER_TAG: ${{ steps.bronnen.outputs.vorige_server_tag }}
+          KOTLIN_SDK: ${{ steps.bronnen.outputs.kotlin_sdk }}
+          SWIFT_SDK: ${{ steps.bronnen.outputs.swift_sdk }}
+        run: |
+          set -euo pipefail
+          haal() { # haal <map> <repo-url> <ref> <sparse-pad>
+            git init -q "$1"
+            git -C "$1" remote add origin "$2"
+            git -C "$1" sparse-checkout set "$4"
+            git -C "$1" fetch -q --depth 1 --filter=blob:none origin "$3"
+            git -C "$1" checkout -q FETCH_HEAD
+            echo "$1: $(git -C "$1" rev-parse HEAD)"
+          }
+          cd "$RUNNER_TEMP"
+          haal srv-nu https://github.com/jellyfin/jellyfin.git "refs/tags/$SERVER_TAG" Jellyfin.Api/Controllers
+          haal srv-vorig https://github.com/jellyfin/jellyfin.git "refs/tags/$VORIGE_SERVER_TAG" Jellyfin.Api/Controllers
+          haal sdk-kotlin https://github.com/jellyfin/jellyfin-sdk-kotlin.git "refs/tags/$KOTLIN_SDK" \
+            jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations
+          haal sdk-swift https://github.com/jellyfin/jellyfin-sdk-swift.git "$SWIFT_SDK" Sources/Paths
+      - name: android en androidtv (jellyfin-sdk-kotlin) tegen de 12.x-server
+        run: >-
+          python3 tools/clients/server_api_compat.py
+          --server-a "$RUNNER_TEMP/srv-vorig/Jellyfin.Api/Controllers"
+          --server-b "$RUNNER_TEMP/srv-nu/Jellyfin.Api/Controllers"
+          --sdk-ops "$RUNNER_TEMP/sdk-kotlin/jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations"
+          --client android=android/app/src/main
+          --client androidtv=androidtv/app/src/main,androidtv/playback,androidtv/preference
+          --root . | tee "$RUNNER_TEMP/compat-kotlin.json"
+      - name: Swiftfin (jellyfin-sdk-swift) tegen de 12.x-server — de app zelf blijft NIET GEVALIDEERD (Mac/Xcode)
+        run: >-
+          python3 tools/clients/server_api_compat.py --sdk-taal swift
+          --server-a "$RUNNER_TEMP/srv-vorig/Jellyfin.Api/Controllers"
+          --server-b "$RUNNER_TEMP/srv-nu/Jellyfin.Api/Controllers"
+          --sdk-ops "$RUNNER_TEMP/sdk-swift/Sources/Paths"
+          --client "swiftfin=swiftfin/Shared,swiftfin/Swiftfin,swiftfin/Swiftfin tvOS,swiftfin/PreferencesView"
+          --root . | tee "$RUNNER_TEMP/compat-swift.json"
+      - name: Uitkomst bewaren
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compat-routes
+          path: |
+            ${{ runner.temp }}/compat-kotlin.json
+            ${{ runner.temp }}/compat-swift.json
+          retention-days: 14

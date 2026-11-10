@@ -69,7 +69,7 @@ def test_alleen_eigen_clients_workflows_in_de_root():
     names = {p.name for p in WORKFLOWS}
     assert names, "geen workflows gevonden"
     assert all(n.startswith("clients-") for n in names), names
-    assert CLIENT_WORKFLOWS | {SYNC_ONE, SYNC_ALL, "clients-forkregels.yml"} == names
+    assert CLIENT_WORKFLOWS | {SYNC_ONE, SYNC_ALL, "clients-forkregels.yml", "clients-compat.yml"} == names
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
@@ -138,7 +138,7 @@ def test_checkout_zonder_opgeslagen_token(path):
                 f"{path.name}:{job_id}: checkout bewaart het token in de git-config")
 
 
-@pytest.mark.parametrize("name", sorted(CLIENT_WORKFLOWS | {"clients-forkregels.yml"}))
+@pytest.mark.parametrize("name", sorted(CLIENT_WORKFLOWS | {"clients-forkregels.yml", "clients-compat.yml"}))
 def test_clientworkflows_zijn_aanroepbaar_voor_een_syncbranch(name):
     data = load(WORKFLOW_DIR / name)
     call = triggers(data).get("workflow_call") or {}

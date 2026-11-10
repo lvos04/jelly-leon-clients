@@ -177,3 +177,69 @@ def test_cli_ongeldige_clientparameter():
     with pytest.raises(SystemExit) as exc:
         sac.main(["--server-a", "a", "--server-b", "b", "--sdk-ops", "c", "--client", "zonder-gelijkteken"])
     assert exc.value.code == 2
+
+
+# --- jellyfin-sdk-swift (Swiftfin; P4-0, JC3) ------------------------------------------------------------------------
+
+SWIFT_PATHS = {
+    "GetItemAPI.swift": """
+extension Paths {
+    /// Gets an item from a user's library.
+    public static func getItem(itemID: String, userID: String? = nil) -> Request<BaseItemDto> {
+        Request(path: "/Items/\\(itemID)", method: "GET", query: makeGetItemQuery(userID), id: "GetItem")
+    }
+
+    private static func makeGetItemQuery(_ userID: String?) -> [(String, String?)] {
+        Request(path: "/Nooit/Meetellen", method: "DELETE")
+    }
+}
+""",
+    "AddMediaPathAPI.swift": """
+public extension Paths {
+    static func addMediaPath(isRefreshLibrary: Bool? = nil, _ body: MediaPathDto) -> Request<Void> {
+        Request(
+            path: "/Library/VirtualFolders/Paths",
+            method: "POST",
+            body: body
+        )
+    }
+}
+""",
+    "GetPublicSystemInfoAPI.swift": """
+public extension Paths {
+    static var getPublicSystemInfo: Request<PublicSystemInfo> {
+        Request(path: "/System/Info/Public", id: "GetPublicSystemInfo")
+    }
+}
+""",
+}
+
+
+def test_swift_sdk_endpoints_enkel_meerregelig_var_en_nooit_private(tmp_path):
+    write(tmp_path / "Paths", SWIFT_PATHS)
+    endpoints = sac.sdk_endpoints_swift(tmp_path / "Paths")
+    assert endpoints == {("GET", "/items/{}"): {"Paths.getItem"},
+                         ("POST", "/library/virtualfolders/paths"): {"Paths.addMediaPath"},
+                         ("GET", "/system/info/public"): {"Paths.getPublicSystemInfo"}}
+
+
+def test_swift_gebruik_alleen_als_paths_aanroep(tmp_path):
+    write(tmp_path / "Paths", SWIFT_PATHS)
+    write(tmp_path / "app", {"A.swift": "let r = Paths.getItem(itemID: id)\n",
+                             "B.swift": "func getPublicSystemInfo() {}\n", "C.kt": "Paths.addMediaPath(x)\n"})
+    endpoints = sac.sdk_endpoints_swift(tmp_path / "Paths")
+    teksten = sac.client_texts([tmp_path / "app"], "swift")
+    assert sac.used_functions(teksten, endpoints, "swift") == {"getItem"}  # C.kt telt niet mee voor Swift
+    weg = {("GET", "/items/{}"): {"Paths.getItem"}}
+    assert sac.client_usages([tmp_path / "app"], weg, tmp_path, "swift")[0]["gebruikt_in"] == ["app/A.swift"]
+
+
+def test_cli_swift(opstelling, tmp_path, capsys):
+    write(tmp_path / "Paths", SWIFT_PATHS)
+    write(tmp_path / "app", {"A.swift": "Paths.getPublicSystemInfo\nPaths.getItem(itemID: i)\n"})
+    code = sac.main(["--sdk-taal", "swift", "--server-a", str(opstelling["a"]), "--server-b", str(opstelling["b"]),
+                     "--sdk-ops", str(tmp_path / "Paths"), "--client", f"swiftfin={tmp_path / 'app'}",
+                     "--root", str(tmp_path)])
+    uit = json.loads(capsys.readouterr().out)
+    assert uit["sdk_taal"] == "swift" and "GET /items/{}" in uit["sdk_endpoints_ontbrekend_in_b"]
+    assert code == 1 and uit["per_client"]["swiftfin"][0]["sdk_functies"] == ["Paths.getItem"]

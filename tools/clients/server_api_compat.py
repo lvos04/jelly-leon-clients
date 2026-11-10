@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Statische vergelijking: welke REST-routes van de Jellyfin-server die een client via jellyfin-sdk-kotlin aanroept,
-bestaan niet (meer) in een andere serverversie? (ADR-0009: Android-clients controleren vóór de serverupgrade naar 12.x.)
+"""Statische vergelijking: welke REST-routes van de Jellyfin-server die een client via jellyfin-sdk-kotlin of
+jellyfin-sdk-swift aanroept, bestaan niet (meer) in een andere serverversie? (ADR-0009: Android-clients controleren
+vóór de serverupgrade naar 12.x; Swiftfin 1.6.1 herbeoordelen tegen 12.x zonder Mac.)
 
 Invoer zijn uitsluitend lokale mappen (alleen gelezen, niets uitgevoerd):
 
 - ``--server-a`` / ``--server-b``: ``Jellyfin.Api/Controllers`` van twee serverversies (bv. v10.11.11 en v12.4);
 - ``--sdk-ops``: ``jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations`` van de
-  jellyfin-sdk-kotlin-versie die de client gebruikt (android/androidtv: zie ``gradle/libs.versions.toml``);
-- ``--client naam=map[,map…]``: Kotlin-bronmappen van een client.
+  jellyfin-sdk-kotlin-versie die de client gebruikt (android/androidtv: zie ``gradle/libs.versions.toml``), of met
+  ``--sdk-taal swift`` de map ``Sources/Paths`` van jellyfin-sdk-swift (Swiftfin: zie ``Package.resolved``);
+- ``--client naam=map[,map…]``: Kotlin- of Swift-bronmappen van een client.
 
 Werkwijze: routes uit de ASP.NET-attributen (``[Route]`` op de klasse, standaard ``[controller]`` van
 ``BaseJellyfinApiController``; ``[HttpGet("…")]`` enz. op methoden), padparameters genormaliseerd naar ``{}``, alles in
@@ -38,6 +40,11 @@ CLASS_RE = re.compile(r"^\s*public\s+(?:(?:sealed|partial|abstract)\s+)*class\s+
 SDK_FUN_RE = re.compile(r"public\s+(?:suspend\s+)?fun\s+(\w+)\s*\(")
 SDK_REQUEST_RE = re.compile(r"api\.`?(get|post|delete|put|patch)`?<.*?>\(\s*\"([^\"]+)\"")
 SDK_URL_RE = re.compile(r"api\.createUrl\(\s*\"([^\"]+)\"")
+# `public static func naam(`, `static func naam(` (in `public extension Paths`) en `static var naam: Request<…>`;
+# nooit de `private static func make…Query`-hulpen. Zonder `method:` is het GET (standaard van Get.Request).
+SWIFT_FUN_RE = re.compile(r"^[ \t]*(?:public\s+)?static\s+(?:func|var)\s+(\w+)\b", re.MULTILINE)
+SWIFT_REQUEST_RE = re.compile(r'Request\(\s*path:\s*"([^"]+)"(?:\s*,\s*method:\s*"([A-Z]+)")?')
+SWIFT_INTERPOLATIE_RE = re.compile(r"\\\([^)]*\)")
 URL_METHOD = "URL"
 GRENZEN = (
     "Statisch en alleen op routeniveau: gewijzigde parameters, DTO-velden, enums, authenticatie en gedrag worden "
@@ -102,6 +109,23 @@ def sdk_endpoints(operations: Path) -> dict[tuple[str, str], set[str]]:
     return endpoints
 
 
+def sdk_endpoints_swift(paths: Path) -> dict[tuple[str, str], set[str]]:
+    """jellyfin-sdk-swift: ``public static func naam(…) -> Request<…>`` met daarin (ook over meerdere regels)
+    ``Request(path: "/Items/\\(itemID)", method: "GET", …)``; de interpolatie wordt ``{}``."""
+    endpoints: dict[tuple[str, str], set[str]] = {}
+    for source in sorted(paths.glob("*.swift")):
+        text = source.read_text(encoding="utf-8", errors="replace")
+        starts = list(SWIFT_FUN_RE.finditer(text))
+        for i, fun in enumerate(starts):
+            body = text[fun.end():starts[i + 1].start() if i + 1 < len(starts) else len(text)]
+            request = SWIFT_REQUEST_RE.search(body)
+            if request:
+                path = SWIFT_INTERPOLATIE_RE.sub("{}", request.group(1))
+                method = request.group(2) or "GET"
+                endpoints.setdefault((method, normalize_path(path)), set()).add(f"Paths.{fun.group(1)}")
+    return endpoints
+
+
 def missing_endpoints(endpoints: dict[tuple[str, str], set[str]],
                       routes_b: set[tuple[str, str]]) -> dict[tuple[str, str], set[str]]:
     paths_b = {path for _, path in routes_b}
@@ -113,17 +137,32 @@ def missing_endpoints(endpoints: dict[tuple[str, str], set[str]],
     return missing
 
 
-def client_usages(source_dirs: list[Path], missing: dict[tuple[str, str], set[str]], root: Path) -> list[dict]:
-    texts = []
-    for directory in source_dirs:
-        for source in sorted(directory.rglob("*.kt")):
-            texts.append((source, source.read_text(encoding="utf-8", errors="replace")))
+def client_texts(source_dirs: list[Path], taal: str = "kotlin") -> list[tuple[Path, str]]:
+    suffix = "*.swift" if taal == "swift" else "*.kt"
+    return [(source, source.read_text(encoding="utf-8", errors="replace"))
+            for directory in source_dirs for source in sorted(directory.rglob(suffix))]
+
+
+def call_pattern(name: str, taal: str = "kotlin") -> re.Pattern[str]:
+    # Swift: de SDK-functies zijn statisch op `Paths` (Swiftfin roept `Paths.getItem(…)` aan).
+    return re.compile(rf"\bPaths\.{re.escape(name)}\s*\(" if taal == "swift" else rf"\b{re.escape(name)}\s*\(")
+
+
+def used_functions(texts: list[tuple[Path, str]], endpoints: dict[tuple[str, str], set[str]], taal: str) -> set[str]:
+    names = {q.split(".", 1)[1] for functions in endpoints.values() for q in functions}
+    alles = "\n".join(text for _, text in texts)
+    return {name for name in names if call_pattern(name, taal).search(alles)}
+
+
+def client_usages(source_dirs: list[Path], missing: dict[tuple[str, str], set[str]], root: Path,
+                  taal: str = "kotlin") -> list[dict]:
+    texts = client_texts(source_dirs, taal)
     used = []
     for (method, path), functions in sorted(missing.items()):
         hits: set[str] = set()
         for qualified in functions:
             name = qualified.split(".", 1)[1]
-            pattern = re.compile(rf"\b{re.escape(name)}\s*\(")
+            pattern = call_pattern(name, taal)
             hits.update(display_path(src, root) for src, text in texts if pattern.search(text))
         if hits:
             used.append({"methode": method, "pad": path, "sdk_functies": sorted(functions),
@@ -138,18 +177,22 @@ def display_path(path: Path, root: Path) -> str:
         return str(path)
 
 
-def compare(server_a: Path, server_b: Path, sdk_ops: Path, clients: dict[str, list[Path]], root: Path) -> dict:
+def compare(server_a: Path, server_b: Path, sdk_ops: Path, clients: dict[str, list[Path]], root: Path,
+            taal: str = "kotlin") -> dict:
     routes_a, routes_b = server_routes(server_a), server_routes(server_b)
-    endpoints = sdk_endpoints(sdk_ops)
+    endpoints = sdk_endpoints_swift(sdk_ops) if taal == "swift" else sdk_endpoints(sdk_ops)
     missing = missing_endpoints(endpoints, routes_b)
     return {
+        "sdk_taal": taal,
         "routes_server_a": len(routes_a),
         "routes_server_b": len(routes_b),
         "routes_weg_in_b": sorted(f"{m} {p}" for m, p in routes_a - routes_b),
         "routes_nieuw_in_b": len(routes_b - routes_a),
         "sdk_endpoints": len(endpoints),
         "sdk_endpoints_ontbrekend_in_b": sorted(f"{m} {p}" for m, p in missing),
-        "per_client": {name: client_usages(dirs, missing, root) for name, dirs in clients.items()},
+        "per_client": {name: client_usages(dirs, missing, root, taal) for name, dirs in clients.items()},
+        "gebruikte_sdk_functies_per_client": {name: len(used_functions(client_texts(dirs, taal), endpoints, taal))
+                                              for name, dirs in clients.items()},
         "grenzen": GRENZEN,
     }
 
@@ -165,7 +208,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--server-a", type=Path, required=True, help="Jellyfin.Api/Controllers van de huidige server")
     parser.add_argument("--server-b", type=Path, required=True, help="Jellyfin.Api/Controllers van de doelserver")
-    parser.add_argument("--sdk-ops", type=Path, required=True, help="operations-map van jellyfin-sdk-kotlin")
+    parser.add_argument("--sdk-ops", type=Path, required=True,
+                        help="operations-map van jellyfin-sdk-kotlin of Sources/Paths van jellyfin-sdk-swift")
+    parser.add_argument("--sdk-taal", choices=["kotlin", "swift"], default="kotlin")
     parser.add_argument("--client", type=parse_client, action="append", default=[], help="naam=map[,map…]")
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="paden in de uitvoer relatief hieraan")
     args = parser.parse_args(argv)
@@ -175,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         if not directory.is_dir():
             print(f"fout: {label}: map {directory} bestaat niet", file=sys.stderr)
             return 2
-    result = compare(args.server_a, args.server_b, args.sdk_ops, dict(args.client), args.root)
+    result = compare(args.server_a, args.server_b, args.sdk_ops, dict(args.client), args.root, args.sdk_taal)
     if result["routes_server_a"] == 0 or result["routes_server_b"] == 0 or result["sdk_endpoints"] == 0:
         print("fout: geen routes of SDK-endpoints gevonden (verkeerde map?)", file=sys.stderr)
         return 2
