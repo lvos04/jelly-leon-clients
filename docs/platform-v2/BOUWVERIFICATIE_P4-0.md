@@ -199,7 +199,9 @@ Bewijs: `test-evidence/p4-0-jc3-routevergelijking-12.4.json` (bronnen, commits e
 Nieuwe workflow **Clients / Compat 12.x (statisch)** (`.github/workflows/clients-compat.yml`): haalt server (upstream-tag
 van de forkbasis, `v12.4`), de Kotlin-SDK (versie uit `libs.versions.toml`) en de Swift-SDK (revisie uit
 `Package.resolved`) op en faalt als een gebruikte route ontbreekt. Run 42772580831 groen op `fc4b263`; Forkregels
-42772580827 groen (217 passed, 2 skipped).
+42772580827 groen (217 passed, 2 skipped). Op `3101e90` (met al het bewijs en de docs): Forkregels 42782635549
+(224 passed, 2 skipped — de byte-vergelijking met de contractbron, die op de runner niet naast de repo staat) en
+Clients / Compat 12.x 42782635849, beide groen.
 
 ## 6. Tests en controles (lokaal)
 
