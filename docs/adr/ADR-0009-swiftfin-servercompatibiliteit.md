@@ -74,7 +74,7 @@ Uitgevoerd volgens het recept hierboven (ADR-0011 van deze repo; bewijs in `docs
 | 1. `server_api_compat.py` met de gekozen 12.x-tag | Kotlin (SDK 1.7.1): 5 van 408 SDK-endpoints ontbreken in 12.4, **geen** ervan gebruikt door android (24 SDK-functies) of androidtv (76). Swift (SDK 3.0.0, API 12.0): **alle 364** endpoints bestaan; Swiftfin gebruikt er 85. Nieuw: Swift-modus (`--sdk-taal swift`) en de CI-workflow *Clients / Compat 12.x (statisch)* | statisch |
 | 2. android- en androidtv-CI | ongewijzigd groen (geen codewijziging in de clients) | CI |
 | 3. Stock-client-smoketest van jelly-leon tegen 12.x | gedaan in jelly-leon P4-0 (25/25, compat-API 5/5) | Sim-getest (jelly-leon) |
-| 4. APK's op een emulator tegen de 12.x-server | release-builds van de fork-apps (eigen applicationId, naast de officiële app) op telefoon-, tablet- en twee Android TV-emulators: inloggen, bladeren met de gezaaide kijkgeschiedenis, hervatten op 300 s, Direct Play, transcode, ondertitels (voorkeur en extern); stock 12.4 als controlegroep | Sim-getest — zie `BOUWVERIFICATIE_P4-0.md` |
+| 4. APK's op een emulator tegen de 12.x-server | release-builds van de fork-apps (eigen applicationId, naast de officiële app) op telefoon- en twee Android TV-emulators: inloggen, bladeren met de gezaaide kijkgeschiedenis, hervatten op 300 s, Direct Play, transcode, ondertitels (voorkeur en extern); stock 12.4 als controlegroep; tablet-emulator niet stabiel (Sim-mislukt) | Sim-getest — zie `BOUWVERIFICATIE_P4-0.md` |
 | 5. Echte apparaten (D15), Swiftfin op iPhone/Apple TV | niet mogelijk | **NIET GEVALIDEERD (hardware)**; **NIET GEVALIDEERD (Mac/Xcode)** |
 | 6. Upstream-Android-release op SDK 1.9.x | nog niet uitgebracht (upstream-sync meldt "actueel") | — |
 

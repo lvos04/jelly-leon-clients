@@ -82,11 +82,13 @@ Toelichting (gemeten):
 - **Skipknoppen:** niet beproefd: 12.4 heeft geen ingebouwde segmentprovider en de plugin 12.4.0-jl.0 levert er geen
   (`GET /MediaSegments/{id}` leeg voor alle 5 afleveringen) → capability_unavailable.
 - **Geheugen:** telefoon, tv en tv36 binnen 4 GiB zonder OOM-kill (`memory.peak` op de limiet door de paginacache).
-  **Tablet (pixel_tablet, 1280x800) is niet stabiel en staat op Sim-mislukt:** van vijf pogingen kreeg de emulator
-  binnen 4 GiB drie keer een OOM-kill van de container (tijdens het afspelen); met 5 GiB (afwijking van B03 §10.14)
-  slaagde één poging volledig (`p4-0-jc3-android-tablet-herhaling-1.json`) en verloor de app twee keer haar sessie
-  op de seriepagina (geen bestuurbare sessie meer binnen 30 s; `…-herhaling-2.json` en het hoofdbewijs, met de
-  vervangen poging onder `vervangen`). Oorzaak niet vastgesteld (vermoedelijk geheugendruk in de gast of op de gedeelde
+  **Tablet (pixel_tablet, 1280x800) is niet stabiel en staat op Sim-mislukt.** Geteld uit het bewijs bij de review:
+  drie runs (07:20, 07:29 en 07:45 UTC) kregen binnen 4 GiB een OOM-kill van de container (tijdens het afspelen) en
+  liepen daarna met 5 GiB (afwijking van B03 §10.14): één keer volledig geslaagd (`p4-0-jc3-android-tablet-herhaling-1.json`)
+  en twee keer verloor de app haar sessie op de seriepagina (geen bestuurbare sessie meer binnen 30 s;
+  `…-herhaling-2.json` en het hoofdbewijs). Daarnaast verloor de eerste run (06:55 UTC, onder `vervangen` in het
+  hoofdbewijs) ook haar sessie op de seriepagina; of die run binnen 4 of 5 GiB liep, is niet meer na te gaan (het
+  vervangen resultaat bewaarde geen geheugenmeting; sinds de review bewaart `--aanvullen` die wel). Oorzaak niet vastgesteld (vermoedelijk geheugendruk in de gast of op de gedeelde
   machine — tijdens twee pogingen draaide er een zware run van een andere agent); de telefoon met dezelfde app en
   hetzelfde systeemimage slaagde in alle drie de runs.
 - **Vergelijking met stock 12.4** (telefoon en tv): elke stap gelijk, **0 regressies**.

@@ -7,9 +7,10 @@ het protocol blijven "Jellyfin", zodat alles blijft werken met de server [`jelly
 
 > **Stand P4-0 (2026-11-10, JC3):** de fork-apps zijn tegen de Jelly Leon 12.x-server (12.4.0-jl.0) getest:
 > release-builds van android en androidtv met de eigen applicationId (`org.jellyfin.mobile.jellyleon`,
-> `org.jellyfin.androidtv.jellyleon`), naast de officiële apps, op telefoon-, tablet- en twee Android TV-emulators, en
+> `org.jellyfin.androidtv.jellyleon`), naast de officiële apps, op telefoon- en twee Android TV-emulators, en
 > desktop 2.0.0 onder Xvfb: inloggen, bladeren met de kijkgeschiedenis, hervatten op het juiste punt, Direct Play,
-> transcode en ondertitels; stock 12.4 als controlegroep, 0 regressies (`docs/platform-v2/BOUWVERIFICATIE_P4-0.md`,
+> transcode en ondertitels; stock 12.4 als controlegroep, 0 regressies; de tablet-emulator is niet stabiel
+> (**Sim-mislukt**) (`docs/platform-v2/BOUWVERIFICATIE_P4-0.md`,
 > ADR-0011). Swiftfin 1.6.1 is herbeoordeeld (ADR-0009). Alles **Sim-getest**; niets op een echt apparaat
 > (**NIET GEVALIDEERD (hardware)**), Swiftfin **NIET GEVALIDEERD (Mac/Xcode)**. Zichtbare naam, pictogram, protocol en
 > Kotlin-/Swift-code zijn ongewijzigd.
