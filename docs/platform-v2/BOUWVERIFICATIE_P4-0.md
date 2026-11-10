@@ -283,6 +283,7 @@ Nieuwe tests: 251 passed lokaal (was 224 + 2 failed), zie §8.3.
 | `JLC_CONTRACT_BRON=/bestaat-niet pytest -q tools/clients/tests/test_contract_kopie.py` | 4 passed, 2 skipped (zoals in CI) |
 | `python tools/clients/check_clients.py`; `python tools/clients/app_identiteit.py bron` | in orde |
 | `actionlint -color .github/workflows/*.yml`; `shellcheck` op de fork-eigen scripts | geen meldingen |
+| GitHub Actions op `20318b4`: Clients / Forkregels 42788330886; Clients / Compat 12.x (statisch) 42788463957 (handmatig gestart) | beide success (249 passed, 2 skipped: de drifttestlaag zonder bronrepo) |
 
 Niet opnieuw gedaan in de review (tijd en geheugen op de gedeelde machine): tablet, Android TV API 34/36 met de
 fork-app, de migratieproef 10.11.11 → 12.4, de desktop onder Xvfb en het Swiftfin-protocol; daarvoor geldt het bewijs
