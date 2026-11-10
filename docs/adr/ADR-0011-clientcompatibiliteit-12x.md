@@ -76,5 +76,6 @@
   clients staat in `INVENTARIS.md` §3 van deze repo en in het bewijs; overnemen in de matrix is een vervolgpunt voor
   jelly-leon.
 - Contract 1.3 verscheen in ai-server-manager tijdens deze ronde; deze taak volgt 1.2. De kopie blijft 1.2 (een nieuwe
-  kopie overnemen is een stap van de orkestratie, C1.3-ALG-01/C1.3-JLC-01); de lokale byte-vergelijking van de
-  drifttest meldt dat verschil zoals bedoeld (in CI wordt die laag overgeslagen).
+  kopie overnemen is een stap van de orkestratie, C1.3-ALG-01/C1.3-JLC-01). Sinds de review van P4-0 vergelijkt de
+  drifttest de kopie met de bron op de vaste bron-commit (fout bij verschil) en meldt hij de nieuwere stand in de
+  werkboom van de bron als waarschuwing (eerst faalde hij lokaal op dat verschil; in CI wordt die laag overgeslagen).

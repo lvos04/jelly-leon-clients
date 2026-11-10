@@ -13,8 +13,9 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `PLATFORM_CONTRACTEN.md` — `contracts 1.2`, byte-gelijke kopie van `lvos04/ai-server-manager`
   `docs/platform-v2/PLATFORM_CONTRACTEN.md` (bron-commit `8b54f39`); bij verschil wint de bron.
 - `CONTRACT_1.2_CONFORMITEIT.md` — wat elke repo voor 1.2 moet veranderen (deze repo: §11, JC1–JC5); zelfde bron.
-- Drifttest: `tools/clients/tests/test_contract_kopie.py` (vaste SHA-256 van de bron; met de bronrepo naast deze repo
-  of `JLC_CONTRACT_BRON=<map>` ook een byte-vergelijking met de actuele bron). Relatieve links in de kopie (bv. naar
+- Drifttest: `tools/clients/tests/test_contract_kopie.py` (vaste SHA-256 van de bron; met een git-checkout van de
+  bronrepo naast deze repo of `JLC_CONTRACT_BRON=<map>` ook een byte-vergelijking met de bron op de bron-commit; een
+  nieuwere contractstand in de bron geeft alleen een waarschuwing). Relatieve links in de kopie (bv. naar
   `docs/adr/ADR-0011-contract-1-2.md`) wijzen naar bestanden in ai-server-manager.
 
 ## B03 2.0 — universele mediaserver (goedgekeurd door de gebruiker op 2026-11-09)

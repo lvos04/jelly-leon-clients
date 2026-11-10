@@ -11,8 +11,11 @@
 1. **A1 — contractkopie:** `docs/platform-v2/PLATFORM_CONTRACTEN.md` en `CONTRACT_1.2_CONFORMITEIT.md` zijn
    byte-gelijke kopieën van ai-server-manager (bron-commit `8b54f39`). Drifttest
    `tools/clients/tests/test_contract_kopie.py`: altijd de vaste SHA-256 van de bron (werkt in CI zonder de bronrepo),
-   en een byte-vergelijking met de actuele bron als die naast deze repo staat of `JLC_CONTRACT_BRON` is gezet; zonder
-   bron wordt alleen die tweede laag overgeslagen (zichtbaar als *skipped*, nooit als geslaagd).
+   en een byte-vergelijking met de bron **op de vaste bron-commit** (`git show 8b54f39:…`) als een git-checkout van
+   ai-server-manager naast deze repo staat of `JLC_CONTRACT_BRON` is gezet; zonder bron wordt alleen die tweede laag
+   overgeslagen (zichtbaar als *skipped*, nooit als geslaagd). Is de werkboom van de bron na de pin gewijzigd (een
+   nieuwere contractstand), dan geeft de test een waarschuwing: overnemen is een stap van de orkestratie (review P4-0,
+   2026-11-10; zelfde opzet als `contract_drift.py` in jelly-leon-web).
 2. **JC1 — eigen applicationId (JLC-0002, JLC-0003):** uitgevoerd met de ID's uit het besluit van de gebruiker
    (2026-11-09, ADR-0004): `org.jellyfin.mobile.jellyleon` en `org.jellyfin.androidtv.jellyleon` (debug met de
    upstream-suffix `.debug`). Androidtv leidt `app_id`, `app_search_suggest_authority` en
