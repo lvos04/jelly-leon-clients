@@ -280,13 +280,18 @@ def run(
     label: str,
     geheugen_gib: int = 4,
     extra_stappen: dict[str, dict[str, Any]] | None = None,
+    bediend: str = "fork",
 ) -> dict[str, Any]:
-    """Volledige scenarioreeks voor één emulator tegen één (verse) server."""
+    """Volledige scenarioreeks voor één emulator tegen één (verse) server. ``bediend``: welke van de twee naast elkaar
+    geïnstalleerde apps bediend wordt — de fork-app (eigen applicationId) of de officiële app (rol stock-native,
+    JLT-63)."""
     a = AVDS[soort]
     app = a["app"]
     fork, officieel = apks[app]["fork"], apks[app]["officieel"]
+    doel = fork if bediend == "fork" else officieel
     res: dict[str, Any] = {
-        "client": f"{app} {FORK[app]['versie']} (fork, {FORK[app]['pakket']})",
+        "client": f"{app} {doel['versionName']} ({bediend}, {doel['pakket']})",
+        "bediend": bediend,
         "emulator": soort,
         "systeemimage": a["image"],
         "apparaat": a["apparaat"],
@@ -297,7 +302,7 @@ def run(
     }
     emu = Emulator(soort, Path(fork["pad"]).parent, geheugen_gib=geheugen_gib)
     try:
-        _stappen(emu, res, server, app, apks, uitmap, label)
+        _stappen(emu, res, server, app, apks, uitmap, label, doel)
     except Exception as fout:  # noqa: BLE001 - elke harnas- of emulatorfout eerlijk in het bewijs, nooit stil
         res["fout"] = f"{type(fout).__name__}: {str(fout)[:600]}"
     finally:
@@ -315,7 +320,14 @@ def run(
 
 
 def _stappen(
-    emu: Emulator, res: dict[str, Any], server: TestServer, app: str, apks: dict[str, Any], uitmap: Path, label: str
+    emu: Emulator,
+    res: dict[str, Any],
+    server: TestServer,
+    app: str,
+    apks: dict[str, Any],
+    uitmap: Path,
+    label: str,
+    doel: dict[str, Any],
 ) -> None:
     assert server.jf
     jf, it, soort = server.jf, server.items, emu.soort
@@ -335,7 +347,7 @@ def _stappen(
         installatie=installatie,
     )
     url = f"http://10.0.2.2:{server.poort}"
-    st["inloggen"] = (inloggen_telefoon if app == "android" else inloggen_tv)(emu, FORK[app]["pakket"], url)
+    st["inloggen"] = (inloggen_telefoon if app == "android" else inloggen_tv)(emu, doel["pakket"], url)
     schot("startscherm")
     sessie = volger.bestuurbaar() if st["inloggen"]["uitkomst"] == sc.GESLAAGD else None
     if sessie is None:
@@ -350,8 +362,8 @@ def _stappen(
         "versie": sessie.get("ApplicationVersion"),
         "apparaat": sessie.get("DeviceName"),
     }
-    if sessie.get("ApplicationVersion") != FORK[app]["versie"]:
-        st["inloggen"].update(uitkomst=sc.MISLUKT, reden="de sessie is niet van de fork-app")
+    if sessie.get("ApplicationVersion") != doel["versionName"]:
+        st["inloggen"].update(uitkomst=sc.MISLUKT, reden="de sessie is niet van de bediende app")
     log(f"{soort}: ingelogd ({sessie.get('Client')} {sessie.get('ApplicationVersion')})")
 
     st["bladeren"] = bladeren(emu, app, jf, volger, server)

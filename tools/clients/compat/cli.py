@@ -78,7 +78,14 @@ def image_herkomst(image: str) -> dict[str, Any]:
 
 
 def een_android_run(
-    label: str, image: str, soort: str, apks: dict[str, Any], uitmap: Path, gib: int, migratie_van: str | None = None
+    label: str,
+    image: str,
+    soort: str,
+    apks: dict[str, Any],
+    uitmap: Path,
+    gib: int,
+    migratie_van: str | None = None,
+    bediend: str = "fork",
 ) -> dict[str, Any]:
     with bewijs.slot("stack.lock", log) as w1, bewijs.slot("gradle.lock", log) as w2:
         log(f"== {label} / {soort} ({gib} GiB; wachttijd sloten {w1 + w2} s)")
@@ -97,7 +104,7 @@ def een_android_run(
             else:
                 server.start()
                 inrichting = server.inrichten()
-            r = android.run(server, soort, apks, uitmap, label, geheugen_gib=gib, extra_stappen=extra)
+            r = android.run(server, soort, apks, uitmap, label, geheugen_gib=gib, extra_stappen=extra, bediend=bediend)
             r["server"] = {
                 "versie": server.info.get("Version"),
                 "product": server.info.get("ProductName"),
@@ -155,6 +162,7 @@ def android_cmd(a: argparse.Namespace) -> int:
     servers = [("jelly-leon", a.image, soorten), ("stock", a.stock_image, vergelijk)]
     document: dict[str, Any] = {
         "schema": "jelly-leon-clients/p4-0-jc3-android/1",
+        "bediend": a.bediend,
         "begin": bewijs.nu(),
         "doel": "JC3 / P4-0: fork-apps android 2.7.3 en androidtv 0.19.10 (eigen applicationId) tegen de Jelly Leon "
         "12.x-server, met stock 12.x op dezelfde upstream-digest als controlegroep",
@@ -183,7 +191,7 @@ def android_cmd(a: argparse.Namespace) -> int:
             # plan, beide pogingen in het bewijs — zelfde beleid als jelly-leon B03-016).
             pogingen = []
             for gib in (4, 5):
-                r = een_android_run(label, image, soort, apks, uitmap, gib, a.migratie_van)
+                r = een_android_run(label, image, soort, apks, uitmap, gib, a.migratie_van, a.bediend)
                 pogingen.append(r)
                 if not r.get("geheugen", {}).get("oom_kill"):
                     break
@@ -270,6 +278,12 @@ def main(argv: list[str] | None = None) -> int:
         "--vergelijk-soorten", default="telefoon,tv", help="emulators tegen stock (controlegroep); leeg = geen"
     )
     pa.add_argument("--uit", type=Path, default=REPO / "docs/platform-v2/test-evidence/p4-0-jc3-android-emulator.json")
+    pa.add_argument(
+        "--bediend",
+        choices=["fork", "officieel"],
+        default="fork",
+        help="welke van de twee geïnstalleerde apps bediend wordt (officieel = rol stock-native, JLT-63)",
+    )
     pa.add_argument(
         "--aanvullen",
         action="store_true",
