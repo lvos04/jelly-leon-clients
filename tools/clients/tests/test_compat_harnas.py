@@ -176,6 +176,18 @@ def test_vergelijking_met_stock_markeert_alleen_echte_regressies():
     assert rij["c"]["gelijk"] and not rij["c"]["regressie"]  # ook stock faalt: upstream-gedrag, geen regressie
 
 
+def test_vergelijking_telt_een_ontbrekende_of_verdwenen_stap_op_jelly_leon_als_regressie():
+    """Review P4-0: brak de Jelly Leon-run af (stap ontbreekt) of levert Jelly Leon een functie niet die stock wel
+    levert, dan is dat een regressie — nooit '0 regressies' door een ontbrekende meting."""
+    st = {"hervatten": {"uitkomst": sc.GESLAAGD}, "seg": {"uitkomst": sc.GESLAAGD},
+          "extra": {"uitkomst": sc.NIET_AANWEZIG}}
+    jl = {"seg": {"uitkomst": sc.NIET_AANWEZIG}, "extra": {"uitkomst": sc.GESLAAGD}}
+    rij = {v["stap"]: v for v in bewijs.vergelijk(jl, st)}
+    assert rij["hervatten"]["regressie"] and rij["hervatten"]["jelly_leon"] is None
+    assert rij["seg"]["regressie"]
+    assert not rij["extra"]["regressie"]  # beter dan stock is geen regressie
+
+
 @pytest.mark.parametrize("document", [
     {"k": "MediaBrowser Client=\"x\", Token=\"abc123\""},
     {"AccessToken": "x"},

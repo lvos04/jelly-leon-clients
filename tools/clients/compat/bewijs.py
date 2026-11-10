@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .scenario import GESLAAGD, MISLUKT
+from .scenario import GESLAAGD
 
 LOCKS = Path("/home/transcode/truenas-v2/.lokaal")
 GEHEIM_RE = re.compile(r'^AccessToken$|Token="[^"]+"|(?:api_key|ApiKey)=[0-9a-fA-F]{16,}')
@@ -60,7 +60,8 @@ def slot(naam: str, log: Any = print) -> Iterator[float]:
 
 
 def vergelijk(jelly_leon: dict[str, Any], stock: dict[str, Any]) -> list[dict[str, Any]]:
-    """Per stap: uitkomst tegen Jelly Leon en tegen stock. Regressie = geslaagd op stock en mislukt op Jelly Leon."""
+    """Per stap: uitkomst tegen Jelly Leon en tegen stock. Regressie = geslaagd op stock en níet geslaagd op Jelly Leon:
+    ook een stap die op Jelly Leon ontbreekt (run afgebroken) of daar ``niet_aanwezig`` is, telt (review P4-0)."""
     uit = []
     for stap in sorted(set(jelly_leon) | set(stock)):
         jl = jelly_leon.get(stap, {}).get("uitkomst")
@@ -70,7 +71,7 @@ def vergelijk(jelly_leon: dict[str, Any], stock: dict[str, Any]) -> list[dict[st
                 "stap": stap,
                 "jelly_leon": jl,
                 "stock": st,
-                "regressie": st == GESLAAGD and jl == MISLUKT,
+                "regressie": st == GESLAAGD and jl != GESLAAGD,
                 "gelijk": jl == st,
             }
         )
