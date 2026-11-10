@@ -85,6 +85,30 @@ def _loopt(rij: list[Monster], minimaal_s: float) -> tuple[bool, float]:
     return stijgend and opgelopen >= minimaal_s and spelend[-1].positie_s > spelend[-2].positie_s, round(opgelopen, 2)
 
 
+def spelende_staart(rij: list[Monster], speling_s: float = 5.0) -> list[Monster]:
+    """Het laatste aaneengesloten stuk waarin de positie echt speelt: niet gepauzeerd en per stap
+    0 ≤ Δpositie ≤ Δt + speling (geen sprong). Een sprong — bv. eerst een melding op 0 en een seconde later op het
+    hervatpunt — breekt de staart, zodat die sprong nooit als 'opgelopen' telt."""
+    spelend = [m for m in rij if not m.gepauzeerd]
+    if not spelend:
+        return []
+    staart = [spelend[-1]]
+    for vorige in reversed(spelend[:-1]):
+        na = staart[0]
+        if 0 <= na.positie_s - vorige.positie_s <= (na.t - vorige.t) + speling_s:
+            staart.insert(0, vorige)
+        else:
+            break
+    return staart
+
+
+def genoeg_opgelopen(rij: list[Monster], minimaal_s: float) -> bool:
+    """Stopcriterium bij het volgen: ≥ 3 meldingen in de spelende staart en ≥ minimaal_s echt opgelopen (review P4-0:
+    eerder telde de sprong van een 0-melding naar het hervatpunt als opgelopen en stopte het volgen na 2 s)."""
+    staart = spelende_staart(rij)
+    return len(staart) >= 3 and staart[-1].positie_s - staart[0].positie_s >= minimaal_s
+
+
 def meest_voorkomend(waarden: list[Any]) -> Any:
     waarden = [w for w in waarden if w is not None]
     return Counter(waarden).most_common(1)[0][0] if waarden else None
@@ -148,7 +172,9 @@ def beoordeel_hervatten(
         "afwijking_s": round(geschat - hervat_s, 2),
         "opgelopen_s": opgelopen,
         "posities_s": [m.positie_s for m in rij][-8:],
-        "meldingen": [[m.t, m.positie_s, m.sessie[:8]] for m in rij][:12],  # voor diagnose (welke sessie meldde wat)
+        # Voor diagnose alle meldingen, ook die op 0 (welke sessie meldde wat, en wanneer).
+        "meldingen": [[m.t, m.positie_s, m.sessie[:8]] for m in alle][:12],
+        "eerst_een_melding_op_0": bool(alle) and alle[0].positie_s == 0 and any(m.positie_s > 0 for m in alle),
         **({"reden": "; ".join(redenen)} if redenen else {}),
     }
 

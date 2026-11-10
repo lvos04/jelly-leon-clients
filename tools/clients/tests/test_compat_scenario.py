@@ -158,3 +158,28 @@ def test_migratie_zonder_gezaaide_geschiedenis_is_nooit_geslaagd(voor):
     uit = sc.beoordeel_migratie(voor, voor, GEZAAID)  # vóór = na, toch mislukt
     assert uit["uitkomst"] == sc.MISLUKT and uit["verschillen"] == []
     assert uit["reden"].startswith("de gezaaide kijkgeschiedenis staat niet op de oude server")
+
+
+def test_volgen_stopt_niet_op_een_sprong_van_0_naar_het_hervatpunt():
+    """Review P4-0 (gemeten met de officiële tv-app, op Jelly Leon én stock): eerste melding op 0, een seconde later op
+    300 s. Het oude stopcriterium (laatste − eerste ≥ 6 s) stopte dan na 3 meldingen en het oordeel zag maar 2
+    positieve meldingen ('positie liep niet op'). De sprong telt nu niet als opgelopen."""
+    sprong = [m(0.01, 0.0), m(1.02, 300.0), m(2.03, 301.0)]
+    assert not sc.genoeg_opgelopen(sprong, 6.0)
+    verder = sprong + [m(t, 299.0 + t) for t in range(3, 9)]
+    assert sc.genoeg_opgelopen(verder, 6.0)
+    assert [x.positie_s for x in sc.spelende_staart(verder)][0] == 300.0
+    uit = sc.beoordeel_hervatten(verder, "i", 300.0)
+    assert uit["uitkomst"] == sc.GESLAAGD and uit["eerst_een_melding_op_0"] is True
+    assert uit["meldingen"][0] == [0.01, 0.0, "s"]  # de 0-melding blijft zichtbaar voor diagnose
+
+
+def test_spelende_staart_negeert_pauze_en_breekt_op_terugspringen():
+    rij = [m(0, 300.0), m(1, 301.0), m(2, 1.0), m(3, 2.0), m(4, 3.0, gepauzeerd=True), m(5, 3.0)]
+    assert [x.positie_s for x in sc.spelende_staart(rij)] == [1.0, 2.0, 3.0]
+    assert not sc.genoeg_opgelopen(rij, 6.0)
+    assert sc.spelende_staart([]) == [] and not sc.genoeg_opgelopen([m(0, 1.0, gepauzeerd=True)], 0.0)
+    # vanaf het begin spelen blijft mislukt bij hervatten, ook met de nieuwe staart
+    begin = [m(0.01, 0.0), m(1, 1.0), m(2, 2.0), m(8, 8.0)]
+    assert sc.genoeg_opgelopen(begin, 6.0)
+    assert sc.beoordeel_hervatten(begin, "i", 300.0)["uitkomst"] == sc.MISLUKT

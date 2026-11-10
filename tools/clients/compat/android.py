@@ -90,7 +90,7 @@ class Volger:
                 if (s.get("NowPlayingItem") or {}).get("Id"):
                     uit.append(sc.monster(s, time.monotonic() - t0))
             rij = [m for m in sc.van_item(uit, item_id) if not m.gepauzeerd]
-            if len(rij) >= 3 and rij[-1].positie_s - rij[0].positie_s >= minimaal_s:
+            if sc.genoeg_opgelopen(rij, minimaal_s):
                 break
             if tot_ondertitel is not None and any(m.ondertitel == tot_ondertitel and m.t >= 3 for m in rij):
                 break
