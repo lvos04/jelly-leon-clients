@@ -1,0 +1,531 @@
+{
+ "schema": "jelly-leon-clients/p4-0-jc3-desktop/1",
+ "begin": "2026-11-10T07:42:26Z",
+ "servers": {
+  "jelly-leon": {
+   "image": "jelly-leon-clients/jelly-leon-server:12.4.0-jl.0-e294f84",
+   "image_id": "sha256:4671a48ade85fa5833e93d4412a48fd07f379b3cd8a8c5e18384efa1e2d76a9b",
+   "version": "12.4.0-jl.0",
+   "revision": "e294f84eaede2bcf16ea2e40f60fc81c7a701511",
+   "web_revisie": "5ced8a24601e30038cafae5dab2f0520b3325427",
+   "name": "docker.io/jellyfin/jellyfin:12.4"
+  },
+  "stock": {
+   "image": "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "image_id": "sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "version": "12.4"
+  }
+ },
+ "resultaten": {
+  "jelly-leon": {
+   "client": "jellyfin-desktop 2.0.0 (forkbron desktop/, 2.0.0-jl.0; Release-build in container)",
+   "omgeving": "Xvfb 1600x900, QtWebEngine, libmpv (software), container --shm-size 1g",
+   "stappen": {
+    "inloggen": {
+     "uitkomst": "geslaagd",
+     "stappen": [
+      "find-webclient: serveradres verstuurd",
+      "web-client van de server geladen: True",
+      "ingelogd: True, startscherm: True"
+     ],
+     "sessie": {
+      "client": "Jellyfin Desktop",
+      "versie": "2.0.0"
+     }
+    },
+    "bladeren": {
+     "uitkomst": "geslaagd",
+     "gezien": {
+      "films_tegel": true,
+      "series_tegel": true,
+      "verder_kijken_rij": true,
+      "hervatitem_op_startscherm": true,
+      "films_in_bibliotheek": [
+       "hero",
+       "sintel-30s-mpeg2-ac3",
+       "sintel-30s-mpeg4-mp3",
+       "sintel-60s-referentie",
+       "tears_of_steel"
+      ],
+      "serie_pagina": {
+       "ok": true,
+       "seizoenen": [
+        "Season 1",
+        "Season 2"
+       ],
+       "tv_telling": true
+      }
+     }
+    },
+    "hervatten": {
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 1.02,
+     "geschatte_startpositie_s": 298.98,
+     "afwijking_s": -1.02,
+     "opgelopen_s": 6.0,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      303.0,
+      304.0,
+      305.0,
+      306.0
+     ],
+     "knop": "Resume (detailpagina)"
+    },
+    "hervatpunt_bewaard": {
+     "uitkomst": "geslaagd",
+     "bewaard_s": 307.21,
+     "laatste_gemelde_positie_s": 306.0,
+     "tolerantie_s": 15.0
+    },
+    "direct_play": {
+     "uitkomst": "geslaagd",
+     "methode": "DirectPlay",
+     "opgelopen_s": 6.0,
+     "posities_s": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0
+     ],
+     "transcode": null,
+     "client": "Jellyfin Desktop",
+     "versie": "2.0.0",
+     "item": "hero"
+    },
+    "transcode": {
+     "uitkomst": "geslaagd",
+     "methode": "Transcode",
+     "opgelopen_s": 6.0,
+     "posities_s": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0
+     ],
+     "transcode": {
+      "VideoCodec": "h264",
+      "AudioCodec": "aac",
+      "Container": "ts",
+      "IsVideoDirect": false,
+      "IsAudioDirect": false,
+      "TranscodeReasons": [
+       "VideoCodecNotSupported",
+       "AudioCodecNotSupported",
+       "ContainerBitrateExceedsLimit"
+      ],
+      "HardwareAccelerationType": "none"
+     },
+     "client": "Jellyfin Desktop",
+     "versie": "2.0.0",
+     "item": "sintel-30s-mpeg4-mp3",
+     "route": "Instellingen → Afspelen: maximale streamingbitrate 400 kbit/s (appSettings)"
+    },
+    "ondertitel_voorkeur": {
+     "uitkomst": "geslaagd",
+     "verwacht_index": 2,
+     "gemeld": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+     ],
+     "eerst_gemeld_na_s": 1.02,
+     "nl_spoor": 2,
+     "server_standaard": 2,
+     "afspeelmethode": "DirectPlay"
+    },
+    "ondertitel_extern": {
+     "uitkomst": "geslaagd",
+     "route": "SetSubtitleStreamIndex tijdens het afspelen (EN, daarna NL)",
+     "naar_en": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 0,
+      "gemeld": [
+       0
+      ],
+      "eerst_gemeld_na_s": 3.04
+     },
+     "naar_nl": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 1,
+      "gemeld": [
+       0,
+       1
+      ],
+      "eerst_gemeld_na_s": 4.05
+     },
+     "bij_start_met_playnow_index": {
+      "gevraagd": 1,
+      "gemeld": 0
+     }
+    },
+    "skip_segmenten": {
+     "uitkomst": "niet_aanwezig",
+     "aantallen": {
+      "B03 Testserie S01E01": 0,
+      "B03 Testserie S01E02": 0,
+      "B03 Testserie S01E03": 0,
+      "B03 Testserie S02E01": 0,
+      "B03 Testserie S02E02": 0
+     },
+     "reden": "capability_unavailable: de server levert geen mediasegmenten (Jellyfin 12.4 heeft geen ingebouwde segmentprovider en de Jelly Leon-plugin 12.4.0-jl.0 implementeert er geen; F6 volgt in P4) — skipknoppen niet beproefd"
+    }
+   },
+   "webfouten": [],
+   "app_log_staart": "ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\nALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory\nALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default\nao/alsa: Playback open error: No such file or directory\nao/jack: cannot open server\nALSA lib confmisc.c:855:(parse_card) cannot find card '0'\nALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory\nALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings\nALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory\nALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name\nALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\nALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory\nALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default\ndoDisableScreensaver : could not find session bus\nDisplayManager : unable to retrieve main display",
+   "geheugen": {
+    "piek_bytes": 982237184,
+    "oom_kill": 0
+   },
+   "oordeel": {
+    "validatie": "Sim-geslaagd",
+    "mislukte_stappen": [],
+    "niet_aanwezig": [
+     "skip_segmenten"
+    ]
+   },
+   "server": {
+    "versie": "12.4.0",
+    "image_id": "sha256:4671a48ade85fa5833e93d4412a48fd07f379b3cd8a8c5e18384efa1e2d76a9b",
+    "inrichting": {
+     "scan_s": 7.2,
+     "items": 10,
+     "kijkgeschiedenis": {
+      "hervatpunt": {
+       "item": "tears_of_steel",
+       "positie_s": 300.0
+      },
+      "gezien": {
+       "item": "hero",
+       "aantal": 2
+      },
+      "favoriet": {
+       "item": "sintel-60s-referentie"
+      },
+      "controle_na_zaaien": {
+       "hervatlijst": [
+        "tears_of_steel"
+       ],
+       "hervat_ticks": 3000000000,
+       "gezien_aantal": 2,
+       "favoriet": true
+      }
+     }
+    }
+   }
+  },
+  "stock": {
+   "client": "jellyfin-desktop 2.0.0 (forkbron desktop/, 2.0.0-jl.0; Release-build in container)",
+   "omgeving": "Xvfb 1600x900, QtWebEngine, libmpv (software), container --shm-size 1g",
+   "stappen": {
+    "inloggen": {
+     "uitkomst": "geslaagd",
+     "stappen": [
+      "find-webclient: serveradres verstuurd",
+      "web-client van de server geladen: True",
+      "ingelogd: True, startscherm: True"
+     ],
+     "sessie": {
+      "client": "Jellyfin Desktop",
+      "versie": "2.0.0"
+     }
+    },
+    "bladeren": {
+     "uitkomst": "geslaagd",
+     "gezien": {
+      "films_tegel": true,
+      "series_tegel": true,
+      "verder_kijken_rij": true,
+      "hervatitem_op_startscherm": true,
+      "films_in_bibliotheek": [
+       "hero",
+       "sintel-30s-mpeg2-ac3",
+       "sintel-30s-mpeg4-mp3",
+       "sintel-60s-referentie",
+       "tears_of_steel"
+      ],
+      "serie_pagina": {
+       "ok": true,
+       "seizoenen": [
+        "Season 1",
+        "Season 2"
+       ],
+       "tv_telling": true
+      }
+     }
+    },
+    "hervatten": {
+     "uitkomst": "geslaagd",
+     "hervatpunt_s": 300.0,
+     "eerste_positie_s": 300.0,
+     "eerste_melding_na_s": 1.03,
+     "geschatte_startpositie_s": 298.97,
+     "afwijking_s": -1.03,
+     "opgelopen_s": 6.0,
+     "posities_s": [
+      300.0,
+      301.0,
+      302.0,
+      303.0,
+      304.0,
+      305.0,
+      306.0
+     ],
+     "knop": "Resume (detailpagina)"
+    },
+    "hervatpunt_bewaard": {
+     "uitkomst": "geslaagd",
+     "bewaard_s": 307.0,
+     "laatste_gemelde_positie_s": 306.0,
+     "tolerantie_s": 15.0
+    },
+    "direct_play": {
+     "uitkomst": "geslaagd",
+     "methode": "DirectPlay",
+     "opgelopen_s": 6.0,
+     "posities_s": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0
+     ],
+     "transcode": null,
+     "client": "Jellyfin Desktop",
+     "versie": "2.0.0",
+     "item": "hero"
+    },
+    "transcode": {
+     "uitkomst": "geslaagd",
+     "methode": "Transcode",
+     "opgelopen_s": 6.0,
+     "posities_s": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0
+     ],
+     "transcode": {
+      "VideoCodec": "h264",
+      "AudioCodec": "aac",
+      "Container": "ts",
+      "IsVideoDirect": false,
+      "IsAudioDirect": false,
+      "TranscodeReasons": [
+       "VideoCodecNotSupported",
+       "AudioCodecNotSupported",
+       "ContainerBitrateExceedsLimit"
+      ],
+      "HardwareAccelerationType": "none"
+     },
+     "client": "Jellyfin Desktop",
+     "versie": "2.0.0",
+     "item": "sintel-30s-mpeg4-mp3",
+     "route": "Instellingen → Afspelen: maximale streamingbitrate 400 kbit/s (appSettings)"
+    },
+    "ondertitel_voorkeur": {
+     "uitkomst": "geslaagd",
+     "verwacht_index": 2,
+     "gemeld": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+     ],
+     "eerst_gemeld_na_s": 1.02,
+     "nl_spoor": 2,
+     "server_standaard": 2,
+     "afspeelmethode": "DirectPlay"
+    },
+    "ondertitel_extern": {
+     "uitkomst": "geslaagd",
+     "route": "SetSubtitleStreamIndex tijdens het afspelen (EN, daarna NL)",
+     "naar_en": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 0,
+      "gemeld": [
+       0
+      ],
+      "eerst_gemeld_na_s": 3.04
+     },
+     "naar_nl": {
+      "uitkomst": "geslaagd",
+      "verwacht_index": 1,
+      "gemeld": [
+       0,
+       1
+      ],
+      "eerst_gemeld_na_s": 4.06
+     },
+     "bij_start_met_playnow_index": {
+      "gevraagd": 1,
+      "gemeld": 0
+     }
+    },
+    "skip_segmenten": {
+     "uitkomst": "niet_aanwezig",
+     "aantallen": {
+      "B03 Testserie S01E01": 0,
+      "B03 Testserie S01E02": 0,
+      "B03 Testserie S01E03": 0,
+      "B03 Testserie S02E01": 0,
+      "B03 Testserie S02E02": 0
+     },
+     "reden": "capability_unavailable: de server levert geen mediasegmenten (Jellyfin 12.4 heeft geen ingebouwde segmentprovider en de Jelly Leon-plugin 12.4.0-jl.0 implementeert er geen; F6 volgt in P4) — skipknoppen niet beproefd"
+    }
+   },
+   "webfouten": [],
+   "app_log_staart": "ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\nALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory\nALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default\nALSA lib confmisc.c:855:(parse_card) cannot find card '0'\nALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory\nALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings\nALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory\nALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name\nALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory\nALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory\nALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default\nao/alsa: Playback open error: No such file or directory\nao/jack: cannot open server\ndoDisableScreensaver : could not find session bus\nDisplayManager : unable to retrieve main display",
+   "geheugen": {
+    "piek_bytes": 754659328,
+    "oom_kill": 0
+   },
+   "oordeel": {
+    "validatie": "Sim-geslaagd",
+    "mislukte_stappen": [],
+    "niet_aanwezig": [
+     "skip_segmenten"
+    ]
+   },
+   "server": {
+    "versie": "12.4.0",
+    "image_id": "sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+    "inrichting": {
+     "scan_s": 7.2,
+     "items": 10,
+     "kijkgeschiedenis": {
+      "hervatpunt": {
+       "item": "tears_of_steel",
+       "positie_s": 300.0
+      },
+      "gezien": {
+       "item": "hero",
+       "aantal": 2
+      },
+      "favoriet": {
+       "item": "sintel-60s-referentie"
+      },
+      "controle_na_zaaien": {
+       "hervatlijst": [
+        "tears_of_steel"
+       ],
+       "hervat_ticks": 3000000000,
+       "gezien_aantal": 2,
+       "favoriet": true
+      }
+     }
+    }
+   }
+  }
+ },
+ "niet_hier": [
+  {
+   "client": "Swiftfin 1.6.1 (iOS/tvOS), Safari, Apple TV",
+   "rol": "stock-native / fork-app",
+   "status": "NIET GEVALIDEERD (Mac/Xcode)",
+   "reden": "geen Mac/Xcode; statische herbeoordeling in ADR-0009"
+  },
+  {
+   "client": "echte telefoons, tablets, tv's, Chromecast, DLNA",
+   "rol": "alle",
+   "status": "NIET GEVALIDEERD (hardware)",
+   "reden": "geen echte apparaten; D15 onbekend (JLT-69)"
+  }
+ ],
+ "vergelijking_met_stock": [
+  {
+   "stap": "bladeren",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "direct_play",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "hervatpunt_bewaard",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "hervatten",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "inloggen",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "ondertitel_extern",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "ondertitel_voorkeur",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "skip_segmenten",
+   "jelly_leon": "niet_aanwezig",
+   "stock": "niet_aanwezig",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "transcode",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  }
+ ],
+ "regressies": [],
+ "schermafdrukken": [
+  "jelly-leon-desktop-direct_play.jpg",
+  "jelly-leon-desktop-hervatten.jpg",
+  "jelly-leon-desktop-ondertitel-extern.jpg",
+  "jelly-leon-desktop-ondertitel-voorkeur.jpg",
+  "jelly-leon-desktop-startscherm.jpg",
+  "jelly-leon-desktop-transcode.jpg"
+ ],
+ "eind": "2026-11-10T07:45:28Z",
+ "validatie": "Sim-geslaagd"
+}

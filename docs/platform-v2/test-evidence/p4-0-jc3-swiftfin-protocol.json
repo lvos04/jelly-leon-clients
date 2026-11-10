@@ -1,0 +1,211 @@
+{
+ "schema": "jelly-leon-clients/p4-0-jc3-swiftfin-protocol/1",
+ "begin": "2026-11-10T07:19:31Z",
+ "doel": "ADR-0009 herbeoordeeld: serverkant van Swiftfin 1.6.1 tegen de Jelly Leon 12.x-server en stock 12.x",
+ "servers": {
+  "jelly-leon": {
+   "image": "jelly-leon-clients/jelly-leon-server:12.4.0-jl.0-e294f84",
+   "image_id": "sha256:4671a48ade85fa5833e93d4412a48fd07f379b3cd8a8c5e18384efa1e2d76a9b",
+   "version": "12.4.0-jl.0",
+   "revision": "e294f84eaede2bcf16ea2e40f60fc81c7a701511",
+   "web_revisie": "5ced8a24601e30038cafae5dab2f0520b3325427",
+   "name": "docker.io/jellyfin/jellyfin:12.4"
+  },
+  "stock": {
+   "image": "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "image_id": "sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+   "version": "12.4"
+  }
+ },
+ "resultaten": {
+  "jelly-leon": {
+   "client": "Swiftfin 1.6.1 (jellyfin-sdk-swift 3.0.0, API 12.0.0) — alleen de serverkant nagebootst",
+   "stappen": {
+    "versiecontrole": {
+     "uitkomst": "geslaagd",
+     "server": "12.4.0",
+     "sdk_api": "12.0.0",
+     "betekenis": "geen melding 'Update to Jellyfin 12.0' meer (ADR-0009)"
+    },
+    "aanmelden_met_ongequote_kop": {
+     "uitkomst": "geslaagd",
+     "gebruiker": "jc3kijker"
+    },
+    "api_met_kop": {
+     "uitkomst": "geslaagd",
+     "users_me": 200,
+     "hervatlijst": [
+      "tears_of_steel"
+     ]
+    },
+    "sessie_herkend": {
+     "uitkomst": "geslaagd",
+     "client": "Swiftfin iOS",
+     "versie": "1.6.1"
+    },
+    "websocket": {
+     "uitkomst": "geslaagd",
+     "met_kop_en_api_key": 101,
+     "alleen_api_key": 403,
+     "uitleg": "Swiftfin stuurt de kop mee; api_key alleen telt in 12.x niet meer (legacy uit)"
+    },
+    "direct_play_url_zonder_token": {
+     "uitkomst": "geslaagd",
+     "status": 200,
+     "uitleg": "statische stream is in 12.x zonder token bereikbaar (UG-GEM-1)"
+    },
+    "transcode_url_van_de_server": {
+     "uitkomst": "geslaagd",
+     "status_master": 200,
+     "parameter": "ApiKey"
+    },
+    "logbestand_beheer": {
+     "uitkomst": "mislukt",
+     "informatief": true,
+     "alleen_api_key": 401,
+     "met_kop": 200,
+     "gevolg": "alleen de beheerweergave 'serverlog openen' in Swiftfin; kijken en afspelen gebruiken de kop"
+    }
+   },
+   "app_zelf": "NIET GEVALIDEERD (Mac/Xcode)",
+   "oordeel": {
+    "validatie": "Sim-geslaagd",
+    "mislukte_stappen": [],
+    "niet_aanwezig": []
+   },
+   "server_versie": "12.4.0"
+  },
+  "stock": {
+   "client": "Swiftfin 1.6.1 (jellyfin-sdk-swift 3.0.0, API 12.0.0) — alleen de serverkant nagebootst",
+   "stappen": {
+    "versiecontrole": {
+     "uitkomst": "geslaagd",
+     "server": "12.4.0",
+     "sdk_api": "12.0.0",
+     "betekenis": "geen melding 'Update to Jellyfin 12.0' meer (ADR-0009)"
+    },
+    "aanmelden_met_ongequote_kop": {
+     "uitkomst": "geslaagd",
+     "gebruiker": "jc3kijker"
+    },
+    "api_met_kop": {
+     "uitkomst": "geslaagd",
+     "users_me": 200,
+     "hervatlijst": [
+      "tears_of_steel"
+     ]
+    },
+    "sessie_herkend": {
+     "uitkomst": "geslaagd",
+     "client": "Swiftfin iOS",
+     "versie": "1.6.1"
+    },
+    "websocket": {
+     "uitkomst": "geslaagd",
+     "met_kop_en_api_key": 101,
+     "alleen_api_key": 403,
+     "uitleg": "Swiftfin stuurt de kop mee; api_key alleen telt in 12.x niet meer (legacy uit)"
+    },
+    "direct_play_url_zonder_token": {
+     "uitkomst": "geslaagd",
+     "status": 200,
+     "uitleg": "statische stream is in 12.x zonder token bereikbaar (UG-GEM-1)"
+    },
+    "transcode_url_van_de_server": {
+     "uitkomst": "geslaagd",
+     "status_master": 200,
+     "parameter": "ApiKey"
+    },
+    "logbestand_beheer": {
+     "uitkomst": "mislukt",
+     "informatief": true,
+     "alleen_api_key": 401,
+     "met_kop": 200,
+     "gevolg": "alleen de beheerweergave 'serverlog openen' in Swiftfin; kijken en afspelen gebruiken de kop"
+    }
+   },
+   "app_zelf": "NIET GEVALIDEERD (Mac/Xcode)",
+   "oordeel": {
+    "validatie": "Sim-geslaagd",
+    "mislukte_stappen": [],
+    "niet_aanwezig": []
+   },
+   "server_versie": "12.4.0"
+  }
+ },
+ "niet_hier": [
+  {
+   "client": "Swiftfin 1.6.1 (iOS/tvOS), Safari, Apple TV",
+   "rol": "stock-native / fork-app",
+   "status": "NIET GEVALIDEERD (Mac/Xcode)",
+   "reden": "geen Mac/Xcode; statische herbeoordeling in ADR-0009"
+  },
+  {
+   "client": "echte telefoons, tablets, tv's, Chromecast, DLNA",
+   "rol": "alle",
+   "status": "NIET GEVALIDEERD (hardware)",
+   "reden": "geen echte apparaten; D15 onbekend (JLT-69)"
+  }
+ ],
+ "vergelijking_met_stock": [
+  {
+   "stap": "aanmelden_met_ongequote_kop",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "api_met_kop",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "direct_play_url_zonder_token",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "logbestand_beheer",
+   "jelly_leon": "mislukt",
+   "stock": "mislukt",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "sessie_herkend",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "transcode_url_van_de_server",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "versiecontrole",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  },
+  {
+   "stap": "websocket",
+   "jelly_leon": "geslaagd",
+   "stock": "geslaagd",
+   "regressie": false,
+   "gelijk": true
+  }
+ ],
+ "regressies": [],
+ "validatie": "Sim-geslaagd",
+ "eind": "2026-11-10T07:20:07Z"
+}

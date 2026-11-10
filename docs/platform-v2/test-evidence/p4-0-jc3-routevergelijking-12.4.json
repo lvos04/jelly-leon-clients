@@ -1,0 +1,111 @@
+{
+ "id": "p4-0-jc3-routevergelijking-12.4",
+ "datum": "2026-11-10",
+ "doel": "JC3 / ADR-0009: gebruiken android 2.7.3, androidtv 0.19.10 (jellyfin-sdk-kotlin 1.7.1) en Swiftfin 1.6.1 (jellyfin-sdk-swift 3.0.0) REST-routes die in de Jelly Leon 12.4-server (fork) niet bestaan? Statisch; geen compatibiliteitsbewijs op zich (zie de emulator- en protocoltests).",
+ "validatie": "Statische analyse (alleen gelezen). Apps op apparaten: NIET GEVALIDEERD (hardware); Swiftfin: NIET GEVALIDEERD (Mac/Xcode).",
+ "bronnen": {
+  "server_10.11.11": {
+   "repo": "jelly-leon (upstream-geschiedenis)",
+   "commit": "1fbd8739292cce610231be93daf43368733edf63",
+   "map": "Jellyfin.Api/Controllers"
+  },
+  "server_jelly_leon_12.4": {
+   "repo": "jelly-leon",
+   "commit": "e294f84eaede2bcf16ea2e40f60fc81c7a701511",
+   "forkversie": "12.4.0-jl.0",
+   "map": "Jellyfin.Api/Controllers"
+  },
+  "jellyfin_sdk_kotlin": {
+   "tag": "v1.7.1",
+   "commit": "32d9840bf2d9f36c43e2d254efdbb696877e1867",
+   "map": "jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations"
+  },
+  "jellyfin_sdk_swift": {
+   "revisie": "37a2f5028bd24689b772effb559f72ec5388f021",
+   "api_versie": "12.0.0",
+   "map": "Sources/Paths",
+   "bron": "swiftfin/Swiftfin.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  },
+  "clients": {
+   "android": "android/app/src/main",
+   "androidtv": "androidtv/app/src/main, androidtv/playback, androidtv/preference",
+   "swiftfin": "swiftfin/Shared, swiftfin/Swiftfin, swiftfin/Swiftfin tvOS, swiftfin/PreferencesView"
+  }
+ },
+ "commandos": [
+  "git -C jelly-leon archive 1fbd8739 Jellyfin.Api/Controllers | tar -x -C srv-10.11.11; git -C jelly-leon archive e294f84e Jellyfin.Api/Controllers | tar -x -C srv-jl-12.4",
+  "git fetch --depth 1 --filter=blob:none https://github.com/jellyfin/jellyfin-sdk-kotlin.git refs/tags/v1.7.1 (sparse: operations)",
+  "git fetch --depth 1 --filter=blob:none https://github.com/jellyfin/jellyfin-sdk-swift.git 37a2f50 (sparse: Sources)",
+  "python3 tools/clients/server_api_compat.py --server-a srv-10.11.11/Jellyfin.Api/Controllers --server-b srv-jl-12.4/Jellyfin.Api/Controllers --sdk-ops <sdk-kotlin operations> --client android=android/app/src/main --client androidtv=androidtv/app/src/main,androidtv/playback,androidtv/preference --root .",
+  "python3 tools/clients/server_api_compat.py --sdk-taal swift --server-a srv-10.11.11/... --server-b srv-jl-12.4/... --sdk-ops <sdk-swift>/Sources/Paths --client 'swiftfin=swiftfin/Shared,swiftfin/Swiftfin,swiftfin/Swiftfin tvOS,swiftfin/PreferencesView' --root .",
+  "idem met --server-a en --server-b omgewisseld (Swift tegen 10.11.11, ter vergelijking)"
+ ],
+ "exitcodes": {
+  "kotlin_tegen_12.4": 0,
+  "swift_tegen_12.4": 0,
+  "swift_tegen_10.11.11": 0
+ },
+ "kotlin_tegen_jelly_leon_12.4": {
+  "sdk_taal": "kotlin",
+  "routes_server_a": 424,
+  "routes_server_b": 419,
+  "routes_weg_in_b": [
+   "GET /environment/networkshares",
+   "GET /items/{}/criticreviews",
+   "GET /livetv/recordings/groups/{}",
+   "GET /quickconnect/initiate",
+   "POST /system/mediaencoder/path",
+   "POST /users/{}/easypassword"
+  ],
+  "routes_nieuw_in_b": 1,
+  "sdk_endpoints": 408,
+  "sdk_endpoints_ontbrekend_in_b": [
+   "GET /environment/networkshares",
+   "GET /items/{}/criticreviews",
+   "GET /livetv/recordings/groups/{}",
+   "GET /system/wakeonlaninfo",
+   "GET /tmdb/clientconfiguration"
+  ],
+  "per_client": {
+   "android": [],
+   "androidtv": []
+  },
+  "gebruikte_sdk_functies_per_client": {
+   "android": 24,
+   "androidtv": 76
+  },
+  "grenzen": "Statisch en alleen op routeniveau: gewijzigde parameters, DTO-velden, enums, authenticatie en gedrag worden niet gezien, evenmin zelf samengestelde URL's of de web-client van de server. Een lege uitkomst bewijst geen compatibiliteit."
+ },
+ "swift_tegen_jelly_leon_12.4": {
+  "sdk_taal": "swift",
+  "routes_server_a": 424,
+  "routes_server_b": 419,
+  "routes_weg_in_b": [
+   "GET /environment/networkshares",
+   "GET /items/{}/criticreviews",
+   "GET /livetv/recordings/groups/{}",
+   "GET /quickconnect/initiate",
+   "POST /system/mediaencoder/path",
+   "POST /users/{}/easypassword"
+  ],
+  "routes_nieuw_in_b": 1,
+  "sdk_endpoints": 364,
+  "sdk_endpoints_ontbrekend_in_b": [],
+  "per_client": {
+   "swiftfin": []
+  },
+  "gebruikte_sdk_functies_per_client": {
+   "swiftfin": 85
+  },
+  "grenzen": "Statisch en alleen op routeniveau: gewijzigde parameters, DTO-velden, enums, authenticatie en gedrag worden niet gezien, evenmin zelf samengestelde URL's of de web-client van de server. Een lege uitkomst bewijst geen compatibiliteit."
+ },
+ "swift_tegen_10.11.11": {
+  "sdk_endpoints_ontbrekend_in_b": [
+   "GET /items/{}/collections"
+  ],
+  "per_client": {
+   "swiftfin": []
+  }
+ },
+ "uitkomst": "Kotlin: 5 van de 408 SDK-endpoints ontbreken in 12.4; geen ervan wordt door android (24 gebruikte SDK-functies) of androidtv (76) aangeroepen — gelijk aan de upstream-12.4-meting van P0. Swift: alle 364 SDK-endpoints bestaan in de 12.4-fork; Swiftfin gebruikt er 85, geen ontbreekt."
+}
