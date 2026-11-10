@@ -7,11 +7,16 @@
 - `apk`/`bouwmap`: met een nep-aapt2 die uitvoer in het echte aapt2-formaat (build-tools 36.0.0, gemeten op de lokaal
   gebouwde APK's) teruggeeft — Sim-getest. De echte aapt2-controle draait in de Android-workflows en lokaal
   (zie test-evidence/contract-1.2-app-identiteit.json).
+- Contract 1.3 §1.1 besluit 1 (C1.3-JLC-02): letterlijke waarden van de officiële app in manifesten, `res/xml` en
+  Kotlin/Java (`bron`), en `vergelijk` tegen de officiële upstream-APK's (nep-aapt2; de echte vergelijking draait in
+  de Android-workflows en lokaal, test-evidence/contract-1.3-app-identiteit.json).
 """
 
 from __future__ import annotations
 
 import difflib
+import hashlib
+import io
 import json
 import plistlib
 import re
@@ -34,11 +39,22 @@ ANDROID = "org.jellyfin.mobile.jellyleon"
 # ---------------------------------------------------------------------------------------------- bron (statisch)
 
 
+#: Kotlin-bronnen met de afgeleide waarden (authority, accounttype) die de tegenproeven hieronder letterlijk maken.
+KOTLIN = {
+    "provider": "androidtv/app/src/main/java/org/jellyfin/androidtv/integration/MediaContentProvider.kt",
+    "account": "androidtv/app/src/main/java/org/jellyfin/androidtv/auth/AccountManagerMigration.kt",
+    "constants": "android/app/src/main/java/org/jellyfin/mobile/utils/Constants.kt",
+}
+
+
 def bron_kopie(tmp_path: Path) -> Path:
     cfg = ai.load_config(ROOT)
-    rels = [ai.CONFIG_REL]
+    rels = [ai.CONFIG_REL, *KOTLIN.values()]
     for key in ai.ANDROID_CLIENTS:
         rels += [cfg[key]["gradle"], *cfg[key]["backup_xml"]]
+        for d in ai.bronsets(ROOT, key):
+            rels += [p.relative_to(ROOT).as_posix() for p in (d / "AndroidManifest.xml", *d.glob("res/xml*/*.xml"))
+                     if p.is_file()]
     rels += [cfg["swiftfin"]["xcconfig"], cfg["swiftfin"]["pbxproj"]]
     for rel in rels:
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -54,6 +70,11 @@ def vervang(path: Path, old: str, new: str, count: int = 1) -> None:
 
 def test_echte_repo_heeft_eigen_app_identiteit():
     assert ai.check_bron(ROOT) == []
+
+
+def test_bron_kopie_zelf_is_in_orde(tmp_path):
+    """De kopie voor de tegenproeven bevat alles wat `bron` leest (anders bewijzen de tegenproeven niets)."""
+    assert ai.check_bron(bron_kopie(tmp_path)) == []
 
 
 def test_configuratie_verschilt_van_de_officiele_ids():
@@ -141,6 +162,104 @@ def test_configuratie_met_officiele_id_faalt(tmp_path):
     cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
     violations = ai.check_bron(repo)
     assert any("officiële ID" in v or "gelijk aan de namespace" in v for v in violations), violations
+
+
+# ------------------------------------------------- letterlijke waarden van de officiële app (contract 1.3, C1.3-JLC-02)
+
+
+def test_bronsets_omvatten_alle_modules_zonder_tests_en_bouwlogica():
+    sets = {d.relative_to(ROOT).as_posix() for d in ai.bronsets(ROOT, "androidtv")}
+    assert {"androidtv/app/src/main", "androidtv/app/src/debug", "androidtv/playback/core/src/main"} <= sets
+    assert not any(s.endswith(("/test", "/androidTest")) or "buildSrc" in s or "/build/" in s for s in sets), sets
+    assert {d.name for d in ai.bronsets(ROOT, "android")} == {"main", "debug", "libre", "proprietary"}
+
+
+@pytest.mark.parametrize(("waarde", "suffixen", "verwacht"), [
+    ("org.jellyfin.androidtv", None, "org.jellyfin.androidtv"),
+    ("org.jellyfin.androidtv.content", None, "org.jellyfin.androidtv"),
+    ("org.jellyfin.androidtv.debug.content", None, "org.jellyfin.androidtv.debug"),
+    ("org.jellyfin.androidtv_preferences", None, "org.jellyfin.androidtv"),
+    ("content://org.jellyfin.androidtv.content/intent", None, "org.jellyfin.androidtv"),
+    (f"{ANDROIDTV}.content", None, None),
+    (f"{ANDROIDTV}.debug_preferences", None, None),
+    ("nl.voorbeeld.content", None, None),
+    ("org.jellyfin.androidtv.content", {"content"}, "org.jellyfin.androidtv"),
+    ("content://org.jellyfin.androidtv.content/intent", {"content"}, "org.jellyfin.androidtv"),
+    ("org.jellyfin.androidtv", {"content"}, "org.jellyfin.androidtv"),
+    ("org.jellyfin.androidtv.ui.AsyncImageView", {"content"}, None),  # klassenaam, geen identiteit
+    ("org.jellyfin.androidtv.contentx", {"content"}, None),
+])
+def test_officiele_waarde(waarde, suffixen, verwacht):
+    assert ai.officiele_waarde(waarde, ai.load_config(ROOT)["androidtv"], suffixen) == verwacht
+
+
+def test_interne_intentnamen_in_de_code_zijn_toegestaan():
+    """`org.jellyfin.mobile.intent.action.PLAY` e.d. zijn expliciete intents binnen de app (ADR-0004), geen ID."""
+    c = ai.load_config(ROOT)["android"]
+    assert ai.officiele_waarde("org.jellyfin.mobile.intent.action.PLAY", c, {"image-provider"}) is None
+    assert ai.officiele_waarde("org.jellyfin.mobile.image-provider", c, {"image-provider"}) == "org.jellyfin.mobile"
+
+
+def test_bron_letterlijke_authority_in_het_manifest_faalt(tmp_path):
+    repo = bron_kopie(tmp_path)
+    vervang(repo / "androidtv/app/src/main/AndroidManifest.xml", 'android:authorities="${applicationId}.content"',
+            'android:authorities="org.jellyfin.androidtv.content"')
+    violations = ai.check_bron(repo)
+    assert any("AndroidManifest.xml: provider authorities='org.jellyfin.androidtv.content'" in v
+               for v in violations), violations
+
+
+def test_bron_letterlijke_permissie_in_een_flavor_manifest_faalt(tmp_path):
+    repo = bron_kopie(tmp_path)
+    vervang(repo / "android/app/src/libre/AndroidManifest.xml", "</manifest>",
+            '    <permission android:name="org.jellyfin.mobile.debug.EIGEN" />\n</manifest>')
+    violations = ai.check_bron(repo)
+    assert any("android/app/src/libre/AndroidManifest.xml: permission name='org.jellyfin.mobile.debug.EIGEN'" in v
+               for v in violations), violations
+
+
+@pytest.mark.parametrize(("bestand", "oud", "nieuw", "melding"), [
+    ("authenticator.xml", 'android:accountType="@string/app_id"', 'android:accountType="org.jellyfin.androidtv"',
+     "account-authenticator accountType='org.jellyfin.androidtv'"),
+    ("searchable.xml", 'android:searchSuggestAuthority="@string/app_search_suggest_authority"',
+     'android:searchSuggestAuthority="org.jellyfin.androidtv.content"', "searchSuggestAuthority="),
+    ("searchable.xml", 'android:searchSuggestIntentData="@string/app_search_suggest_intent_data"',
+     'android:searchSuggestIntentData="content://org.jellyfin.androidtv.debug.content/intent"',
+     "searchSuggestIntentData="),
+])
+def test_bron_letterlijke_waarde_in_res_xml_faalt(tmp_path, bestand, oud, nieuw, melding):
+    repo = bron_kopie(tmp_path)
+    vervang(repo / "androidtv/app/src/main/res/xml" / bestand, oud, nieuw)
+    violations = ai.check_bron(repo)
+    assert any(bestand in v and melding in v for v in violations), violations
+
+
+@pytest.mark.parametrize(("sleutel", "oud", "nieuw", "letterlijk"), [
+    ("provider", 'AUTHORITY = "${BuildConfig.APPLICATION_ID}.content"', 'AUTHORITY = "org.jellyfin.androidtv.content"',
+     "org.jellyfin.androidtv.content"),
+    ("account", "ACCOUNT_TYPE = BuildConfig.APPLICATION_ID", 'ACCOUNT_TYPE = "org.jellyfin.androidtv"',
+     "org.jellyfin.androidtv"),
+])
+def test_bron_letterlijke_waarde_in_kotlin_faalt(tmp_path, sleutel, oud, nieuw, letterlijk):
+    repo = bron_kopie(tmp_path)
+    vervang(repo / KOTLIN[sleutel], oud, nieuw)
+    violations = ai.check_bron(repo)
+    assert any(KOTLIN[sleutel] in v and f'"{letterlijk}"' in v for v in violations), violations
+
+
+def test_bron_testcode_en_interne_namen_tellen_niet(tmp_path):
+    repo = bron_kopie(tmp_path)
+    test_kt = repo / "androidtv/app/src/test/kotlin/X.kt"
+    test_kt.parent.mkdir(parents=True)
+    test_kt.write_text('val a = "org.jellyfin.androidtv.content"\n', encoding="utf-8")
+    assert "org.jellyfin.mobile.intent.action.PLAY" in (repo / KOTLIN["constants"]).read_text(encoding="utf-8")
+    assert ai.check_bron(repo) == []
+
+
+def test_bron_zonder_hoofdmanifest_is_geen_bewijs(tmp_path):
+    repo = bron_kopie(tmp_path)
+    (repo / "android/app/src/main/AndroidManifest.xml").unlink()
+    assert any("geen android/app/src/main/AndroidManifest.xml" in v for v in ai.check_bron(repo))
 
 
 # Minimale patch: per bestand precies zoveel regels als nu (toegevoegd, verwijderd) t.o.v. de upstream-basis (de jongste
@@ -529,6 +648,171 @@ def test_parsers_op_echte_aapt2_uitvoer():
     assert ai.resolve(res, tree[0].attrs["accountType"]) == "org.jellyfin.androidtv.jellyleon.debug"
     assert ai.parse_attr_value('"a.b" (Raw: "a.b")') == "a.b" and ai.parse_attr_value("false") == "false"
     assert ai.parse_attr_value(r'"Jelly \"Leon\" é\\x" (Raw: "…")') == 'Jelly "Leon" é\\x'
+
+
+# -------------------------------------------------- vergelijking met de officiële APK's (contract 1.3, C1.3-JLC-02)
+
+
+def officiele_set(nep, client: str) -> list:
+    cfg = ai.load_config(ROOT)
+    maak = androidtv_archief if client == "androidtv" else android_archief
+    out = []
+    for o in cfg[client]["officieel"]:
+        variant = "debug" if o.endswith(".debug") else "release"
+        path = nep(f"officieel/{o}-{variant}.apk", maak(o))
+        out.append(ai.check_apk(cfg, client, path, nep.aapt2, variant))
+    return out
+
+
+def eigen_set(nep, client: str, **kw) -> list:
+    cfg = ai.load_config(ROOT)
+    maak = androidtv_archief if client == "androidtv" else android_archief
+    eigen = cfg[client]["application_id"]
+    return [ai.check_apk(cfg, client, nep(f"eigen/{pkg}-{variant}.apk", maak(pkg, **kw)), nep.aapt2, variant)
+            for pkg, variant in ((f"{eigen}.debug", "debug"), (eigen, "release"))]
+
+
+@pytest.mark.parametrize("client", ai.ANDROID_CLIENTS)
+def test_vergelijk_eigen_builds_hebben_geen_officiele_waarde(nep_aapt2, client):
+    v = ai.vergelijk_met_officieel(ai.load_config(ROOT), client, eigen_set(nep_aapt2, client),
+                                   officiele_set(nep_aapt2, client))
+    assert v.violations == []
+    # systemprefs is in beide apps gelijk, maar per app afgeschermd en niet van de pakketnaam afgeleid
+    assert any("sharedpref 'systemprefs'" in g and "afgeschermd" in g for g in v.gelijk_toegestaan), v.gelijk_toegestaan
+    soorten = ai.identiteitswaarden(v.eigen[0])
+    assert soorten["authority"] and soorten["permissie"] and soorten["sharedpref"]
+    if client == "androidtv":
+        assert soorten["accounttype"] == {f"{ANDROIDTV}.debug"}
+        assert soorten["app_search_suggest"] == {f"{ANDROIDTV}.debug.content",
+                                                 f"content://{ANDROIDTV}.debug.content/intent"}
+
+
+@pytest.mark.parametrize(("kw", "melding"), [
+    ({"authorities": ["org.jellyfin.androidtv.content"]}, "authority 'org.jellyfin.androidtv.content' is gelijk aan"),
+    ({"permissions": ["org.jellyfin.androidtv.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"]}, "permissie"),
+    ({"app_id": "org.jellyfin.androidtv"}, "accounttype 'org.jellyfin.androidtv' is gelijk aan"),
+    ({"authority": "org.jellyfin.androidtv.debug.content"},
+     "app_search_suggest 'org.jellyfin.androidtv.debug.content'"),
+    ({"prefs": ["org.jellyfin.androidtv_preferences"]}, "sharedpref 'org.jellyfin.androidtv_preferences' is gelijk"),
+])
+def test_vergelijk_vindt_elke_soort_gelijke_waarde(nep_aapt2, kw, melding):
+    v = ai.vergelijk_met_officieel(ai.load_config(ROOT), "androidtv", eigen_set(nep_aapt2, "androidtv", **kw),
+                                   officiele_set(nep_aapt2, "androidtv"))
+    assert any(melding in x for x in v.violations), v.violations
+
+
+def test_vergelijk_met_onbruikbare_officiele_meting_is_gebruiksfout(nep_aapt2):
+    cfg = ai.load_config(ROOT)
+    eigen = eigen_set(nep_aapt2, "android")
+    officieel = officiele_set(nep_aapt2, "android")
+    with pytest.raises(ToolError, match="dekt niet alle officiële ID's"):
+        ai.vergelijk_met_officieel(cfg, "android", eigen, officieel[:1])
+    with pytest.raises(ToolError, match="geen officiële ID"):
+        ai.vergelijk_met_officieel(cfg, "android", eigen, [*officieel, eigen[1]])
+    zonder = ai.check_apk(cfg, "android", nep_aapt2("off/x-release.apk", android_archief("org.jellyfin.mobile",
+                                                                                         authorities=[])),
+                          nep_aapt2.aapt2, "release")
+    with pytest.raises(ToolError, match="geen authorities"):
+        ai.vergelijk_met_officieel(cfg, "android", eigen, [zonder, officieel[1]])
+    with pytest.raises(ToolError, match="bewijst niets"):
+        ai.vergelijk_met_officieel(cfg, "android", [], officieel)
+
+
+def test_officiele_apks_in_de_configuratie_volgen_de_basislijn():
+    """Zelfde upstream-versie als de subtree, elke officiële ID gedekt, sha256 van de GitHub-release."""
+    cfg = ai.load_config(ROOT)
+    basis = json.loads((ROOT / "tools/clients/baseline.json").read_text(encoding="utf-8"))["clients"]
+    for client in ai.ANDROID_CLIENTS:
+        lijst = ai.officiele_apks(cfg, client)
+        tag = basis[client]["upstream_tag"]
+        repo_naam = basis[client]["upstream_repo"].removeprefix("https://github.com/").removesuffix(".git")
+        assert len({a["naam"] for a in lijst}) == len(lijst)
+        assert {a["variant"] for a in lijst} == set(ai.VARIANTEN)
+        for a in lijst:
+            assert f"-{tag}-" in a["naam"], f"{client}: {a['naam']} hoort bij {tag} (upstream-sync: officiele_apks mee)"
+            assert a["url"] == f"https://github.com/{repo_naam}/releases/download/{tag}/{a['naam']}", a["url"]
+
+
+@pytest.mark.parametrize("fout", [
+    {"variant": "beta"}, {"sha256": "abc"}, {"url": "https://voorbeeld.invalid/x.apk"}, {"naam": "../x.apk"},
+    {"naam": "x.aab"},
+])
+def test_ongeldige_officiele_apk_regel_is_gebruiksfout(fout):
+    cfg = ai.load_config(ROOT)
+    cfg["android"]["officiele_apks"] = [{**cfg["android"]["officiele_apks"][0], **fout}]
+    with pytest.raises(ToolError, match="ongeldige officiele_apks-regel"):
+        ai.officiele_apks(cfg, "android")
+    cfg["android"]["officiele_apks"] = []
+    with pytest.raises(ToolError, match="geen officiele_apks"):
+        ai.officiele_apks(cfg, "android")
+
+
+class NepAntwoord(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_haal_officiele_apk_controleert_sha256_en_hernoemt_atomair(tmp_path, monkeypatch):
+    inhoud = b"PK\x03\x04 officieel"
+    a = {"naam": "jellyfin-android-v2.7.3-libre-release.apk", "variant": "release",
+         "url": "https://github.com/jellyfin/jellyfin-android/releases/download/v2.7.3/x.apk",
+         "sha256": hashlib.sha256(inhoud).hexdigest()}
+    gevraagd = []
+    monkeypatch.setattr(ai.urllib.request, "urlopen", lambda url, timeout: gevraagd.append(url) or NepAntwoord(inhoud))
+    doel = ai.haal_officiele_apk(a, tmp_path / "off")
+    assert doel.read_bytes() == inhoud and gevraagd == [a["url"]]
+    assert ai.haal_officiele_apk(a, tmp_path / "off") == doel and len(gevraagd) == 1  # hergebruikt, geen download
+    monkeypatch.setattr(ai.urllib.request, "urlopen", lambda url, timeout: NepAntwoord(b"vervalst"))
+    doel.write_bytes(b"beschadigd")
+    with pytest.raises(ToolError, match="sha256"):
+        ai.haal_officiele_apk(a, tmp_path / "off")
+    assert sorted(p.name for p in (tmp_path / "off").iterdir()) == [a["naam"]]  # geen .deel achtergelaten
+    with pytest.raises(ToolError, match="download uitgezet"):
+        ai.haal_officiele_apk(a, tmp_path / "off", download=False)
+
+    def kapot(url, timeout):
+        raise OSError("netwerk weg")
+    monkeypatch.setattr(ai.urllib.request, "urlopen", kapot)
+    with pytest.raises(ToolError, match="download van .* mislukt"):
+        ai.haal_officiele_apk(a, tmp_path / "leeg")
+
+
+def test_cli_vergelijk(nep_aapt2, tmp_path, capsys):
+    """Eind-tot-eind met een eigen configuratie (sha256 van de nep-APK's) en een bouwmap; geen netwerk."""
+    cfg = ai.load_config(ROOT)
+    repo = tmp_path / "repo"
+    (repo / ai.CONFIG_REL).parent.mkdir(parents=True)
+    off = tmp_path / "officieel"
+    lijst = []
+    for o in cfg["androidtv"]["officieel"]:
+        variant = "debug" if o.endswith(".debug") else "release"
+        naam = f"jellyfin-androidtv-v0.19.10-{variant}.apk"
+        path = nep_aapt2(f"officieel/{naam}", androidtv_archief(o))
+        lijst.append({"naam": naam, "variant": variant, "sha256": ai.sha256_bestand(path),
+                      "url": f"https://github.com/jellyfin/jellyfin-androidtv/releases/download/v0.19.10/{naam}"})
+    cfg["androidtv"]["officiele_apks"] = lijst
+    (repo / ai.CONFIG_REL).write_text(json.dumps(cfg), encoding="utf-8")
+    nep_aapt2("tvbuild/outputs/apk/debug/jellyfin-androidtv-debug.apk", androidtv_archief(f"{ANDROIDTV}.debug"))
+    nep_aapt2("tvbuild/outputs/apk/release/jellyfin-androidtv-release.apk", androidtv_archief(ANDROIDTV))
+    args = ["--repo-root", str(repo), "vergelijk", "androidtv", str(tmp_path / "tvbuild"), "--officieel-map", str(off),
+            "--geen-download", "--aapt2", nep_aapt2.aapt2]
+    assert ai.main(args) == 0, capsys.readouterr()
+    out = capsys.readouterr().out
+    assert "2 eigen artefact(en) tegen 2 officiële APK('s): 0 gelijke identiteitswaarde(n)." in out
+    assert "gelijk, toegestaan" in out and "systemprefs" in out
+    assert ai.main(["--json", *args]) == 0
+    assert json.loads(capsys.readouterr().out)["in_orde"] is True
+    nep_aapt2("tvbuild/outputs/apk/release/jellyfin-androidtv-release.apk",
+              androidtv_archief(ANDROIDTV, app_id="org.jellyfin.androidtv"))
+    assert ai.main(args) == 1
+    assert "OVERTREDING: release org.jellyfin.androidtv.jellyleon: accounttype 'org.jellyfin.androidtv'" in \
+        capsys.readouterr().out
+    (off / lijst[0]["naam"]).unlink()
+    assert ai.main(args) == 3
+    assert "download uitgezet" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------------- Swiftfin (xcodebuild-instellingen)

@@ -1,32 +1,96 @@
 {
   "schema_versie": 1,
-  "toelichting": "Eigen app-identiteit van de forks naast de officiële Jellyfin-apps (besluit gebruiker 2026-11-09, ADR-0004; patches JLC-0002/0003/0004). Gecontroleerd door tools/clients/app_identiteit.py: 'bron' (zonder SDK, in Clients / Forkregels) en 'bouwmap'/'apk' met aapt2 (in Clients / Android en Clients / Android TV). Een applicationId/bundle-id is na verspreiding praktisch permanent: alleen wijzigen vóór de eerste verspreiding en met een besluit van de gebruiker.",
+  "toelichting": "Eigen app-identiteit van de forks naast de officiële Jellyfin-apps (besluit gebruiker 2026-11-09; de ID's bevestigd door de gebruiker op 2026-11-10, ai-server-manager:docs/platform-v2/OVERDRACHT/STATUS.md; ADR-0004, ADR-0012; patches JLC-0002/0003/0004). Gecontroleerd door tools/clients/app_identiteit.py: 'bron' (zonder SDK, in Clients / Forkregels), 'bouwmap'/'apk' met aapt2 en 'vergelijk' tegen de officiële upstream-APK's van dezelfde versie (officiele_apks: GitHub-release, sha256 uit de release-digest, bij download gecontroleerd; in Clients / Android en Clients / Android TV). Een applicationId/bundle-id is na verspreiding praktisch permanent: alleen wijzigen vóór de eerste verspreiding en met een besluit van de gebruiker. Bij een upstream-sync naar een nieuwe versie horen de officiele_apks mee te gaan (test_app_identiteit.py bewaakt dat).",
+  "bevestiging": {
+    "datum": "2026-11-10",
+    "bron": "ai-server-manager:docs/platform-v2/OVERDRACHT/STATUS.md, 'Besluiten van de gebruiker na contract 1.3' (commit c63b32e)",
+    "bevestigd": [
+      "org.jellyfin.mobile.jellyleon",
+      "org.jellyfin.androidtv.jellyleon",
+      "org.jellyfin.swiftfin.jellyleon"
+    ],
+    "opmerking": "Swiftfin (iOS/tvOS): NIET GEVALIDEERD (Mac/Xcode); ondertekenen en Apple-registratie vragen een Apple-account (NIET GEVALIDEERD (account), mogelijk betaald: alleen met akkoord van de gebruiker). Verspreiden wacht op het besluit over ondertekening en kanaal (ADR-0008)."
+  },
   "android": {
     "patch": "JLC-0002",
     "namespace": "org.jellyfin.mobile",
     "application_id": "org.jellyfin.mobile.jellyleon",
     "debug_suffix": ".debug",
-    "officieel": ["org.jellyfin.mobile", "org.jellyfin.mobile.debug"],
+    "officieel": [
+      "org.jellyfin.mobile",
+      "org.jellyfin.mobile.debug"
+    ],
     "gradle": "android/app/build.gradle.kts",
-    "backup_xml": ["android/app/src/main/res/xml/backup_content.xml"]
+    "backup_xml": [
+      "android/app/src/main/res/xml/backup_content.xml"
+    ],
+    "officiele_apks": [
+      {
+        "naam": "jellyfin-android-v2.7.3-libre-release.apk",
+        "variant": "release",
+        "url": "https://github.com/jellyfin/jellyfin-android/releases/download/v2.7.3/jellyfin-android-v2.7.3-libre-release.apk",
+        "sha256": "f9f4b3ab46cc9434df811194c2d4351417f4db83a4c1a0facd0a662d69533f7f"
+      },
+      {
+        "naam": "jellyfin-android-v2.7.3-libre-debug.apk",
+        "variant": "debug",
+        "url": "https://github.com/jellyfin/jellyfin-android/releases/download/v2.7.3/jellyfin-android-v2.7.3-libre-debug.apk",
+        "sha256": "aa46102d17fdc0786ac685023762a03a8acb8425b826b07bed3b0ac4b7a1ed9d"
+      },
+      {
+        "naam": "jellyfin-android-v2.7.3-proprietary-release.apk",
+        "variant": "release",
+        "url": "https://github.com/jellyfin/jellyfin-android/releases/download/v2.7.3/jellyfin-android-v2.7.3-proprietary-release.apk",
+        "sha256": "a55062734662fa990989b2783d7865954b42f3a555924ad9061b51df879f892b"
+      },
+      {
+        "naam": "jellyfin-android-v2.7.3-proprietary-debug.apk",
+        "variant": "debug",
+        "url": "https://github.com/jellyfin/jellyfin-android/releases/download/v2.7.3/jellyfin-android-v2.7.3-proprietary-debug.apk",
+        "sha256": "70ddb832c4a1152bcc676655b45ad0476a8dc930f6e596cb4b1077e4a691c964"
+      }
+    ]
   },
   "androidtv": {
     "patch": "JLC-0003",
     "namespace": "org.jellyfin.androidtv",
     "application_id": "org.jellyfin.androidtv.jellyleon",
     "debug_suffix": ".debug",
-    "officieel": ["org.jellyfin.androidtv", "org.jellyfin.androidtv.debug"],
+    "officieel": [
+      "org.jellyfin.androidtv",
+      "org.jellyfin.androidtv.debug"
+    ],
     "gradle": "androidtv/app/build.gradle.kts",
     "backup_xml": [
       "androidtv/app/src/main/res/xml/backup_content.xml",
       "androidtv/app/src/main/res/xml/backup_rules.xml"
     ],
-    "res_waarden": ["app_id", "app_search_suggest_authority", "app_search_suggest_intent_data"]
+    "res_waarden": [
+      "app_id",
+      "app_search_suggest_authority",
+      "app_search_suggest_intent_data"
+    ],
+    "officiele_apks": [
+      {
+        "naam": "jellyfin-androidtv-v0.19.10-release.apk",
+        "variant": "release",
+        "url": "https://github.com/jellyfin/jellyfin-androidtv/releases/download/v0.19.10/jellyfin-androidtv-v0.19.10-release.apk",
+        "sha256": "8510a517c99927076082917f41bf306dd7a2546c59d492dd11bde18d6e2e4628"
+      },
+      {
+        "naam": "jellyfin-androidtv-v0.19.10-debug.apk",
+        "variant": "debug",
+        "url": "https://github.com/jellyfin/jellyfin-androidtv/releases/download/v0.19.10/jellyfin-androidtv-v0.19.10-debug.apk",
+        "sha256": "7831bf5400269bec49a00ebce4ba9f7499d4e470f7b1d88e778304068595456e"
+      }
+    ]
   },
   "swiftfin": {
     "patch": "JLC-0004",
     "bundle_id": "org.jellyfin.swiftfin.jellyleon",
-    "officieel": ["org.jellyfin.swiftfin"],
+    "officieel": [
+      "org.jellyfin.swiftfin"
+    ],
     "xcconfig": "swiftfin/XcodeConfig/Shared.xcconfig",
     "pbxproj": "swiftfin/Swiftfin.xcodeproj/project.pbxproj"
   }

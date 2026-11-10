@@ -192,10 +192,16 @@ def test_android_ci_controleert_de_eigen_app_identiteit_met_aapt2(name):
     runs = [str(s.get("run") or "") for _j, _job, s in steps(data)]
     aanroep, taken = APP_ID_CHECKS[name]
     gradle = [i for i, r in enumerate(runs) if "./gradlew" in r]
-    check = [i for i, r in enumerate(runs) if "app_identiteit.py" in r]
+    check = [i for i, r in enumerate(runs) if "app_identiteit.py bouwmap" in r]
     assert len(gradle) == 1 and len(check) == 1 and check[0] > gradle[0], name
     assert all(t in runs[gradle[0]] for t in taken), f"{name}: release-resources worden niet gelinkt"
     assert aanroep in runs[check[0]], name
+    # contract 1.3 §1.1 besluit 1 (C1.3-JLC-02): ook tegen de gemeten waarden van de officiële app, debug én release
+    client = aanroep.split()[1]
+    vergelijk = [i for i, r in enumerate(runs) if "app_identiteit.py vergelijk" in r]
+    assert len(vergelijk) == 1 and vergelijk[0] > gradle[0], name
+    assert f"vergelijk {client} app/build" in runs[vergelijk[0]] and "--officieel-map" in runs[vergelijk[0]], name
+    assert "--verwacht debug,release" in runs[vergelijk[0]] and "--geen-download" not in runs[vergelijk[0]], name
     for trigger in ("push", "pull_request"):
         assert "tools/clients/app_identiteit.*" in triggers(data)[trigger]["paths"], (name, trigger)
 

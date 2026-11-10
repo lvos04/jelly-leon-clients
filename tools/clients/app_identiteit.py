@@ -11,6 +11,11 @@ Subcommando's:
   apk <client> <bestand>…   met `aapt2` op gebouwde APK's of op de gelinkte resources (`*.ap_`) van een variant
   bouwmap <client> <map>    zoekt in een Gradle-bouwmap (`<client>/app/build`) alle APK's en de `*.ap_` van de
                             release-variant(en) en controleert ze; `--verwacht debug,release` eist beide
+  vergelijk <client> <map>  contract 1.3 §1.1 besluit 1 (C1.3-JLC-02): meet dezelfde waarden in de officiële
+                            upstream-APK's (alle varianten van dezelfde versie, sha256-gepind in
+                            `app_identiteit.json`, zo nodig gedownload) en eist dat geen pakketnaam, authority,
+                            permissie, accounttype, `app_search_suggest_*`-waarde of sharedpref-naam van de eigen
+                            builds gelijk is aan een waarde van de officiële app
   xcode --instellingen <json>…  Swiftfin: uitvoer van `xcodebuild -showBuildSettings -json` (per schema en
                             configuratie, alleen op macOS te maken): elk app-doel heeft de eigen bundle-id; met
                             `--plist` ook `CFBundleIdentifier` in de Info.plist van de gebouwde app
@@ -25,12 +30,21 @@ Controles per APK/.ap_ (aapt2 `dump packagename`, `dump xmltree`, `dump resource
     `xml/authenticator` en de zoek-authority/-data in `xml/searchable` verwijzen (opgelost) naar precies die waarden,
     en de zoek-authority bestaat als provider in het manifest.
 
+`bron` zoekt daarnaast in de manifesten, `res/xml` en de Kotlin/Java-bron van android en androidtv naar letterlijk
+geschreven waarden van de officiële app (authority, permissie, accounttype, zoek-authority, `targetPackage`,
+sharedpref-naam): die moeten van de applicationId afgeleid zijn (`${applicationId}`, `BuildConfig.APPLICATION_ID`,
+`@string/app_id`), anders botst of verwijst de build naar de officiële app.
+
+Sharedpref-namen die niet van een pakketnaam zijn afgeleid (`systemprefs`, `AuthenticationPreferences`) zijn per app
+afgeschermd en mogen gelijk zijn aan die van de officiële app; `vergelijk` meldt ze apart (ADR-0012).
+
 Exitcodes: 0 = in orde, 1 = overtreding, 3 = gebruiks- of omgevingsfout (bv. geen aapt2, niets gevonden).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import plistlib
@@ -38,6 +52,7 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -153,6 +168,117 @@ def check_gradle(key: str, text: str, c: dict, out: list[str]) -> None:
                            "applicationId")
 
 
+MANIFEST_ATTRS = {"provider": ("authorities",), "permission": ("name",), "permission-tree": ("name",),
+                  "permission-group": ("name",)}
+RES_XML_ATTRS = ("accountType", "searchSuggestAuthority", "searchSuggestIntentData", "targetPackage", "authorities")
+STRING_LITERAL_RE = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
+APPID_PLACEHOLDER_RE = re.compile(r"^\$\{applicationId\}\.(?P<suffix>[\w.-]+)$")
+
+
+def officiele_waarde(value: str, c: dict, suffixen: set[str] | None = None) -> str | None:
+    """De officiële ID waar ``value`` letterlijk bij hoort, of ``None``.
+
+    Hoort bij een officiële ID: gelijk eraan, of die ID gevolgd door ``.``/``_`` (authority, permissie,
+    sharedpref ``<id>_preferences``). Waarden van de eigen ID (``org.jellyfin.mobile.jellyleon…``) tellen niet mee.
+    Met ``suffixen`` (Kotlin/Java) telt alleen ``<id>``, ``<id>_preferences`` en ``<id>.<suffix>`` met een suffix
+    uit het eigen manifest (bv. ``content``), zodat interne intent-namen (``org.jellyfin.mobile.intent.…``) vrij zijn.
+    """
+    value = value.removeprefix("content://")
+    if value == c["application_id"] or value.startswith((c["application_id"] + ".", c["application_id"] + "_")):
+        return None
+    for o in sorted(c["officieel"], key=len, reverse=True):  # langste eerst: org.jellyfin.mobile.debug vóór …mobile
+        if value in {o, f"{o}_preferences"}:
+            return o
+        if suffixen is None and value.startswith((o + ".", o + "_")):
+            return o
+        if suffixen is not None and value.startswith(o + "."):
+            rest = value[len(o) + 1:]
+            if any(rest == s or rest.startswith(s + "/") for s in suffixen):
+                return o
+    return None
+
+
+def _xml_attrs(root: ET.Element, names: tuple[str, ...]) -> list[tuple[str, str, str]]:
+    found = []
+    for el in root.iter():
+        for name in names:
+            value = el.get(f"{{{ANDROID_NS}}}{name}")
+            if value is not None:
+                found.append((el.tag, name, value))
+    return found
+
+
+TEST_SETS = {"test", "androidTest", "testFixtures"}
+OVERSLAAN = {"build", ".gradle", ".kotlin", "buildSrc"}
+
+
+def bronsets(repo: Path, key: str) -> list[Path]:
+    """Alle bronsets (``<module>/src/<set>``) van een client, alle Gradle-modules, zonder tests, bouwmappen en
+    ``buildSrc`` (bouwlogica, komt niet in de app)."""
+    base = repo / key
+    found = []
+    for src in sorted(base.rglob("src")):
+        rel = src.relative_to(base).parts
+        if not src.is_dir() or OVERSLAAN & set(rel):
+            continue
+        found += [d for d in sorted(src.iterdir()) if d.is_dir() and d.name not in TEST_SETS]
+    return found
+
+
+def check_letterlijk(repo: Path, key: str, c: dict, out: list[str]) -> None:
+    """Letterlijk geschreven waarden van de officiële app in manifesten, res/xml en Kotlin/Java van alle modules
+    (contract 1.3 §1.1 besluit 1). Testbronnen tellen niet mee."""
+    sets = bronsets(repo, key)
+    if not (repo / key / "app" / "src" / "main").is_dir():
+        out.append(f"{key}/app/src/main ontbreekt (letterlijke waarden niet gecontroleerd)")
+        return
+    suffixen: set[str] = set()
+    manifesten = [d / "AndroidManifest.xml" for d in sets if (d / "AndroidManifest.xml").is_file()]
+    if repo / key / "app" / "src" / "main" / "AndroidManifest.xml" not in manifesten:
+        out.append(f"{key}: geen {key}/app/src/main/AndroidManifest.xml (letterlijke waarden niet gecontroleerd)")
+    for manifest in manifesten:
+        rel = manifest.relative_to(repo).as_posix()
+        try:
+            root = ET.parse(manifest).getroot()
+        except ET.ParseError as exc:
+            out.append(f"{rel}: geen geldige XML ({exc})")
+            continue
+        for el in root.iter():
+            for attr in MANIFEST_ATTRS.get(el.tag, ()):
+                for value in filter(None, (el.get(f"{{{ANDROID_NS}}}{attr}") or "").split(";")):
+                    m = APPID_PLACEHOLDER_RE.match(value)
+                    if m:
+                        suffixen.add(m.group("suffix"))
+                    elif officiele_waarde(value, c):
+                        out.append(f"{rel}: {el.tag} {attr}='{value}' is een waarde van de officiële app "
+                                   "(gebruik ${applicationId})")
+    for d in sets:
+        for xml_file in sorted((d / "res").glob("xml*/*.xml")):
+            rel = xml_file.relative_to(repo).as_posix()
+            try:
+                root = ET.parse(xml_file).getroot()
+            except ET.ParseError as exc:
+                out.append(f"{rel}: geen geldige XML ({exc})")
+                continue
+            for tag, attr, value in _xml_attrs(root, RES_XML_ATTRS):
+                if not value.startswith("@") and officiele_waarde(value, c):
+                    out.append(f"{rel}: {tag} {attr}='{value}' is een waarde van de officiële app (gebruik "
+                               "@string/app_id of een resValue uit de applicationId)")
+    for d in sets:
+        for code in sorted([*d.rglob("*.kt"), *d.rglob("*.java")]):
+            rel = code.relative_to(repo).as_posix()
+            try:
+                text = code.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                out.append(f"{rel}: onleesbaar ({exc})")
+                continue
+            for nr, line in enumerate(text.splitlines(), 1):
+                for literal in STRING_LITERAL_RE.findall(line):
+                    if officiele_waarde(literal, c, suffixen):
+                        out.append(f"{rel}:{nr}: tekst \"{literal}\" is een waarde van de officiële app (gebruik "
+                                   "BuildConfig.APPLICATION_ID of context.packageName)")
+
+
 def check_bron(repo: Path, cfg: dict | None = None) -> list[str]:
     cfg = cfg or load_config(repo)
     out = config_violations(cfg)
@@ -165,6 +291,7 @@ def check_bron(repo: Path, cfg: dict | None = None) -> list[str]:
             xml_text = _read(repo, rel, out)
             if xml_text is not None:
                 check_backup_xml(rel, xml_text, c, out)
+        check_letterlijk(repo, key, c, out)
     s = cfg["swiftfin"]
     for rel, regex in ((s["xcconfig"], XCCONFIG_BUNDLE_RE), (s["pbxproj"], PBX_BUNDLE_RE)):
         text = _read(repo, rel, out)
@@ -300,6 +427,7 @@ class ApkResult:
     authorities: list[str] = field(default_factory=list)
     permissies: list[str] = field(default_factory=list)
     res_waarden: dict[str, str] = field(default_factory=dict)
+    sharedprefs: list[str] = field(default_factory=list)
     violations: list[str] = field(default_factory=list)
 
 
@@ -355,6 +483,9 @@ def check_apk(cfg: dict, client: str, path: Path, aapt2: str, variant: str | Non
     base = pkg[: -len(c["debug_suffix"])] if variant == "debug" and pkg.endswith(c["debug_suffix"]) else pkg
     for name in backup_files:
         tree = parse_xmltree(run_aapt2(aapt2, "dump", "xmltree", "--file", res.files[name], str(path)))
+        alle = [e.attrs.get("path", "") for e in tree
+                if e.tag in {"include", "exclude"} and e.attrs.get("domain") == "sharedpref"]
+        result.sharedprefs = list(dict.fromkeys([*result.sharedprefs, *filter(None, alle)]))
         # dict.fromkeys: backup_rules noemt elke naam per sectie (cloud-backup, device-transfer); één melding per naam
         paths = list(dict.fromkeys(e.attrs.get("path", "") for e in tree
                                    if e.tag == "include" and e.attrs.get("domain") == "sharedpref"
@@ -417,6 +548,117 @@ def find_artifacts(build_dir: Path) -> list[tuple[Path, str]]:
                     per_variant.setdefault(variant_dir, ap)
         found += [(ap, "release") for _v, ap in sorted(per_variant.items())]
     return found
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# vergelijking met de officiële app (contract 1.3 §1.1 besluit 1, C1.3-JLC-02)
+
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def identiteitswaarden(r: ApkResult) -> dict[str, set[str]]:
+    """De waarden waarmee twee apps op één apparaat kunnen botsen of naar elkaar kunnen verwijzen."""
+    waarden = {
+        "pakketnaam": {r.pakket},
+        "authority": set(r.authorities),
+        "permissie": set(r.permissies),
+        "accounttype": {v for k, v in r.res_waarden.items() if k in {"app_id", "xml/authenticator:accountType"}},
+        "app_search_suggest": {v for k, v in r.res_waarden.items()
+                               if k.startswith("app_search_suggest_") or k.startswith("xml/searchable:")},
+        "sharedpref": set(r.sharedprefs),
+    }
+    return {k: {x for x in v if x} for k, v in waarden.items()}
+
+
+def sha256_bestand(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for blok in iter(lambda: fh.read(1 << 20), b""):
+            h.update(blok)
+    return h.hexdigest()
+
+
+def officiele_apks(cfg: dict, client: str) -> list[dict]:
+    lijst = cfg[client].get("officiele_apks") or []
+    if not lijst:
+        raise ToolError(f"{CONFIG_REL}: {client} heeft geen officiele_apks (niets om mee te vergelijken)")
+    for a in lijst:
+        if a.get("variant") not in VARIANTEN or not SHA256_RE.match(str(a.get("sha256", ""))) \
+                or not str(a.get("url", "")).startswith("https://github.com/jellyfin/") \
+                or Path(str(a.get("naam", ""))).name != a.get("naam") or not str(a["naam"]).endswith(".apk"):
+            raise ToolError(f"{CONFIG_REL}: {client}: ongeldige officiele_apks-regel {a!r}")
+    return lijst
+
+
+def haal_officiele_apk(a: dict, map_: Path, download: bool = True) -> Path:
+    """Officiële upstream-APK uit ``map_`` of via download; altijd sha256-gecontroleerd, atomair hernoemd."""
+    map_.mkdir(parents=True, exist_ok=True)
+    doel = map_ / a["naam"]
+    if doel.is_file() and sha256_bestand(doel) == a["sha256"]:
+        return doel
+    if not download:
+        raise ToolError(f"{doel} ontbreekt of heeft een andere sha256 (download uitgezet)")
+    tijdelijk = doel.with_name(doel.name + ".deel")
+    try:
+        with urllib.request.urlopen(a["url"], timeout=300) as r, tijdelijk.open("wb") as fh:  # noqa: S310 - vaste URL
+            shutil.copyfileobj(r, fh)
+    except OSError as exc:
+        tijdelijk.unlink(missing_ok=True)
+        raise ToolError(f"download van {a['url']} mislukt: {exc}") from exc
+    gemeten = sha256_bestand(tijdelijk)
+    if gemeten != a["sha256"]:
+        tijdelijk.unlink(missing_ok=True)
+        raise ToolError(f"{a['naam']}: sha256 {gemeten} ≠ vastgelegde {a['sha256']}; niet gebruikt")
+    tijdelijk.replace(doel)
+    return doel
+
+
+@dataclass
+class Vergelijking:
+    officieel: list[ApkResult]
+    eigen: list[ApkResult]
+    gelijk_toegestaan: list[str] = field(default_factory=list)
+    violations: list[str] = field(default_factory=list)
+
+
+def vergelijk_met_officieel(cfg: dict, client: str, eigen: list[ApkResult],
+                            officieel: list[ApkResult]) -> Vergelijking:
+    """Geen enkele identiteitswaarde van een eigen build is gelijk aan een waarde uit een officiële build.
+
+    Vergeleken wordt over alle soorten heen (een eigen authority mag ook geen officieel accounttype zijn). Een gelijke
+    sharedpref-naam die niet van een pakketnaam is afgeleid (`systemprefs`) is per app afgeschermd: toegestaan, wel
+    gemeld. De officiële meting moet zelf bruikbaar zijn (officiële pakketnaam, authorities gemeten).
+    """
+    c = cfg[client]
+    v = Vergelijking(officieel, eigen)
+    if not officieel or not eigen:
+        raise ToolError("vergelijking zonder officiële of eigen artefacten bewijst niets")
+    for r in officieel:
+        if r.pakket not in c["officieel"]:
+            raise ToolError(f"{r.pad}: pakketnaam '{r.pakket}' is geen officiële ID {c['officieel']} (verkeerde APK?)")
+        if not r.authorities:
+            raise ToolError(f"{r.pad}: geen authorities gemeten in de officiële APK (meting onbruikbaar)")
+    gemeten = {o.pakket for o in officieel}
+    if gemeten != set(c["officieel"]):
+        raise ToolError(f"officiële meting dekt niet alle officiële ID's: gemeten {sorted(gemeten)}, verwacht "
+                        f"{sorted(c['officieel'])}")
+    officieel_per_waarde: dict[str, set[str]] = {}
+    for o in officieel:
+        for soort, waarden in identiteitswaarden(o).items():
+            for w in waarden:
+                officieel_per_waarde.setdefault(w, set()).add(f"{soort} van {o.pakket}")
+    for r in eigen:
+        for soort, waarden in identiteitswaarden(r).items():
+            for w in sorted(waarden):
+                if w not in officieel_per_waarde:
+                    continue
+                bron = ", ".join(sorted(officieel_per_waarde[w]))
+                if soort == "sharedpref" and not any(o in w for o in c["officieel"]):
+                    v.gelijk_toegestaan.append(f"{r.variant} {r.pakket}: sharedpref '{w}' ({bron}) — per app "
+                                               "afgeschermd, niet van een pakketnaam afgeleid")
+                else:
+                    v.violations.append(f"{r.variant} {r.pakket}: {soort} '{w}' is gelijk aan {bron}")
+    return v
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -506,6 +748,14 @@ def main(argv: list[str] | None = None) -> int:
     p_map.add_argument("--verwacht", default="debug,release",
                        help="varianten die minstens één keer gevonden moeten worden (standaard debug,release)")
     p_map.add_argument("--aapt2")
+    p_v = sub.add_parser("vergelijk", help="eigen builds tegen de officiële upstream-APK's (contract 1.3 §1.1)")
+    p_v.add_argument("client", choices=ANDROID_CLIENTS)
+    p_v.add_argument("map", type=Path, help="Gradle-bouwmap van de eigen build (<client>/app/build)")
+    p_v.add_argument("--officieel-map", type=Path, required=True,
+                     help="map voor de officiële APK's (hergebruikt bij gelijke sha256, anders gedownload)")
+    p_v.add_argument("--geen-download", action="store_true", help="niet downloaden; ontbreken = gebruiksfout")
+    p_v.add_argument("--verwacht", default="debug,release")
+    p_v.add_argument("--aapt2")
     p_x = sub.add_parser("xcode", help="Swiftfin: bundle-id uit xcodebuild -showBuildSettings -json")
     p_x.add_argument("--instellingen", type=Path, action="append", required=True)
     p_x.add_argument("--plist", action="store_true", help="ook CFBundleIdentifier in de gebouwde app")
@@ -554,9 +804,39 @@ def main(argv: list[str] | None = None) -> int:
                 raise ToolError(f"{args.map}: geen artefact voor {', '.join(sorted(nodig - gevonden))} gevonden "
                                 "(eerst bouwen; niets gecontroleerd is geen bewijs)")
         results = [check_apk(cfg, args.client, path, aapt2, variant) for path, variant in targets]
+        if args.cmd == "vergelijk":
+            officieel = [check_apk(cfg, args.client, haal_officiele_apk(a, args.officieel_map, not args.geen_download),
+                                   aapt2, a["variant"]) for a in officiele_apks(cfg, args.client)]
+            vergelijking = vergelijk_met_officieel(cfg, args.client, results, officieel)
     except ToolError as exc:
         print(f"FOUT: {exc}", file=sys.stderr)
         return 3
+    if args.cmd == "vergelijk":
+        if args.json:
+            print(json.dumps({"in_orde": not vergelijking.violations,
+                              "officieel": [{"pad": o.pad, "pakket": o.pakket, **{k: sorted(w) for k, w in
+                                             identiteitswaarden(o).items()}} for o in vergelijking.officieel],
+                              "eigen": [{"pad": r.pad, "pakket": r.pakket, **{k: sorted(w) for k, w in
+                                         identiteitswaarden(r).items()}} for r in vergelijking.eigen],
+                              "gelijk_toegestaan": vergelijking.gelijk_toegestaan,
+                              "overtredingen": vergelijking.violations}, indent=2, ensure_ascii=False))
+        else:
+            print(f"aapt2: {aapt2}")
+            for o in vergelijking.officieel:
+                w = identiteitswaarden(o)
+                print(f"officieel {o.variant}: {Path(o.pad).name} — {o.pakket}; "
+                      + "; ".join(f"{k} {len(v)}" for k, v in w.items()))
+            for r in vergelijking.eigen:
+                w = identiteitswaarden(r)
+                print(f"eigen {r.variant}: {Path(r.pad).name} — {r.pakket}; "
+                      + "; ".join(f"{k} {len(v)}" for k, v in w.items()))
+            for g in vergelijking.gelijk_toegestaan:
+                print(f"  gelijk, toegestaan: {g}")
+            for v in vergelijking.violations:
+                print(f"OVERTREDING: {v}")
+            print(f"\n{len(vergelijking.eigen)} eigen artefact(en) tegen {len(vergelijking.officieel)} officiële "
+                  f"APK('s): {len(vergelijking.violations)} gelijke identiteitswaarde(n).")
+        return 1 if vergelijking.violations else 0
     if args.json:
         print(json.dumps([r.__dict__ for r in results], indent=2, ensure_ascii=False))
     else:

@@ -56,6 +56,8 @@ actionlint: venv
 sync-status:
 	python3 tools/clients/upstream_sync.py status
 
+# Officiële upstream-APK's voor `app_identiteit.py vergelijk` (sha256-gepind; hergebruikt of gedownload).
+OFFICIELE_APKS ?= .bouw/officiele-apks
 # Release-resources linken (manifest + resources, geen release-APK) zodat aapt2 ook de release-ID controleert.
 RELEASE_RES_android = processLibreReleaseResources processProprietaryReleaseResources
 RELEASE_RES_androidtv = processReleaseResources
@@ -64,6 +66,7 @@ android-bouw androidtv-bouw: %-bouw:
 	@test -n "$$ANDROID_HOME" || { echo "ANDROID_HOME is niet gezet (Android SDK met platform 36)"; exit 2; }
 	cd $* && $(GRADLE) assembleDebug test $(RELEASE_RES_$*)
 	python3 tools/clients/app_identiteit.py bouwmap $* $*/app/build --verwacht debug,release
+	python3 tools/clients/app_identiteit.py vergelijk $* $*/app/build --officieel-map $(OFFICIELE_APKS)
 
 desktop-image:
 	nice -n 10 $(if $(DOCKER_LOCK),flock $(DOCKER_LOCK)) docker buildx build --load \

@@ -2,6 +2,8 @@
 # Bouwt de debug-APK's (libre + proprietary) en draait de unit tests, zoals upstream app-build/app-test.
 # Daarna controleert aapt2 de eigen app-identiteit (JLC-0002, ADR-0004) in de debug-APK's en in de gelinkte
 # release-resources (process*ReleaseResources: manifest + resources, geen release-APK en geen ondertekening).
+# Contract 1.3 §1.1 besluit 1 (C1.3-JLC-02): daarnaast meet aapt2 de officiële upstream-APK's van dezelfde versie
+# (GitHub-release, sha256-gepind) en faalt de run als een identiteitswaarde van de eigen build daaraan gelijk is.
 # Upstream-workflows in android/.github/ voert GitHub niet uit (alleen de root telt, ADR-0006).
 # Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
 name: Clients / Android
@@ -66,6 +68,13 @@ jobs:
           processLibreReleaseResources processProprietaryReleaseResources
       - name: Eigen app-identiteit controleren met aapt2 (JLC-0002)
         run: python3 ../tools/clients/app_identiteit.py bouwmap android app/build --verwacht debug,release
+      - name: Geen waarde gelijk aan de officiële app (contract 1.3 §1.1 besluit 1, C1.3-JLC-02)
+        # Officiële upstream-APK's van dezelfde versie (debug en release, sha256-gepind in app_identiteit.json):
+        # pakketnaam, authorities, permissies, accounttype, app_search_suggest_* en sharedpref-namen mogen niet gelijk
+        # zijn aan die van de eigen builds.
+        run: >-
+          python3 ../tools/clients/app_identiteit.py vergelijk android app/build
+          --officieel-map "$RUNNER_TEMP/officiele-apks" --verwacht debug,release
       - name: APK's verzamelen
         run: |
           mkdir -p build/jlc-artefacten

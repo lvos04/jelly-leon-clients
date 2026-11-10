@@ -2,6 +2,8 @@
 # Bouwt de debug-APK en draait de unit tests, zoals upstream app-build/app-test (JDK 21, gradle-toolchain 21).
 # Daarna controleert aapt2 de eigen app-identiteit (JLC-0003, ADR-0004): pakketnaam, app_id (accounttype) en
 # zoek-authority in de debug-APK en in de gelinkte release-resources (geen release-APK, geen ondertekening).
+# Contract 1.3 §1.1 besluit 1 (C1.3-JLC-02): daarnaast meet aapt2 de officiële upstream-APK's van dezelfde versie
+# (GitHub-release, sha256-gepind) en faalt de run als een identiteitswaarde van de eigen build daaraan gelijk is.
 # Ook aanroepbaar vanuit Clients / Upstream-sync voor een syncbranch (input `ref`).
 name: Clients / Android TV
 
@@ -63,6 +65,13 @@ jobs:
         run: ./gradlew --no-daemon --max-workers=2 assembleDebug test processReleaseResources
       - name: Eigen app-identiteit controleren met aapt2 (JLC-0003)
         run: python3 ../tools/clients/app_identiteit.py bouwmap androidtv app/build --verwacht debug,release
+      - name: Geen waarde gelijk aan de officiële app (contract 1.3 §1.1 besluit 1, C1.3-JLC-02)
+        # Officiële upstream-APK's van dezelfde versie (debug en release, sha256-gepind in app_identiteit.json):
+        # pakketnaam, authorities, permissies, accounttype, app_search_suggest_* en sharedpref-namen mogen niet gelijk
+        # zijn aan die van de eigen builds.
+        run: >-
+          python3 ../tools/clients/app_identiteit.py vergelijk androidtv app/build
+          --officieel-map "$RUNNER_TEMP/officiele-apks" --verwacht debug,release
       - name: APK's verzamelen
         run: |
           mkdir -p build/jlc-artefacten
