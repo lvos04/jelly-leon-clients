@@ -78,8 +78,11 @@ class Volger:
             time.sleep(2)
         return None
 
-    def volg(self, item_id: str, seconden: float, minimaal_s: float = 6.0) -> list[sc.Monster]:
-        """Verzamelt monsters tot ``seconden`` voorbij zijn, of eerder zodra het item ≥ minimaal_s is opgelopen."""
+    def volg(
+        self, item_id: str, seconden: float, minimaal_s: float = 6.0, tot_ondertitel: int | None = None
+    ) -> list[sc.Monster]:
+        """Verzamelt monsters tot ``seconden`` voorbij zijn, of eerder zodra het item ≥ minimaal_s is opgelopen (of,
+        met ``tot_ondertitel``, zodra de client na 3 s dat ondertitelspoor meldt)."""
         t0 = time.monotonic()
         uit: list[sc.Monster] = []
         while time.monotonic() - t0 < seconden:
@@ -88,6 +91,8 @@ class Volger:
                     uit.append(sc.monster(s, time.monotonic() - t0))
             rij = [m for m in sc.van_item(uit, item_id) if not m.gepauzeerd]
             if len(rij) >= 3 and rij[-1].positie_s - rij[0].positie_s >= minimaal_s:
+                break
+            if tot_ondertitel is not None and any(m.ondertitel == tot_ondertitel and m.t >= 3 for m in rij):
                 break
             time.sleep(1)
         return uit
@@ -446,9 +451,9 @@ def _stappen(
         jf.speel(volger.id(), it.hervat["Id"], start_ticks=24 * TICKS)
         begin = volger.volg(it.hervat["Id"], 20, minimaal_s=2)
         jf.algemeen_commando(volger.id(), "SetSubtitleStreamIndex", {"Index": str(en_ext)})
-        naar_en = volger.volg(it.hervat["Id"], 8, minimaal_s=99)
+        naar_en = volger.volg(it.hervat["Id"], 20, minimaal_s=99, tot_ondertitel=en_ext)
         jf.algemeen_commando(volger.id(), "SetSubtitleStreamIndex", {"Index": str(nl_ext)})
-        naar_nl = volger.volg(it.hervat["Id"], 10, minimaal_s=99)
+        naar_nl = volger.volg(it.hervat["Id"], 20, minimaal_s=99, tot_ondertitel=nl_ext)
         schot("ondertitel-extern")
         en_ok = sc.beoordeel_ondertitel(naar_en, it.hervat["Id"], en_ext, vanaf_t=3)
         nl_ok = sc.beoordeel_ondertitel(naar_nl, it.hervat["Id"], nl_ext, vanaf_t=3)

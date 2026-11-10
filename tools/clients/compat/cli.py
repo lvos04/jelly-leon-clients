@@ -115,6 +115,37 @@ def een_android_run(
     return r
 
 
+def aanvullen(oud: dict[str, Any], nieuw: dict[str, Any]) -> dict[str, Any]:
+    """Nieuwe resultaten in een bestaand bewijs zetten; een vervangen resultaat blijft met zijn oordeel en fout
+    zichtbaar onder ``vervangen`` (nooit stil overschreven)."""
+    uit = {**oud, "resultaten": {k: dict(v) for k, v in oud.get("resultaten", {}).items()}}
+    vervangen = list(oud.get("vervangen", []))
+    for label, rr in nieuw["resultaten"].items():
+        for soort, r in rr.items():
+            vorig = uit["resultaten"].setdefault(label, {}).get(soort)
+            if vorig is not None:
+                vervangen.append(
+                    {
+                        "server": label,
+                        "emulator": soort,
+                        "sessie": oud.get("begin"),
+                        "oordeel": vorig.get("oordeel"),
+                        "fout": vorig.get("fout"),
+                        "mislukte_stappen": vorig.get("oordeel", {}).get("mislukte_stappen"),
+                    }
+                )
+            uit["resultaten"][label][soort] = r
+    uit["vervangen"] = vervangen
+    uit["sessies"] = [
+        *oud.get("sessies", [{"begin": oud.get("begin"), "eind": oud.get("eind")}]),
+        {
+            "begin": nieuw.get("begin"),
+            "aangevuld": sorted(f"{lbl}/{s}" for lbl, rr in nieuw["resultaten"].items() for s in rr),
+        },
+    ]
+    return uit
+
+
 def android_cmd(a: argparse.Namespace) -> int:
     soorten = [s for s in a.soorten.split(",") if s]
     vergelijk = [s for s in a.vergelijk_soorten.split(",") if s]
@@ -167,6 +198,8 @@ def android_cmd(a: argparse.Namespace) -> int:
                 f"== {label} / {soort}: {r.get('oordeel', {}).get('validatie')} "
                 f"{r.get('oordeel', {}).get('mislukte_stappen', '')}"
             )
+    if a.aanvullen and a.uit.exists():
+        document = aanvullen(json.loads(a.uit.read_text(encoding="utf-8")), document)
     jl, st = document["resultaten"].get("jelly-leon", {}), document["resultaten"].get("stock", {})
     document["vergelijking_met_stock"] = {
         s: bewijs.vergelijk(jl[s].get("stappen", {}), st[s].get("stappen", {})) for s in jl if s in st
@@ -174,7 +207,9 @@ def android_cmd(a: argparse.Namespace) -> int:
     document["regressies"] = [
         {"emulator": s, **v} for s, rij in document["vergelijking_met_stock"].items() for v in rij if v["regressie"]
     ]
-    document["schermafdrukken"] = bewijs.comprimeer_schermafdrukken(uitmap)
+    document["schermafdrukken"] = sorted(
+        set(document.get("schermafdrukken", [])) | set(bewijs.comprimeer_schermafdrukken(uitmap))
+    )
     document["eind"] = bewijs.nu()
     document["samenvatting"] = {
         f"{lbl}/{s}": r.get("oordeel", {}).get("validatie")
@@ -235,6 +270,11 @@ def main(argv: list[str] | None = None) -> int:
         "--vergelijk-soorten", default="telefoon,tv", help="emulators tegen stock (controlegroep); leeg = geen"
     )
     pa.add_argument("--uit", type=Path, default=REPO / "docs/platform-v2/test-evidence/p4-0-jc3-android-emulator.json")
+    pa.add_argument(
+        "--aanvullen",
+        action="store_true",
+        help="resultaten toevoegen aan een bestaand bewijs (een vervangen resultaat blijft zichtbaar)",
+    )
     pa.add_argument(
         "--migratie-van",
         default=None,

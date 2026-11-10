@@ -179,6 +179,8 @@ def beoordeel_ondertitel(
         return {"uitkomst": MISLUKT, "reden": "geen verwacht ondertitelspoor bepaald", "gemeld": gemeld[-6:]}
     ok = bool(rij) and verwacht in gemeld
     uit = {"uitkomst": GESLAAGD if ok else MISLUKT, "verwacht_index": verwacht, "gemeld": gemeld[-6:]}
+    if ok:
+        uit["eerst_gemeld_na_s"] = next(m.t for m in rij if m.ondertitel == verwacht)
     if not ok:
         uit["reden"] = "client meldde het verwachte ondertitelspoor niet" if rij else "de client meldde het item niet"
     return uit

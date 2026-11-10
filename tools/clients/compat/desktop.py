@@ -278,9 +278,10 @@ def _stappen(d: Desktop, res: dict[str, Any], server: TestServer, uitmap: Path, 
     jf.speel(volger.id(), it.hervat["Id"], start_ticks=24 * TICKS, ondertitel=nl_ext)
     begin = volger.volg(it.hervat["Id"], 20, minimaal_s=2)
     jf.algemeen_commando(volger.id(), "SetSubtitleStreamIndex", {"Index": str(en_ext)})
-    naar_en = volger.volg(it.hervat["Id"], 8, minimaal_s=99)
+    # Gemeten: de desktop meldt een gewisseld extern spoor soms pas na ~10 s (mpv laadt de srt van de server).
+    naar_en = volger.volg(it.hervat["Id"], 20, minimaal_s=99, tot_ondertitel=en_ext)
     jf.algemeen_commando(volger.id(), "SetSubtitleStreamIndex", {"Index": str(nl_ext)})
-    naar_nl = volger.volg(it.hervat["Id"], 10, minimaal_s=99)
+    naar_nl = volger.volg(it.hervat["Id"], 20, minimaal_s=99, tot_ondertitel=nl_ext)
     schot("ondertitel-extern")
     en_ok = sc.beoordeel_ondertitel(naar_en, it.hervat["Id"], en_ext, vanaf_t=3)
     nl_ok = sc.beoordeel_ondertitel(naar_nl, it.hervat["Id"], nl_ext, vanaf_t=3)

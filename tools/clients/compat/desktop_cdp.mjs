@@ -23,14 +23,17 @@ async function verbind(doel) {
   const fouten = [];
   ws.onmessage = (m) => {
     const d = JSON.parse(m.data);
-    if (d.id && wachtend.has(d.id)) { wachtend.get(d.id)(d); wachtend.delete(d.id); }
+    if (d.id && wachtend.has(d.id)) { const [ok, timer] = wachtend.get(d.id); clearTimeout(timer); wachtend.delete(d.id); ok(d); }
     if (d.method === 'Runtime.exceptionThrown') fouten.push(String(d.params.exceptionDetails?.exception?.description || d.params.exceptionDetails?.text).slice(0, 200));
     if (d.method === 'Log.entryAdded' && d.params.entry.level === 'error') fouten.push(`${d.params.entry.text} ${d.params.entry.url || ''}`.slice(0, 200));
   };
-  // Elke aanroep met een time-out: tijdens een paginawissel antwoordt het oude doel niet meer.
+  // Elke aanroep met een time-out: tijdens een paginawissel antwoordt het oude doel niet meer. De timer wordt bij een
+  // antwoord gewist (gemeten: openstaande timers hielden het Node-proces ~15 s in leven, waardoor de harnas de start
+  // van het afspelen te laat zag).
   const stuur = (method, params = {}) => new Promise((ok, nok) => {
-    id += 1; const mijn = id; wachtend.set(mijn, ok);
-    setTimeout(() => { if (wachtend.delete(mijn)) nok(new Error(`CDP-time-out: ${method}`)); }, 15000);
+    id += 1; const mijn = id;
+    const timer = setTimeout(() => { if (wachtend.delete(mijn)) nok(new Error(`CDP-time-out: ${method}`)); }, 15000);
+    wachtend.set(mijn, [ok, timer]);
     ws.send(JSON.stringify({ id: mijn, method, params }));
   });
   await stuur('Runtime.enable');
@@ -139,4 +142,4 @@ async function main() {
 }
 
 main().catch((e) => { uit.ok = false; uit.fout = String(e).slice(0, 400); })
-  .finally(() => { process.stdout.write(`${JSON.stringify(uit)}\n`); });
+  .finally(() => { process.stdout.write(`${JSON.stringify(uit)}\n`, () => process.exit(0)); });

@@ -220,3 +220,17 @@ def test_cli_zonder_kvm_is_omgevingsfout(monkeypatch, capsys):
 
 def test_cli_desktop_zonder_build_is_omgevingsfout(tmp_path):
     assert cli.main(["desktop", "--image", "x", "--build", str(tmp_path), "--uit", str(tmp_path / "d.json")]) == 2
+
+
+def test_aanvullen_vervangt_zichtbaar_en_houdt_de_rest():
+    oud = {"begin": "t0", "eind": "t1", "resultaten": {"jelly-leon": {
+        "tablet": {"oordeel": {"validatie": "Sim-mislukt", "mislukte_stappen": ["bladeren"]}, "fout": "x"},
+        "tv": {"oordeel": {"validatie": "Sim-geslaagd"}}}}}
+    nieuw = {"begin": "t2", "resultaten": {"jelly-leon": {"tablet": {"oordeel": {"validatie": "Sim-geslaagd"}}}}}
+    uit = cli.aanvullen(oud, nieuw)
+    assert uit["resultaten"]["jelly-leon"]["tablet"]["oordeel"]["validatie"] == "Sim-geslaagd"
+    assert uit["resultaten"]["jelly-leon"]["tv"]["oordeel"]["validatie"] == "Sim-geslaagd"
+    assert uit["vervangen"] == [{"server": "jelly-leon", "emulator": "tablet", "sessie": "t0",
+                                 "oordeel": {"validatie": "Sim-mislukt", "mislukte_stappen": ["bladeren"]},
+                                 "fout": "x", "mislukte_stappen": ["bladeren"]}]
+    assert uit["sessies"][-1]["aangevuld"] == ["jelly-leon/tablet"]
