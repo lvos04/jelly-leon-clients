@@ -148,6 +148,7 @@ def beoordeel_hervatten(
         "afwijking_s": round(geschat - hervat_s, 2),
         "opgelopen_s": opgelopen,
         "posities_s": [m.positie_s for m in rij][-8:],
+        "meldingen": [[m.t, m.positie_s, m.sessie[:8]] for m in rij][:12],  # voor diagnose (welke sessie meldde wat)
         **({"reden": "; ".join(redenen)} if redenen else {}),
     }
 

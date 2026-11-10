@@ -236,6 +236,33 @@ def android_cmd(a: argparse.Namespace) -> int:
     return 0
 
 
+def hervatproef_cmd(a: argparse.Namespace) -> int:
+    from . import hervatproef
+
+    apks = apk.bereid_voor(REPO, WERK / "apk", APK_CACHE)
+    document: dict[str, Any] = {
+        "schema": "jelly-leon-clients/p4-0-jc3-hervatproef/1",
+        "begin": bewijs.nu(),
+        "doel": "hervatten op het juiste punt n keer herhaald, op Jelly Leon en stock (wie veroorzaakt een afwijking?)",
+        "servers": {"jelly-leon": image_herkomst(a.image), "stock": image_herkomst(a.stock_image)},
+        "resultaten": {},
+    }
+    for label, image in (("jelly-leon", a.image), ("stock", a.stock_image)):
+        with bewijs.slot("stack.lock", log), bewijs.slot("gradle.lock", log):
+            server = TestServer(image).start()
+            try:
+                server.inrichten()
+                document["resultaten"][label] = hervatproef.herhaal(server, a.soort, apks, a.bediend, a.n)
+            finally:
+                server.verwijder()
+        r = document["resultaten"][label]
+        log(f"hervatproef {label}: {r.get('geslaagd')}/{r.get('n')}")
+    document["eind"] = bewijs.nu()
+    bewijs.schrijf(a.uit, document, geheimen=[KIJKER_WW, BEHEER_WW])
+    log(f"bewijs geschreven: {a.uit}")
+    return 0
+
+
 def swiftfin_cmd(a: argparse.Namespace) -> int:
     from . import swiftfin
 
@@ -306,6 +333,15 @@ def main(argv: list[str] | None = None) -> int:
     ps.add_argument("--image", required=True)
     ps.add_argument("--stock-image", default=STOCK_12_4)
     ps.add_argument("--uit", type=Path, default=REPO / "docs/platform-v2/test-evidence/p4-0-jc3-swiftfin-protocol.json")
+    ph = sub.add_parser(
+        "hervatproef", help="hervatten n keer herhalen op Jelly Leon en stock (één emulator per server)"
+    )
+    ph.add_argument("--image", required=True)
+    ph.add_argument("--stock-image", default=STOCK_12_4)
+    ph.add_argument("--soort", default="tv", choices=["telefoon", "tablet", "tv", "tv36"])
+    ph.add_argument("--bediend", choices=["fork", "officieel"], default="fork")
+    ph.add_argument("-n", type=int, default=5)
+    ph.add_argument("--uit", type=Path, default=REPO / "docs/platform-v2/test-evidence/p4-0-jc3-hervatproef.json")
     sub.add_parser("bronnen", help="server-tag en SDK-versies voor de statische controle ($GITHUB_OUTPUT-regels)")
     a = p.parse_args(argv)
     if a.opdracht == "bronnen":
@@ -321,6 +357,8 @@ def main(argv: list[str] | None = None) -> int:
         return android_cmd(a)
     if a.opdracht == "swiftfin":
         return swiftfin_cmd(a)
+    if a.opdracht == "hervatproef":
+        return hervatproef_cmd(a)
     from . import desktop  # alleen nodig voor de desktopproef
 
     return desktop.main(a)
