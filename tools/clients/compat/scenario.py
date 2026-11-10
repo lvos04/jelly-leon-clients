@@ -89,7 +89,12 @@ def spelende_staart(rij: list[Monster], speling_s: float = 5.0) -> list[Monster]
     """Het laatste aaneengesloten stuk waarin de positie echt speelt: niet gepauzeerd en per stap
     0 ≤ Δpositie ≤ Δt + speling (geen sprong). Een sprong — bv. eerst een melding op 0 en een seconde later op het
     hervatpunt — breekt de staart, zodat die sprong nooit als 'opgelopen' telt."""
-    spelend = [m for m in rij if not m.gepauzeerd]
+    spelend: list[Monster] = []
+    for m in rij:  # gelijke opeenvolgende posities samenvoegen (vroegste melding): een client die maar elke paar
+        if m.gepauzeerd:  # seconden zijn positie bijwerkt, springt dan niet schijnbaar
+            continue
+        if not spelend or spelend[-1].positie_s != m.positie_s:
+            spelend.append(m)
     if not spelend:
         return []
     staart = [spelend[-1]]

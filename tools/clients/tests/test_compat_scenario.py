@@ -183,3 +183,8 @@ def test_spelende_staart_negeert_pauze_en_breekt_op_terugspringen():
     begin = [m(0.01, 0.0), m(1, 1.0), m(2, 2.0), m(8, 8.0)]
     assert sc.genoeg_opgelopen(begin, 6.0)
     assert sc.beoordeel_hervatten(begin, "i", 300.0)["uitkomst"] == sc.MISLUKT
+
+
+def test_spelende_staart_met_een_client_die_maar_elke_10_s_meldt():
+    rij = [m(t, 300.0) for t in range(1, 11)] + [m(t, 310.0) for t in range(11, 21)] + [m(21, 320.0)]
+    assert sc.genoeg_opgelopen(rij, 6.0)  # 10 s erbij in ~10 s is spelen, geen sprong
