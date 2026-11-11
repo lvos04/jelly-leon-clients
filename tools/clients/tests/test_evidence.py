@@ -128,24 +128,39 @@ def test_regel_volgt_paragraaf_11(rec):
     assert fouten_in_regel(rec) == []
 
 
-def test_ids_uniek_en_bekend():
-    ids = [r["id"] for r in records()]
-    assert len(ids) == len(set(ids)), "dubbele ID's"
+def bekende_ids() -> tuple[set[str], dict[str, str], str]:
+    """(ID's uit EXCEL_TAKEN.json, tekst van de conformiteitslijsten per contractversie, tekst van de pakketdocs)."""
     eigen = {t["ID"] for t in json.loads(TAKEN.read_text(encoding="utf-8"))}
     conformiteit = {v: (PV2 / f"CONTRACT_1.{v}_CONFORMITEIT.md").read_text(encoding="utf-8") for v in ("2", "3")}
     pakket = "\n".join(p.read_text(encoding="utf-8") for p in PV2.rglob("*.md"))
-    for evidence_id in ids:
-        if evidence_id.startswith("REVIEW-"):
-            assert REVIEW_ID.fullmatch(evidence_id), f"{evidence_id}: vorm REVIEW-{REPO}-<onderwerp>"
-            continue
+    return eigen, conformiteit, pakket
+
+
+def id_fout(evidence_id: str, eigen: set[str], conformiteit: dict[str, str], pakket: str) -> str | None:
+    """Fout als de ID niet uit de Excel, de pakketdocs of de conformiteitslijst komt (§11); ``None`` = bekend.
+
+    Reviews en contractpunten hebben een eigen vorm; een contractpunt moet letterlijk in de conformiteitslijst van
+    zijn eigen contractversie staan (een voorvoegsel van een bestaand punt telt niet).
+    """
+    if evidence_id.startswith("REVIEW-"):
+        return None if REVIEW_ID.fullmatch(evidence_id) else f"{evidence_id}: vorm REVIEW-{REPO}-<onderwerp>"
+    if evidence_id.startswith("C1."):
         punt = CONTRACTPUNT_ID.fullmatch(evidence_id)
-        if evidence_id.startswith("C1."):
-            assert punt, f"{evidence_id}: vorm C1.3-<code>-<nn> of C1.2-<code>"
-            assert re.search(rf"(?<![\w.-]){re.escape(evidence_id)}(?![\w-])", conformiteit[punt["versie"]]), (
-                f"{evidence_id}: staat niet in CONTRACT_1.{punt['versie']}_CONFORMITEIT.md")
-            continue
-        assert evidence_id in eigen or re.search(rf"\b{re.escape(evidence_id)}\b", pakket), (
-            f"{evidence_id}: staat niet in EXCEL_TAKEN.json of de pakketdocs")
+        if not punt:
+            return f"{evidence_id}: vorm C1.3-<code>-<nn> of C1.2-<code>"
+        if not re.search(rf"(?<![\w.-]){re.escape(evidence_id)}(?![\w-])", conformiteit[punt["versie"]]):
+            return f"{evidence_id}: staat niet in CONTRACT_1.{punt['versie']}_CONFORMITEIT.md"
+        return None
+    if evidence_id in eigen or re.search(rf"\b{re.escape(evidence_id)}\b", pakket):
+        return None
+    return f"{evidence_id}: staat niet in EXCEL_TAKEN.json of de pakketdocs"
+
+
+def test_ids_uniek_en_bekend():
+    ids = [r["id"] for r in records()]
+    assert len(ids) == len(set(ids)), "dubbele ID's"
+    bekend = bekende_ids()
+    assert [f for f in (id_fout(evidence_id, *bekend) for evidence_id in ids) if f] == []
 
 
 def test_genoemde_commits_bestaan():
@@ -198,6 +213,10 @@ def test_geldige_regels_van_elk_soort():
     ({"bewijs": " "}, "geen bewijs"),
     ({"repo": "jelly-leon"}, "verwacht 'jelly-leon-clients'"),
     ({"bijgewerkt": "10-11-2026"}, "geen datum"),
+    ({"blokkade": None}, "elk veld is tekst"),
+    ({"validatie": ["Sim-getest"]}, "elk veld is tekst"),
+    ({"id": "REVIEW-jelly-leon-clients-contract-1.3", "status": "Gereed"}, "nooit gezet"),
+    ({"id": "REVIEW-jelly-leon-clients-contract-1.3", "validatie": "Sim-geslaagd"}, "alleen bij Testmatrix"),
 ])
 def test_overtredingen_worden_gevonden(wijziging, melding):
     gevonden = fouten_in_regel(regel(**wijziging))
@@ -209,3 +228,27 @@ def test_extra_of_ontbrekend_veld_faalt():
     zonder = regel()
     del zonder["opmerking"]
     assert "velden wijken af" in fouten_in_regel(zonder)[0]
+
+
+def test_bekende_ids_van_elk_soort():
+    bekend = bekende_ids()
+    for evidence_id in ("B03-001", "EX48", "JLT-63", "C1.3-JLC-01", "C1.3-JLC-02", "C1.3-JLC-03", "C1.3-ALG-01",
+                        "REVIEW-jelly-leon-clients-contract-1.3"):
+        assert id_fout(evidence_id, *bekend) is None, evidence_id
+
+
+@pytest.mark.parametrize(("evidence_id", "melding"), [
+    ("C1.3-JLC-99", "staat niet in CONTRACT_1.3_CONFORMITEIT.md"),  # bestaat niet in de lijst
+    ("C1.3-JLC", "staat niet in CONTRACT_1.3_CONFORMITEIT.md"),  # voorvoegsel van een bestaand punt
+    ("C1.2-JLC-01", "staat niet in CONTRACT_1.2_CONFORMITEIT.md"),  # punt van 1.3 onder de verkeerde versie
+    ("C1.3-JLC-1", "vorm C1.3-<code>-<nn>"),
+    ("C1.3-jlc-01", "vorm C1.3-<code>-<nn>"),
+    ("C1.4-JLC-01", "vorm C1.3-<code>-<nn>"),
+    ("REVIEW-jelly-leon-web-contract-1.3", "vorm REVIEW-jelly-leon-clients-<onderwerp>"),  # andere repo
+    ("REVIEW-jelly-leon-clients-", "vorm REVIEW-jelly-leon-clients-<onderwerp>"),
+    ("REVIEW-jelly-leon-clients-Contract 1.3", "vorm REVIEW-jelly-leon-clients-<onderwerp>"),
+    ("ZZ9-999", "staat niet in EXCEL_TAKEN.json of de pakketdocs"),
+])
+def test_onbekende_of_verkeerd_gevormde_id_faalt(evidence_id, melding):
+    fout = id_fout(evidence_id, *bekende_ids())
+    assert fout is not None and melding in fout, fout
