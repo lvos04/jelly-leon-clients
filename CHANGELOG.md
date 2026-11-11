@@ -104,4 +104,4 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
   `org.jellyfin.androidtv.jellyleon`, `org.jellyfin.swiftfin.jellyleon` (ADR-0004, ADR-0012). Swiftfin: NIET
   GEVALIDEERD (Mac/Xcode) en (account); naast elkaar installeren op echte apparaten: NIET GEVALIDEERD (hardware).
 - ADR-0012 (contract 1.3 in de clients); ADR-0004, ADR-0008, README's, PATCHES, FORK_STRATEGIE en INVENTARIS
-  bijgewerkt. Bewijs: `docs/platform-v2/test-evidence/contract-1.3-app-identiteit.json`. 326 tests.
+  bijgewerkt. Bewijs: `docs/platform-v2/test-evidence/contract-1.3-app-identiteit.json`. 329 tests.
