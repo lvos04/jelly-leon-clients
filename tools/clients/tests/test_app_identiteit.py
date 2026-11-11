@@ -963,3 +963,121 @@ def test_xcode_zonder_app_doel_of_kapotte_json(tmp_path):
     kapot = tmp_path / "kapot.json"
     kapot.write_text("error: scheme not found", encoding="utf-8")
     assert ai.main(["--repo-root", str(ROOT), "xcode", "--instellingen", str(kapot)]) == 3
+
+
+def test_xcode_andere_lege_of_ontbrekende_bundle_id_faalt(tmp_path, capsys):
+    """Alleen de eigen bundle-id is goed: 'niet de officiële' is niet genoeg (nooit 'open bij fout').
+
+    Een andere waarde, een lege waarde en een ontbrekende sleutel zijn elk een overtreding; anders zou een doel zonder
+    bundle-id als bewezen doorgaan.
+    """
+    cfg = ai.load_config(ROOT)
+    eigen = cfg["swiftfin"]["bundle_id"]
+    ander = build_settings(tmp_path, "ander.json", [("Swiftfin iOS", "Debug", eigen),
+                                                    ("Swiftfin iOS", "Release", "nl.voorbeeld.swiftfin")])
+    assert ai.check_xcode(cfg, [ander])[1] == [
+        f"Swiftfin iOS (Release): bundle-id 'nl.voorbeeld.swiftfin', verwacht '{eigen}'"]
+    leeg = build_settings(tmp_path, "leeg-id.json", [("Swiftfin tvOS", "Release", "")])
+    assert ai.check_xcode(cfg, [leeg])[1] == [f"Swiftfin tvOS (Release): bundle-id '', verwacht '{eigen}'"]
+    zonder = tmp_path / "zonder-sleutel.json"
+    zonder.write_text(json.dumps([{"action": "build", "target": "Swiftfin tvOS",
+                                   "buildSettings": {"WRAPPER_EXTENSION": "app", "CONFIGURATION": "Debug"}}]),
+                      encoding="utf-8")
+    assert ai.check_xcode(cfg, [zonder])[1] == [f"Swiftfin tvOS (Debug): bundle-id '', verwacht '{eigen}'"]
+    # een afgeleide van de eigen ID (zoals een debug-achtervoegsel) telt voor Swiftfin evenmin als de eigen ID
+    achtervoegsel = build_settings(tmp_path, "achtervoegsel.json", [("Swiftfin iOS", "Debug", eigen + ".debug")])
+    assert len(ai.check_xcode(cfg, [achtervoegsel])[1]) == 1
+    for path in (ander, leeg, zonder, achtervoegsel):
+        assert ai.main(["--repo-root", str(ROOT), "xcode", "--instellingen", str(path)]) == 1
+        assert "1 overtreding(en)." in capsys.readouterr().out
+
+
+# ------------------------------------------------- ontbrekende gegevens zijn geen bewijs (tegenproeven uit de review)
+# Gevonden met een mutatiecontrole: elk van deze voorwaarden kon uit app_identiteit.py verdwijnen zonder dat een test
+# faalde. De controle moet dan een overtreding of gebruiksfout geven en nooit stil "in orde" melden.
+
+
+@pytest.mark.parametrize("sleutel", ["xcconfig", "pbxproj"])
+def test_bron_swiftfin_zonder_bundle_id_is_geen_bewijs(tmp_path, sleutel):
+    rel = ai.load_config(ROOT)["swiftfin"][sleutel]
+    repo = bron_kopie(tmp_path)
+    vervang(repo / rel, "PRODUCT_BUNDLE_IDENTIFIER = org.jellyfin.swiftfin.jellyleon", "")
+    assert ai.check_bron(repo) == [f"{rel}: geen PRODUCT_BUNDLE_IDENTIFIER gevonden"]
+
+
+def test_archief_zonder_backupregels_is_geen_bewijs(nep_aapt2):
+    archief = android_archief(f"{ANDROID}.debug")
+    archief["resources"], _ids = resources_dump(f"{ANDROID}.debug", {"app_name": "Jellyfin"}, {})
+    r = check(nep_aapt2, "android", nep_aapt2("app-debug.apk", archief))
+    assert r.violations == ["geen back-upregels (xml/backup_content) gevonden"]
+    assert r.sharedprefs == []
+
+
+@pytest.mark.parametrize("xml_name", ["authenticator", "searchable"])
+def test_androidtv_zonder_vaste_xml_is_geen_bewijs(nep_aapt2, xml_name):
+    """Zonder xml/authenticator of xml/searchable is het accounttype of de zoek-authority niet gemeten."""
+    archief = androidtv_archief(ANDROIDTV)
+    regel = rf"    resource 0x[0-9a-f]+ xml/{xml_name}\n      \(\) \(file\) [^\n]+\n"
+    archief["resources"], aantal = re.subn(regel, "", archief["resources"])
+    assert aantal == 1
+    r = check(nep_aapt2, "androidtv", nep_aapt2("app-release.apk", archief))
+    # één melding per attribuut dat uit dat bestand gelezen had moeten worden (searchable: authority en intent-data)
+    assert r.violations and set(r.violations) == {f"xml/{xml_name} ontbreekt in het archief"}
+
+
+def test_manifest_package_wijkt_af_van_de_pakketnaam(nep_aapt2):
+    archief = android_archief(ANDROID)
+    archief["xmltree"]["AndroidManifest.xml"] = manifest_tree(
+        "org.jellyfin.mobile", [f"{ANDROID}.image-provider"], [f"{ANDROID}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"])
+    r = check(nep_aapt2, "android", nep_aapt2("app-release.apk", archief))
+    assert r.violations == [f"manifest-package 'org.jellyfin.mobile' wijkt af van de pakketnaam '{ANDROID}'"]
+
+
+def test_onbekende_client_of_ontbrekend_bestand_is_gebruiksfout(nep_aapt2, tmp_path):
+    cfg = ai.load_config(ROOT)
+    apk = nep_aapt2("app-debug.apk", android_archief(f"{ANDROID}.debug"))
+    with pytest.raises(ToolError, match="onbekende Android-client 'desktop'"):
+        ai.check_apk(cfg, "desktop", apk, nep_aapt2.aapt2)
+    with pytest.raises(ToolError, match="bestand bestaat niet"):
+        ai.check_apk(cfg, "android", tmp_path / "bestaat-niet-debug.apk", nep_aapt2.aapt2)
+
+
+def test_find_aapt2_valt_terug_op_het_zoekpad(tmp_path, monkeypatch):
+    for env in ("AAPT2", "ANDROID_HOME", "ANDROID_SDK_ROOT"):
+        monkeypatch.delenv(env, raising=False)
+    nep = tmp_path / "aapt2"
+    nep.write_text("", encoding="utf-8")
+    nep.chmod(nep.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert ai.find_aapt2() == str(nep)
+    monkeypatch.setenv("ANDROID_HOME", str(tmp_path / "sdk-zonder-build-tools"))
+    assert ai.find_aapt2() == str(nep)
+
+
+def test_cli_json_houdt_exitcode_en_meldt_de_overtreding(nep_aapt2, tmp_path, capsys):
+    """`--json` (waar het bewijs in test-evidence/ uit komt) verandert de uitkomst niet: in_orde false en exit 1."""
+    repo = bron_kopie(tmp_path / "bron")
+    assert ai.main(["--repo-root", str(repo), "--json", "bron"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"in_orde": True, "overtredingen": []}
+    vervang(repo / "swiftfin/XcodeConfig/Shared.xcconfig", "org.jellyfin.swiftfin.jellyleon", "org.jellyfin.swiftfin")
+    assert ai.main(["--repo-root", str(repo), "--json", "bron"]) == 1
+    uit = json.loads(capsys.readouterr().out)
+    assert uit["in_orde"] is False and any("officiële bundle-id" in v for v in uit["overtredingen"])
+
+    instellingen = build_settings(tmp_path, "s.json", [("Swiftfin iOS", "Release", "org.jellyfin.swiftfin")])
+    assert ai.main(["--repo-root", str(ROOT), "--json", "xcode", "--instellingen", str(instellingen)]) == 1
+    uit = json.loads(capsys.readouterr().out)
+    assert uit["in_orde"] is False and uit["doelen"][0]["bundle_id"] == "org.jellyfin.swiftfin"
+    assert uit["overtredingen"] == ["Swiftfin iOS (Release): officiële bundle-id org.jellyfin.swiftfin"]
+
+    apk = nep_aapt2("x-release.apk", android_archief("org.jellyfin.mobile"))
+    assert ai.main(["--repo-root", str(ROOT), "--json", "apk", "android", str(apk), "--aapt2", nep_aapt2.aapt2]) == 1
+    uit = json.loads(capsys.readouterr().out)
+    assert uit[0]["pakket"] == "org.jellyfin.mobile" and any("is de officiële app" in v for v in uit[0]["violations"])
+
+
+def test_bouwmap_met_onbekende_variant_is_gebruiksfout(nep_aapt2, tmp_path, capsys):
+    nep_aapt2("b/outputs/apk/libre/debug/app-libre-debug.apk", android_archief(f"{ANDROID}.debug"))
+    assert ai.main(["--repo-root", str(ROOT), "bouwmap", "android", str(tmp_path / "b"), "--verwacht", "debug,beta",
+                    "--aapt2", nep_aapt2.aapt2]) == 3
+    assert "--verwacht: onbekende variant" in capsys.readouterr().err
