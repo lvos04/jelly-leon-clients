@@ -1,0 +1,115 @@
+{
+  "id": "contract-1.3-review-qa",
+  "datum": "2026-11-11",
+  "soort": "onafhankelijke review/QA van contract 1.3 (jelly-leon-clients), alleen de NU-punten C1.3-JLC-01…03: kopie byte-gelijk, app-ID's bevestigd vastgelegd, EVIDENCE-regels",
+  "uitgangspunt_commit": "b3eae8b",
+  "omgeving": "eigen Ubuntu-machine van de gebruiker (22 CPU's, 14,5 GiB RAM, gedeeld met andere bouwers), geen proxy en geen eigen CA; Gradle onder flock <werkmap>/.lokaal/gradle.lock (nice -n 10, --no-daemon, --max-workers=4, -Xmx2g); aapt2 uit de build-tools van de Android-SDK op deze machine; geen Mac, geen echte apparaten",
+  "opnieuw_uitgevoerd": [
+    {
+      "wat": "forkregels zoals de CI (Clients / Forkregels)",
+      "commando": "ruff check --config tools/clients/ruff.toml tools/clients; python -m pytest -q -rs -W default tools/clients/tests; python tools/clients/check_clients.py; python tools/clients/app_identiteit.py bron; actionlint .github/workflows/*.yml",
+      "resultaat": "op b3eae8b: ruff geen meldingen, 329 passed (niets overgeslagen: de checkout van ai-server-manager staat hier naast de repo), forkregels in orde, app-identiteit in de bron in orde, actionlint exitcode 0; na deze review: ruff geen meldingen, 367 passed na de reparaties en 368 passed met de regel REVIEW-jelly-leon-clients-contract-1.3 in EVIDENCE.json (test_evidence.py telt per regel; niets overgeslagen, geen waarschuwingen), de andere drie ongewijzigd in orde"
+    },
+    {
+      "wat": "contractkopie byte voor byte tegen de bron",
+      "commando": "git -C <werkmap>/ai-server-manager show 02b119cb84be9a307a88532f6692ea8a4bcb12f1:docs/platform-v2/<naam> | cmp - docs/platform-v2/<naam>",
+      "resultaat": "PLATFORM_CONTRACTEN.md (sha256 15b30cf17f91b606451ef9c41f02327076ef76ce655ee94e40e3538106962310), CONTRACT_1.3_CONFORMITEIT.md (f0a2352ddb27088ae668013501c62a1eaaf879efe742a2d4422ffe8d33b43466) en CONTRACT_1.2_CONFORMITEIT.md (634941340afd2d9a55846076ab468ea4aacddb32dd8be6a7b92dd113661d39a4): alle drie byte-gelijk aan de bron op 02b119c en aan de werkboom van de bron (HEAD daar 7d3a8ce; geen commit na 02b119c op deze drie bestanden). De hashes zijn gelijk aan de pins in tools/clients/tests/test_contract_kopie.py."
+    },
+    {
+      "wat": "android vanaf nul gebouwd en gemeten (zoals Clients / Android)",
+      "commando": "bouwmappen en .gradle van android/ eerst verwijderd; ANDROID_HOME=<sdk> make android-bouw GRADLE_LOCK=<gradle.lock>",
+      "resultaat": "2026-11-11 06:25Z: BUILD SUCCESSFUL in 56s, 129 actionable tasks: 129 executed; testLibreDebugUnitTest en testProprietaryDebugUnitTest NO-SOURCE (upstream heeft geen unit-tests); bouwmap: 4 artefacten gecontroleerd, 0 overtredingen; vergelijk: 4 eigen artefacten tegen 4 officiële APK's, 0 gelijke identiteitswaarden; exitcode 0"
+    },
+    {
+      "wat": "androidtv vanaf nul gebouwd, getest en gemeten (zoals Clients / Android TV)",
+      "commando": "bouwmappen en .gradle van androidtv/ eerst verwijderd; ANDROID_HOME=<sdk> make androidtv-bouw GRADLE_LOCK=<gradle.lock>",
+      "resultaat": "2026-11-11 06:26Z: BUILD SUCCESSFUL in 1m 5s, 317 actionable tasks: 317 executed; JUnit-XML: app 13/13 en preference 2/2 in testDebugUnitTest én in testReleaseUnitTest, 0 fouten, 0 overgeslagen; bouwmap: 2 artefacten gecontroleerd, 0 overtredingen; vergelijk: 2 eigen artefacten tegen 2 officiële APK's, 0 gelijke identiteitswaarden (4 keer 'gelijk, toegestaan': de sharedpref-namen systemprefs en AuthenticationPreferences); exitcode 0"
+    },
+    {
+      "wat": "officiële upstream-APK's tegen de pins",
+      "commando": "sha256 van de zes bestanden in .bouw/officiele-apks tegen officiele_apks in tools/clients/app_identiteit.json",
+      "resultaat": "jellyfin-android v2.7.3 (libre en proprietary, debug en release) en jellyfin-androidtv v0.19.10 (debug en release): alle zes gelijk aan de pin"
+    },
+    {
+      "wat": "CI-runs van de bouwers nagelezen (gh run view)",
+      "resultaat": "Clients / Forkregels 42971842197 groen op b3eae8b; op 13ff0eb groen: Clients / Forkregels 42969899251, Clients / Android 42969899255, Clients / Android TV 42969899236, Clients / Swiftfin 42969899181 (macOS-runner, simulatorbuild zonder ondertekening). Door deze review niet opnieuw gestart: de review wijzigt alleen tests en docs, en die starten alleen Clients / Forkregels."
+    },
+    {
+      "wat": "bevestiging van de app-ID's nagelezen in de bron",
+      "resultaat": "ai-server-manager docs/platform-v2/OVERDRACHT/STATUS.md (commit c63b32e, 'Besluiten van de gebruiker na contract 1.3'): 'App-ID's (A02) bevestigd' met org.jellyfin.mobile.jellyleon, org.jellyfin.androidtv.jellyleon en org.jellyfin.swiftfin.jellyleon (iOS/tvOS: NIET GEVALIDEERD (Mac/Xcode)). In deze repo vastgelegd in tools/clients/app_identiteit.json (bevestiging), ADR-0004, ADR-0012 en de README; de drie waarden zijn overal gelijk."
+    }
+  ],
+  "mutatiecontrole": {
+    "methode": "Elke if/elif-voorwaarde om de beurt vervangen door False, in losse kladkopieën (git worktree) buiten de repo; daarna de tests die het bestand dekken. Een proef die dan nog slaagt, is een voorwaarde die geen enkele test bewaakt. Vóór elke reeks is gecontroleerd dat de ongewijzigde kladkopie slaagt.",
+    "app_identiteit.py": {
+      "tests": "test_app_identiteit.py, test_workflows.py, test_check_clients.py",
+      "voorwaarden": 98,
+      "voor_de_review": {
+        "gevangen": 75,
+        "onbewaakt": 23,
+        "regels": [
+          83,
+          97,
+          99,
+          102,
+          105,
+          149,
+          166,
+          235,
+          301,
+          304,
+          332,
+          454,
+          456,
+          475,
+          502,
+          548,
+          739,
+          763,
+          805,
+          811,
+          819,
+          838,
+          877
+        ]
+      },
+      "na_de_review": {
+        "gevangen": 97,
+        "onbewaakt": 1,
+        "regels": [
+          763
+        ],
+        "toelichting": "r. 763 drukt alleen de regel 'eigen permissies' af; geen invloed op overtredingen of exitcode"
+      }
+    },
+    "test_evidence.py": {
+      "voor_de_review": "21 voorwaarden: 18 gevangen, 3 onbewaakt — 'elk veld is tekst' en de twee vormcontroles van REVIEW- en C1.-ID's (die stonden in de testfunctie zelf, zonder tegenproef)",
+      "na_de_review": "24 voorwaarden (de ID-controle is een losse functie geworden): 24 gevangen, 0 onbewaakt",
+      "toelichting": "beide gemeten zonder bytecode-cache (PYTHONDONTWRITEBYTECODE=1), omdat dit testbestand binnen één seconde draait"
+    },
+    "test_contract_kopie.py": {
+      "voorwaarden": 6,
+      "resultaat": "3 gevangen; 3 slagen ook als ze uitstaan en zijn in deze omgeving gelijkwaardig: het inkorten van een pad naar docs/platform-v2 en de twee 'overslaan'-takken die alleen optreden als de bron-checkout of de bron-commit ontbreekt (gemeten met JLC_CONTRACT_BRON naar de checkout van ai-server-manager: 9 passed, niets overgeslagen). Niets gewijzigd."
+    },
+    "correctie": "De eerste meting over r. 83-301 van app_identiteit.py was ongeldig: in de kladkopie stond een verouderde bytecode-cache van een eerdere handproef, waardoor de hele testmap ook zonder mutatie faalde en elke proef 'gevangen' leek. Opnieuw gemeten met een slagende uitgangsstand bleken daar negen voorwaarden onbewaakt; die zijn in commit 119d428 afgedekt."
+  },
+  "gevonden_en_gerepareerd": [
+    "Fail-closed-paden van app_identiteit.py zonder tegenproef (22 voorwaarden, zie mutatiecontrole): tests toegevoegd in de commits 763f130 en 119d428. De code zelf was goed en is niet gewijzigd.",
+    "De bestaande tegenproef voor de configuratie vroeg 'één van twee meldingen'; daardoor kon de regel 'eigen ID is een officiële ID' ongemerkt verdwijnen. Nu per regel de exacte melding (commit 119d428).",
+    "De bevestiging van de drie app-ID's stond in app_identiteit.json, maar geen test bewaakte dat ze precies de drie eigen ID's dekt. Nu wel (commit 119d428): een ID wijzigen zonder nieuw besluit valt op.",
+    "De ID-regels van EVIDENCE.json (vorm van C1.3-, C1.2- en REVIEW-ID's) hadden geen tegenproef: losse functie met tien gevallen die moeten falen (commit 982aab0).",
+    "README: vroeg nog om bevestiging van de Swiftfin-bundle-id (al bevestigd op 2026-11-10), noemde de vergelijkstap niet en was dubbelzinnig over de unit-tests van android (commit 31564fa)."
+  ],
+  "gemeld_niet_gewijzigd": [
+    "De contractkopie noemt de bevestiging van de ID's nog als open (§1.1 besluit 1 'bevestiging gevraagd', §1.2, C1.3-JLC-02 'wachten op bevestiging'), terwijl de gebruiker op 2026-11-10 bevestigde. De kopie wordt hier nooit aangepast; dit is een punt voor de bron (ai-server-manager).",
+    "Letterlijke tekst van §1.1 besluit 1 verbiedt gelijke sharedpref-namen; androidtv gebruikt net als de officiële app 'systemprefs' en 'AuthenticationPreferences'. Die zijn niet van een pakketnaam afgeleid en per app afgeschermd; gelezen als toegestaan (§2.3 regel 6, R9: 'volgen de eigen ID'; ADR-0012 besluit 4). De vergelijkstap toont ze zichtbaar als 'gelijk, toegestaan'.",
+    "Het Swiftfin-URL-schema 'swiftfin' is gelijk aan dat van de officiële app (ADR-0012 besluit 6); de regel noemt URL-schema's niet.",
+    "De byte-vergelijking met de bron draait niet in CI (de bronrepo staat daar niet naast); daar bewaakt alleen de SHA-256-pin de kopie.",
+    "'make opruimen' sluit af met 'docker image prune -f'; op een gedeelde machine raakt dat ook naamloze images van andere bouwers. Buiten de NU-punten, niet gewijzigd."
+  ],
+  "niet_gevalideerd": [
+    "Fork-app en officiële app naast elkaar op echte apparaten (D15): NIET GEVALIDEERD (hardware).",
+    "Swiftfin: niet lokaal gebouwd (geen Mac), nooit ondertekend of op een apparaat gezet: NIET GEVALIDEERD (Mac/Xcode).",
+    "Registratie van de bundle-id bij Apple: NIET GEVALIDEERD (account)."
+  ]
+}

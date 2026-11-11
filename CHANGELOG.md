@@ -105,3 +105,9 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
   GEVALIDEERD (Mac/Xcode) en (account); naast elkaar installeren op echte apparaten: NIET GEVALIDEERD (hardware).
 - ADR-0012 (contract 1.3 in de clients); ADR-0004, ADR-0008, README's, PATCHES, FORK_STRATEGIE en INVENTARIS
   bijgewerkt. Bewijs: `docs/platform-v2/test-evidence/contract-1.3-app-identiteit.json`. 329 tests.
+- Review contract 1.3 (2026-11-11): kopie byte-gelijk aan de bron op `02b119c`, android en androidtv vanaf nul
+  gebouwd en tegen de officiële APK's gemeten (0 gelijke identiteitswaarden). Geen fout in de code; wel ontbrekende
+  tegenproeven (mutatiecontrole: 23 van de 98 voorwaarden in `app_identiteit.py` onbewaakt, nu 1, alleen weergave),
+  geen test dat de bevestiging precies de drie eigen ID's dekt, en een README die nog om bevestiging van de
+  Swiftfin-bundle-id vroeg. Alle drie gerepareerd. Bewijs:
+  `docs/platform-v2/test-evidence/contract-1.3-review-qa.json`. 368 tests.
