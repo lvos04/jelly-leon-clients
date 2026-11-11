@@ -111,5 +111,11 @@
     "Fork-app en officiële app naast elkaar op echte apparaten (D15): NIET GEVALIDEERD (hardware).",
     "Swiftfin: niet lokaal gebouwd (geen Mac), nooit ondertekend of op een apparaat gezet: NIET GEVALIDEERD (Mac/Xcode).",
     "Registratie van de bundle-id bij Apple: NIET GEVALIDEERD (account)."
-  ]
+  ],
+  "ci_na_de_push": {
+    "commit": "5990f65",
+    "run": "GitHub Actions Clients / Forkregels 42976836320",
+    "resultaat": "groen: ruff geen meldingen, 365 passed en 3 skipped (de byte-vergelijking met de bron: de bronrepo staat in CI niet naast deze repo, daar bewaakt de SHA-256-pin de kopie), forkregels, app-identiteit in de bron en actionlint in orde",
+    "niet_gestart": "Clients / Android, Clients / Android TV en Clients / Swiftfin: de review wijzigt alleen tests en docs. Laatste groene runs daarvan staan op 13ff0eb (zie opnieuw_uitgevoerd)."
+  }
 }
