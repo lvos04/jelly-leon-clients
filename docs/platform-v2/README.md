@@ -10,13 +10,18 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 
 ## Contract (kopie, niet lokaal wijzigen)
 
-- `PLATFORM_CONTRACTEN.md` — `contracts 1.2`, byte-gelijke kopie van `lvos04/ai-server-manager`
-  `docs/platform-v2/PLATFORM_CONTRACTEN.md` (bron-commit `8b54f39`); bij verschil wint de bron.
-- `CONTRACT_1.2_CONFORMITEIT.md` — wat elke repo voor 1.2 moet veranderen (deze repo: §11, JC1–JC5); zelfde bron.
-- Drifttest: `tools/clients/tests/test_contract_kopie.py` (vaste SHA-256 van de bron; met een git-checkout van de
+- `PLATFORM_CONTRACTEN.md` — `contracts 1.3`, byte-gelijke kopie van `lvos04/ai-server-manager`
+  `docs/platform-v2/PLATFORM_CONTRACTEN.md` (bron-commit `02b119c`); bij verschil wint de bron.
+- `CONTRACT_1.3_CONFORMITEIT.md` — wat elke repo voor 1.3 moet veranderen (deze repo: §11, C1.3-JLC-01…03); zelfde
+  bron en bron-commit. Hoe deze repo eraan voldoet: `../adr/ADR-0012-contract-1-3-in-de-clients.md`.
+- `CONTRACT_1.2_CONFORMITEIT.md` — historie (deze repo: §11, JC1–JC5), ook byte-gelijk aan de bron op dezelfde
+  bron-commit.
+- Drifttest: `tools/clients/tests/test_contract_kopie.py` (vaste SHA-256 van elke kopie; met een git-checkout van de
   bronrepo naast deze repo of `JLC_CONTRACT_BRON=<map>` ook een byte-vergelijking met de bron op de bron-commit; een
   nieuwere contractstand in de bron geeft alleen een waarschuwing). Relatieve links in de kopie (bv. naar
-  `docs/adr/ADR-0011-contract-1-2.md`) wijzen naar bestanden in ai-server-manager.
+  `docs/adr/…`) wijzen naar bestanden in ai-server-manager.
+- De kopie noemt de bevestiging van de app-ID's nog als open punt (§1.2); de gebruiker heeft ze op 2026-11-10
+  bevestigd (ADR-0004, ADR-0012). De kopie wordt niet lokaal aangepast; dat is gemeld als contractpunt.
 
 ## B03 2.0 — universele mediaserver (goedgekeurd door de gebruiker op 2026-11-09)
 
@@ -64,7 +69,7 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `05_TESTS/INTEGRALE_E2E_TESTMATRIX.md`
 - `06_TEMPLATES/PROMPTS_PER_APP/PROMPT_B03_UNIVERSELE_MEDIASERVER.md`
 
-## Eigen documenten van deze repo (P0 en contract 1.2)
+## Eigen documenten van deze repo (P0, contract 1.2 en contract 1.3)
 
 - `FORK_STRATEGIE.md` — aanpak: subtree-indeling, upstream-sync per client, patchregister, branding, licenties
 - `INVENTARIS.md` — per client taal/build, toolchain, minimale SDK/OS, tests, servercompatibiliteit, delta-matrix B03-003
@@ -72,7 +77,10 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 - `BOUWVERIFICATIE_P0.md` en `test-evidence/` — wat echt gebouwd/getest is en wat geblokkeerd was
 - `EVIDENCE.json` — status per Excel-taak (contract §11)
 - `test-evidence/contract-1.2-app-identiteit.json` — lokale builds en `aapt2`-metingen van de eigen app-identiteit
-- Besluiten: `../adr/ADR-0001…0011` (ADR-0010: contract 1.2 in deze repo; ADR-0011: clientcompatibiliteit met 12.x);
+- `test-evidence/contract-1.3-app-identiteit.json` — de eigen builds gemeten tegen de officiële upstream-APK's
+  (`app_identiteit.py vergelijk`), met tegenproef; apparaten en Swiftfin NIET GEVALIDEERD
+- Besluiten: `../adr/ADR-0001…0012` (ADR-0010: contract 1.2 in deze repo; ADR-0011: clientcompatibiliteit met 12.x;
+  ADR-0012: contract 1.3 in deze repo en de bevestigde app-ID's);
   B03 2.0-besluiten van jelly-leon die de clients raken: `../adr/README.md`
 
 ## P4-0 — clients tegen de Jelly Leon 12.x-server (JC3, 2026-11-10)

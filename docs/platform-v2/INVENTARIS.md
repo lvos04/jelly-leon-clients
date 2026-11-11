@@ -115,7 +115,7 @@ tot D15 bekend is.
 | Desktop | **bestaand (upstream)**, Linux-build **gemeten** | Windows/macOS-builds ontbreken in onze CI |
 | Tv-browser, smart-tv, Chromecast/AirPlay | **ontbrekend / unknown** | afhankelijk van D15; Chromecast alleen in android *proprietary* |
 | Geteste matrix op echte apparaten (ondertitels, hervatten, afspelen) | **ontbrekend** (emulator: **gemeten**) | emulators en desktop onder Xvfb tegen 12.4 Sim-getest (P4-0, JC3); acceptatie B03-003 vraagt echte apparaten → Geblokkeerd |
-| Eigen app-identiteit naast de officiële apps | **bestaand (nieuw, contract 1.2)** | JLC-0002/0003/0004; android/androidtv met `aapt2` gemeten, Swiftfin via build-instellingen; naast de officiële app geïnstalleerd en gebruikt op de emulators (P4-0, Sim-getest); op een apparaat NIET GEVALIDEERD (hardware) |
+| Eigen app-identiteit naast de officiële apps | **bestaand (nieuw, contract 1.2)** | JLC-0002/0003/0004; android/androidtv met `aapt2` gemeten, sinds contract 1.3 ook tegen de officiële upstream-APK's (0 gelijke identiteitswaarden, ADR-0012), Swiftfin via build-instellingen (NIET GEVALIDEERD (Mac/Xcode)); ID's door de gebruiker bevestigd op 2026-11-10; naast de officiële app geïnstalleerd en gebruikt op de emulators (P4-0, Sim-getest); op een apparaat NIET GEVALIDEERD (hardware) |
 | Branding "Jelly Leon" (zichtbare naam) | **ontbrekend (bewust)** | aparte stap na de app-identiteit (ADR-0004 punt 5) |
 | Distributie naar apparaten (APK/IPA/installers) | **ontbrekend** | geen TrueNAS-app (ADR-0008); kanaal is een gebruikersbesluit |
 | Upstream-sync + patchregister | **bestaand (nieuw in P0)** | `tools/clients/`, workflows, 159 tests (Sim-getest) |

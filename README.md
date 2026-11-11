@@ -33,8 +33,9 @@ submodule gepinde KDE MpvQt-bron (LGPL), als geneste subtree toegevoegd. Alles d
 - [`docs/platform-v2/PATCHES.md`](docs/platform-v2/PATCHES.md) — patchregister (elke afwijking van upstream)
 - [`docs/platform-v2/BOUWVERIFICATIE_P0.md`](docs/platform-v2/BOUWVERIFICATIE_P0.md) — wat echt gebouwd/getest is
 - [`docs/platform-v2/EVIDENCE.json`](docs/platform-v2/EVIDENCE.json) — status per Excel-taak
-- [`docs/platform-v2/PLATFORM_CONTRACTEN.md`](docs/platform-v2/PLATFORM_CONTRACTEN.md) — kopie van `contracts 1.2`
-  (met `CONTRACT_1.2_CONFORMITEIT.md`; drifttest `tools/clients/tests/test_contract_kopie.py`)
+- [`docs/platform-v2/PLATFORM_CONTRACTEN.md`](docs/platform-v2/PLATFORM_CONTRACTEN.md) — kopie van `contracts 1.3`
+  (met `CONTRACT_1.3_CONFORMITEIT.md`, en `CONTRACT_1.2_CONFORMITEIT.md` als historie; drifttest
+  `tools/clients/tests/test_contract_kopie.py`)
 - [`docs/adr/`](docs/adr/) — architectuurbesluiten
 - [`tools/clients/`](tools/clients/) — basislijn, forkregels, upstream-sync, bouwverificatie, tests
 - [`.github/workflows/`](.github/workflows/) — eigen CI (`clients-*.yml`)

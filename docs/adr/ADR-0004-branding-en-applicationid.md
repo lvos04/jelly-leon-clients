@@ -1,9 +1,12 @@
 # ADR-0004 — Branding alleen zichtbaar; eigen applicationId/bundle-id naast de officiële apps
 
 - **Status:** Aanvaard — **besluit van de gebruiker 2026-11-09** (STATUS.md, besluit 1), concrete ID's eveneens
-  **besluit van de gebruiker (2026-11-09)**. Uitgevoerd in de ronde van contract 1.2 (`CONTRACT_1.2_CONFORMITEIT.md`
-  JC1/JC2) als geregistreerde patches JLC-0002 (android), JLC-0003 (androidtv) en JLC-0004 (swiftfin) — eerder dan
-  het oorspronkelijke "P4", omdat contract 1.2 het in deze ronde vraagt.
+  **besluit van de gebruiker (2026-11-09)** en **door de gebruiker bevestigd op 2026-11-10**, ook de Swiftfin-bundle-id
+  (`ai-server-manager:docs/platform-v2/OVERDRACHT/STATUS.md`, "Besluiten van de gebruiker na contract 1.3", commit
+  `c63b32e`; ADR-0012). Uitgevoerd in de ronde van contract 1.2 (`CONTRACT_1.2_CONFORMITEIT.md` JC1/JC2) als
+  geregistreerde patches JLC-0002 (android), JLC-0003 (androidtv) en JLC-0004 (swiftfin) — eerder dan het
+  oorspronkelijke "P4", omdat contract 1.2 het in deze ronde vraagt. Contract 1.3 (§1.1 besluit 1) bewaakt sinds
+  2026-11-10 ook in CI dat geen afgeleide waarde gelijk is aan die van de officiële app (C1.3-JLC-02, ADR-0012).
 - **Context:** Vaste keuze (contract §1): technische identiteit/API blijft "Jellyfin", alleen de zichtbare naam wordt
   "Jelly Leon"; GPL-licenties en upstream-credits blijven staan. Voor de clients betekent "technische identiteit" ook:
   de `Authorization: MediaBrowser Client=…`-header, apparaatprofielen en API-gedrag. De app-identiteit op het apparaat
@@ -28,13 +31,23 @@
    geregistreerde patch. Bij android en desktop komt het meeste zichtbare uit de web-client van de server
    (`jelly-leon-web`); daar hoort de branding primair.
 
-### Concrete waarde van de ID — besluit van de gebruiker (2026-11-09)
+### Concrete waarde van de ID — besluit van de gebruiker (2026-11-09), bevestigd op 2026-11-10
 
 | Client | Vastgezet (release) | Debug (upstream-suffix blijft) | Patch | Bron van de keuze |
 |---|---|---|---|---|
-| android | **`org.jellyfin.mobile.jellyleon`** | `org.jellyfin.mobile.jellyleon.debug` | JLC-0002 | besluit van de gebruiker (2026-11-09) |
-| androidtv | **`org.jellyfin.androidtv.jellyleon`** | `org.jellyfin.androidtv.jellyleon.debug` | JLC-0003 | besluit van de gebruiker (2026-11-09) |
-| swiftfin (iOS en tvOS) | **`org.jellyfin.swiftfin.jellyleon`** | n.v.t. (één ID voor Debug en Release) | JLC-0004 | afgeleid: zelfde patroon als het besluit, door de bouwer toegepast; door de gebruiker te bevestigen vóór de eerste Apple-registratie |
+| android | **`org.jellyfin.mobile.jellyleon`** | `org.jellyfin.mobile.jellyleon.debug` | JLC-0002 | besluit van de gebruiker (2026-11-09), **bevestigd 2026-11-10** |
+| androidtv | **`org.jellyfin.androidtv.jellyleon`** | `org.jellyfin.androidtv.jellyleon.debug` | JLC-0003 | besluit van de gebruiker (2026-11-09), **bevestigd 2026-11-10** |
+| swiftfin (iOS en tvOS) | **`org.jellyfin.swiftfin.jellyleon`** | n.v.t. (één ID voor Debug en Release) | JLC-0004 | eerst afgeleid (zelfde patroon, door de bouwer toegepast); **door de gebruiker bevestigd 2026-11-10** — NIET GEVALIDEERD (Mac/Xcode): nog nooit ondertekend of bij Apple geregistreerd |
+
+**Bevestiging door de gebruiker (2026-11-10):** na contract 1.3 heeft de gebruiker de drie ID's bevestigd
+(`ai-server-manager:docs/platform-v2/OVERDRACHT/STATUS.md`, "Besluiten van de gebruiker na contract 1.3": "App-ID's
+(A02) bevestigd: `org.jellyfin.mobile.jellyleon` (Android), `org.jellyfin.androidtv.jellyleon` (Android TV),
+`org.jellyfin.swiftfin.jellyleon` (iOS/tvOS; NIET GEVALIDEERD (Mac/Xcode))"). Daarmee vervalt het open punt van
+contract 1.3 §1.2 ("Bevestiging van de Android-ID's … en van de Swiftfin-bundle-id"); de kopie van het contract in
+deze repo noemt het nog als open en wordt niet lokaal aangepast (ADR-0012, gemeld als contractpunt). Vastgelegd in
+`tools/clients/app_identiteit.json` (`bevestiging`). Verspreiden blijft wachten op het besluit over ondertekening en
+kanaal (ADR-0008); een Apple-registratie vraagt een Apple Developer-account van de gebruiker (NIET GEVALIDEERD
+(account); mogelijk betaald, dus alleen met diens akkoord).
 
 **Besluit van de gebruiker (2026-11-09):** in het keuzemenu koos de gebruiker het alternatief "suffix `.jellyleon`
 op de upstream-ID" uit het voorstel hieronder (`org.jellyfin.mobile.jellyleon` voor android,
@@ -43,16 +56,18 @@ orkestratie-opdracht van de contract-1.2-ronde; een eigen vastlegging in `ai-ser
 bestond op de peildatum nog niet. De keuze heeft de kleinste diff en houdt de herkomst van de code herkenbaar; nadeel
 (bewust geaccepteerd): de ID blijft in de naamruimte van het Jellyfin-project.
 
-**Afwijking van de letterlijke contracttekst (gemeld als contractpunt, ADR-0010):** contract 1.2 §1.1 besluit 1 en
-`CONTRACT_1.2_CONFORMITEIT.md` JC1 zeggen "nooit `org.jellyfin.*` als ID van de fork". Het latere, concrete besluit
-van de gebruiker gaat voor; wat die regel beschermt, blijft geborgd: de fork gebruikt **nooit een officiële ID**
-(`org.jellyfin.mobile[.debug]`, `org.jellyfin.androidtv[.debug]`, `org.jellyfin.swiftfin`), en alle afgeleide waarden
-(accounttype, authorities, permissies, sharedprefs) verschillen van die van de officiële app — bewaakt door
-`tools/clients/app_identiteit.py` (bron + `aapt2`) in CI. De contracteigenaar wordt gevraagd §1.1/JC1 aan te passen.
+**Afwijking van de letterlijke contracttekst van 1.2 (gemeld als contractpunt, ADR-0010; in 1.3 opgelost):**
+contract 1.2 §1.1 besluit 1 en `CONTRACT_1.2_CONFORMITEIT.md` JC1 zeiden "nooit `org.jellyfin.*` als ID van de fork".
+Contract 1.3 heeft die regel vervangen door "nooit een ID die gelijk is aan die van een officiële app, en geen
+accounttype, authority, permissie, `app_search_suggest_*`-waarde of sharedpref-naam die gelijk is aan die van de
+officiële app; CI bewaakt dit", met de gekozen ID's erbij. De fork gebruikt **nooit een officiële ID**
+(`org.jellyfin.mobile[.debug]`, `org.jellyfin.androidtv[.debug]`, `org.jellyfin.swiftfin`); dat alle afgeleide waarden
+verschillen, bewaakt `tools/clients/app_identiteit.py` in CI (bron, `aapt2` op de eigen builds en sinds 1.3 de
+vergelijking met de gemeten waarden van de officiële APK's, ADR-0012).
 
-**Nog te herzien vóór de eerste verspreiding:** een `applicationId`/bundle-id is na verspreiding praktisch permanent
-(een andere ID = een andere app). Er is nog niets verspreid; wijzigen kan dus tot de eerste verspreiding, alleen met
-een nieuw besluit van de gebruiker, in `tools/clients/app_identiteit.json` + de patches.
+**De ID's liggen vast:** een `applicationId`/bundle-id is na verspreiding praktisch permanent (een andere ID = een andere
+app). Er is nog niets verspreid. Met de bevestiging van 2026-11-10 liggen de ID's vast; wijzigen kan alleen met een
+nieuw besluit van de gebruiker vóór de eerste verspreiding, in `tools/clients/app_identiteit.json` + de patches.
 
 Oorspronkelijk voorstel (bewaard voor de herleidbaarheid; niet gekozen):
 
@@ -112,7 +127,10 @@ zoek-authority = pakketnaam + `.content` en bestaand als provider, accounttype/z
 sharedpref-namen); lokaal daarnaast op de release-APK's (`assembleRelease`, niet ondertekend) en als tegenproef op een
 echte upstream-build en een "halve patch" (alleen `applicationId`: accounttype `org.jellyfin.androidtv.debug` = dat
 van de officiële debug-app, 13 overtredingen); *Clients / Swiftfin* leest de bundle-id uit `xcodebuild
--showBuildSettings` (Debug en Release) en de Info.plist van de simulator-app. Naast elkaar installeren op een
+-showBuildSettings` (Debug en Release) en de Info.plist van de simulator-app. **Sinds contract 1.3 (2026-11-10,
+ADR-0012):** `app_identiteit.py vergelijk` meet dezelfde waarden in de officiële upstream-APK's (alle varianten van
+dezelfde versie, SHA-256 gepind) en faalt bij elke gelijke waarde; `bron` zoekt ook letterlijke officiële waarden in
+manifesten, `res/xml` en Kotlin/Java van alle modules. Naast elkaar installeren op een
 emulator en op echte apparaten uit D15: **NIET GEVALIDEERD (hardware)**; Swiftfin ondertekenen/registreren:
 **NIET GEVALIDEERD (Mac/Xcode)** en **(account)**.
 

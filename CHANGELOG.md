@@ -85,3 +85,23 @@ Alleen fork-eigen wijzigingen; de clients zelf volgen hun upstream-releases (zie
   kijkgeschiedenis; geheugen fail-closed; hervatproef telt elke gevraagde poging.
 - Drifttest contractkopie vergelijkt met de bron op de bron-commit (contract 1.3 in de bron = waarschuwing).
 - Docs: tablet-emulator overal als Sim-mislukt; telling van de tabletpogingen uit het bewijs. 251 tests.
+
+## Contract 1.3 — 2026-11-10/11 (ontwikkelstand, niets gepubliceerd)
+
+- Contractkopie `contracts 1.3` en `CONTRACT_1.3_CONFORMITEIT.md` byte-gelijk overgenomen uit ai-server-manager
+  (bron-commit `02b119c`); `CONTRACT_1.2_CONFORMITEIT.md` blijft als historie op dezelfde bron-commit. De drifttest pint
+  de SHA-256 van elke kopie en vergelijkt met de bron op de bron-commit (C1.3-JLC-01).
+- EVIDENCE-test volgens contract 1.3 §11: vaste validatiewaarden, `Sim-geslaagd`/`Sim-mislukt` alleen bij
+  Testmatrix-ID's, elke blokkade ook in `validatie`, contractpunten `C1.3-…` en reviews nooit "Gereed", genoemde
+  commits moeten bestaan; met tegenproeven (C1.3-JLC-03).
+- ID-regel van §1.1 besluit 1 in CI (C1.3-JLC-02): `app_identiteit.py vergelijk` meet de eigen Android- en Android
+  TV-builds tegen de officiële upstream-APK's van dezelfde versie (alle varianten, SHA-256 gepind) en faalt bij elke
+  gelijke pakketnaam, authority, permissie, accounttype, `app_search_suggest_*`-waarde of sharedpref-naam; `bron` zoekt
+  ook letterlijke officiële waarden in manifesten, `res/xml` en Kotlin/Java. `bouwmap` leest nu elke xml-resource van
+  het artefact bij elke client (accounttype, zoek-authority, `contentAuthority`) en telt ook `permission-tree` en
+  `permission-group`. Gemeten: 0 gelijke identiteitswaarden; tegenproef met de officiële APK's als eigen build faalt.
+- App-ID's door de gebruiker bevestigd op 2026-11-10: `org.jellyfin.mobile.jellyleon`,
+  `org.jellyfin.androidtv.jellyleon`, `org.jellyfin.swiftfin.jellyleon` (ADR-0004, ADR-0012). Swiftfin: NIET
+  GEVALIDEERD (Mac/Xcode) en (account); naast elkaar installeren op echte apparaten: NIET GEVALIDEERD (hardware).
+- ADR-0012 (contract 1.3 in de clients); ADR-0004, ADR-0008, README's, PATCHES, FORK_STRATEGIE en INVENTARIS
+  bijgewerkt. Bewijs: `docs/platform-v2/test-evidence/contract-1.3-app-identiteit.json`. 326 tests.

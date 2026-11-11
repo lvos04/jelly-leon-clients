@@ -1,6 +1,7 @@
 # Forkstrategie Jelly Leon clients (B03-001 / B03-003 / B03-013)
 
-Versie P0 + contract 1.2 · 2026-11-09 · repo `lvos04/jelly-leon-clients`.
+Versie P0 + contract 1.2 · 2026-11-09, aangevuld voor contract 1.3 op 2026-11-11 · repo
+`lvos04/jelly-leon-clients`.
 
 Deze repo bevat de apparaat-apps van het universele mediaplatform: forks van **jellyfin-android v2.7.3**,
 **jellyfin-androidtv v0.19.10**, **jellyfin-desktop v2.0.0** en **Swiftfin 1.6.1** (iOS/tvOS). Doel: zelf kunnen bouwen,
@@ -65,7 +66,13 @@ JLC-0003 (androidtv), JLC-0004 (swiftfin); alleen build-configuratie en XML-reso
   `app_search_suggest_intent_data` en de back-upregels), swiftfin **`org.jellyfin.swiftfin.jellyleon`** (JLC-0004,
   NIET GEVALIDEERD (Mac/Xcode)); debug houdt de suffix `.debug`. Kotlin-`namespace` blijft. Bewaakt door
   `tools/clients/app_identiteit.py` (bron in *Forkregels*, `aapt2` in de Android-workflows, Xcode-instellingen in
-  *Swiftfin*). Waarom deze ID's en de afwijking van de contracttekst "nooit `org.jellyfin.*`": ADR-0004 en ADR-0010.
+  *Swiftfin*). Waarom deze ID's en de afwijking van de contracttekst van 1.2 "nooit `org.jellyfin.*`": ADR-0004 en
+  ADR-0010.
+- **Contract 1.3 (§1.1 besluit 1) en bevestiging door de gebruiker (2026-11-10):** de regel is nu "nooit een ID die
+  gelijk is aan die van een officiële app, en geen accounttype, authority, permissie, `app_search_suggest_*`-waarde
+  of sharedpref-naam die gelijk is aan die van de officiële app; CI bewaakt dit". De drie ID's zijn door de gebruiker
+  bevestigd (Swiftfin: NIET GEVALIDEERD (Mac/Xcode)). `app_identiteit.py vergelijk` meet de eigen builds tegen de
+  officiële upstream-APK's van dezelfde versie; zie ADR-0012.
 
 ## 5. Licenties (ADR-0007)
 

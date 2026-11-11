@@ -30,12 +30,16 @@ een patch in de client. Branding is in P0 bewust **niet** gewijzigd (ADR-0004).
 | JLC-0004 | Eigen bundle-id `org.jellyfin.swiftfin.jellyleon` | swiftfin | app-identiteit (build-instellingen) | actief |
 
 Appcode (Kotlin, C++, Swift): **geen** patches — de app-identiteitspatches (JLC-0002 e.v.) wijzigen alleen
-build-configuratie en XML-resources (contract 1.2 §2.3 regel 6, besluit van de gebruiker 2026-11-09, ADR-0004).
+build-configuratie en XML-resources (contract §1.1 besluit 1 en §2.3 regel 6; besluit van de gebruiker 2026-11-09,
+de ID's bevestigd op 2026-11-10; ADR-0004, ADR-0012).
 Kotlin-`namespace`/pakketten, de clientnaam in de `Authorization`-header, apparaatprofielen, API-gedrag, zichtbare
 naam en pictogrammen zijn ongewijzigd.
 De verwachte ID's staan centraal in `tools/clients/app_identiteit.json`; `tools/clients/app_identiteit.py bron`
 (workflow *Clients / Forkregels*) en `… bouwmap` met `aapt2` (workflows *Clients / Android* en *Clients / Android TV*)
-controleren ze.
+controleren ze. Sinds contract 1.3 meet `… vergelijk` in dezelfde twee workflows ook de officiële upstream-APK's van
+dezelfde versie (SHA-256 gepind) en faalt bij elke gelijke pakketnaam, authority, permissie, accounttype,
+`app_search_suggest_*`-waarde of sharedpref-naam; `bouwmap` leest daarvoor elke xml-resource van het artefact, bij
+elke client (ADR-0012). Swiftfin: de workflow leest de effectieve build-instelling — NIET GEVALIDEERD (Mac/Xcode).
 
 ## JLC-0001 — Submodule `external/mpvqt` als geneste subtree
 
