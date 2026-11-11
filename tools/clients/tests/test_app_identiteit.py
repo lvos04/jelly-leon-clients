@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import copy
 import difflib
 import hashlib
 import io
@@ -1081,3 +1082,106 @@ def test_bouwmap_met_onbekende_variant_is_gebruiksfout(nep_aapt2, tmp_path, caps
     assert ai.main(["--repo-root", str(ROOT), "bouwmap", "android", str(tmp_path / "b"), "--verwacht", "debug,beta",
                     "--aapt2", nep_aapt2.aapt2]) == 3
     assert "--verwacht: onbekende variant" in capsys.readouterr().err
+
+
+# Tweede ronde van dezelfde mutatiecontrole, over de configuratie en de bron-controle. De bestaande tegenproef voor de
+# configuratie vroeg "één van twee meldingen", waardoor elke regel apart kon verdwijnen; hier per regel de exacte
+# melding.
+
+
+def test_bevestiging_dekt_precies_de_drie_eigen_ids():
+    """De gebruiker bevestigde op 2026-11-10 precies deze drie ID's. Een ID wijzigen zonder nieuw besluit valt hier op:
+    de bevestiging dekt de nieuwe waarde dan niet meer."""
+    cfg = ai.load_config(ROOT)
+    eigen = [cfg["android"]["application_id"], cfg["androidtv"]["application_id"], cfg["swiftfin"]["bundle_id"]]
+    assert eigen == [ANDROID, ANDROIDTV, "org.jellyfin.swiftfin.jellyleon"]
+    assert cfg["bevestiging"]["bevestigd"] == eigen
+    assert cfg["bevestiging"]["datum"] == "2026-11-10"
+    assert "OVERDRACHT/STATUS.md" in cfg["bevestiging"]["bron"]
+
+
+def _android_krijgt_officiele_id(cfg: dict) -> None:
+    cfg["android"]["application_id"] = "org.jellyfin.androidtv"
+
+
+def _android_id_gelijk_aan_namespace(cfg: dict) -> None:
+    cfg["android"]["namespace"] = cfg["android"]["application_id"] = "nl.voorbeeld.app"
+
+
+def _swiftfin_krijgt_officiele_id(cfg: dict) -> None:
+    cfg["swiftfin"]["bundle_id"] = "org.jellyfin.swiftfin"
+
+
+def _twee_clients_met_dezelfde_id(cfg: dict) -> None:
+    cfg["androidtv"]["application_id"] = cfg["android"]["application_id"]
+
+
+@pytest.mark.parametrize(("wijzig", "verwacht"), [
+    (_android_krijgt_officiele_id, ["android: eigen ID 'org.jellyfin.androidtv' is een officiële ID",
+                                    "android: eigen ID 'org.jellyfin.androidtv.debug' is een officiële ID"]),
+    (_android_id_gelijk_aan_namespace, ["android: application_id is gelijk aan de namespace (= de officiële ID)"]),
+    (_swiftfin_krijgt_officiele_id, ["swiftfin: bundle-id 'org.jellyfin.swiftfin' is een officiële ID"]),
+    (_twee_clients_met_dezelfde_id, [f"eigen Android-ID's niet uniek: {ANDROID}, {ANDROID}.debug"]),
+], ids=["officiele-id", "gelijk-aan-namespace", "swiftfin-officieel", "niet-uniek"])
+def test_configuratie_elke_regel_apart(wijzig, verwacht):
+    cfg = copy.deepcopy(ai.load_config(ROOT))
+    assert ai.config_violations(cfg) == []
+    wijzig(cfg)
+    assert ai.config_violations(cfg) == verwacht
+
+
+def test_onbekende_schema_versie_is_gebruiksfout(tmp_path):
+    repo = bron_kopie(tmp_path)
+    pad = repo / ai.CONFIG_REL
+    cfg = json.loads(pad.read_text(encoding="utf-8"))
+    cfg["schema_versie"] = 2
+    pad.write_text(json.dumps(cfg), encoding="utf-8")
+    with pytest.raises(ToolError, match="onbekende schema_versie 2"):
+        ai.load_config(repo)
+    assert ai.main(["--repo-root", str(repo), "bron"]) == 3
+
+
+def test_bron_vreemde_sharedpref_in_de_backupregels_faalt(tmp_path):
+    rel = "android/app/src/main/res/xml/backup_content.xml"
+    repo = bron_kopie(tmp_path)
+    vervang(repo / rel, "</full-backup-content>",
+            '    <include domain="sharedpref" path="nl.voorbeeld_preferences" />\n</full-backup-content>')
+    assert ai.check_bron(repo) == [f"{rel}: sharedpref 'nl.voorbeeld_preferences' hoort niet bij '{ANDROID}'"]
+
+
+def test_bron_resvalue_alleen_voor_release_faalt(tmp_path):
+    """De debug-variant zonder eigen `app_id` zou het accounttype van de release-app erven."""
+    rel = "androidtv/app/build.gradle.kts"
+    repo = bron_kopie(tmp_path)
+    tekst = (repo / rel).read_text(encoding="utf-8")
+    regel = next(r for r in tekst.splitlines() if '"app_id"' in r and "applicationIdSuffix" in r)
+    (repo / rel).write_text(tekst.replace(regel + "\n", ""), encoding="utf-8")
+    assert ai.check_bron(repo) == [f"{rel}: resValue 'app_id' hoort precies 2× (release en debug) te staan, gevonden 1"]
+
+
+def test_bron_zonder_hoofdbronset_is_geen_bewijs(tmp_path):
+    repo = bron_kopie(tmp_path)
+    shutil.rmtree(repo / "android/app/src/main")
+    violations = ai.check_bron(repo)
+    assert "android/app/src/main ontbreekt (letterlijke waarden niet gecontroleerd)" in violations
+    assert any(v.startswith("android/app/src/main/res/xml/backup_content.xml: onleesbaar (") for v in violations)
+
+
+@pytest.mark.parametrize("sleutel", ["xcconfig", "pbxproj"])
+def test_bron_zonder_swiftfin_bestand_is_een_overtreding_en_geen_crash(tmp_path, sleutel):
+    rel = ai.load_config(ROOT)["swiftfin"][sleutel]
+    repo = bron_kopie(tmp_path)
+    (repo / rel).unlink()
+    violations = ai.check_bron(repo)
+    assert len(violations) == 1 and violations[0].startswith(f"{rel}: onleesbaar ("), violations
+    assert ai.main(["--repo-root", str(repo), "bron"]) == 1
+
+
+def test_cli_bron_meldt_alleen_in_orde_zonder_overtreding(tmp_path, capsys):
+    assert ai.main(["--repo-root", str(ROOT), "bron"]) == 0
+    assert "in orde" in capsys.readouterr().out
+    repo = bron_kopie(tmp_path)
+    (repo / "swiftfin/XcodeConfig/Shared.xcconfig").unlink()
+    assert ai.main(["--repo-root", str(repo), "bron"]) == 1
+    uit = capsys.readouterr().out
+    assert "OVERTREDING" in uit and "in orde" not in uit
