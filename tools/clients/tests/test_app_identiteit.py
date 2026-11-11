@@ -536,6 +536,92 @@ def test_officiele_sharedpref_in_apk_faalt(nep_aapt2):
     assert any("'org.jellyfin.mobile_preferences' hoort niet bij" in v for v in r.violations)
 
 
+def met_xml(archief: dict, naam: str, element: str, attrs: dict[str, str]) -> dict:
+    """Extra xml-resource in het archief, zoals een upstream die later een account of zoekfunctie toevoegt."""
+    archief["resources"] += (f"    resource 0x7f16ff{len(archief['xmltree']):02x} xml/{naam}\n"
+                             f"      () (file) res/xml/{naam}.xml type=XML\n")
+    archief["xmltree"][f"res/xml/{naam}.xml"] = f"N: android={NS} (line=2)\n  E: {element} (line=2)\n" + "".join(
+        f'    A: {NS}:{k}(0x01010000)="{v}" (Raw: "{v}")\n' for k, v in attrs.items())
+    return archief
+
+
+def test_android_meet_accounttype_en_zoekwaarden_in_elke_xml(nep_aapt2):
+    """Ook zonder vaste bestandsnamen (android): de waarden worden gemeten en tellen mee in de vergelijking."""
+    archief = android_archief(ANDROID)
+    met_xml(archief, "sync", "sync-adapter", {"accountType": ANDROID, "contentAuthority": f"{ANDROID}.sync"})
+    met_xml(archief, "zoeken", "searchable", {"searchSuggestAuthority": f"{ANDROID}.zoek",
+                                              "searchSuggestIntentData": f"content://{ANDROID}.zoek/intent"})
+    r = check(nep_aapt2, "android", nep_aapt2("app-libre-release.apk", archief))
+    assert r.violations == [], r.violations
+    soorten = ai.identiteitswaarden(r)
+    assert soorten["accounttype"] == {ANDROID}
+    assert soorten["app_search_suggest"] == {f"{ANDROID}.zoek", f"content://{ANDROID}.zoek/intent"}
+    assert f"{ANDROID}.sync" in soorten["authority"]
+    # zonder zulke bestanden is nul een meting: elk xml-bestand is gelezen
+    kaal = check(nep_aapt2, "android", nep_aapt2("b-libre-release.apk", android_archief(ANDROID)))
+    leeg = ai.identiteitswaarden(kaal)
+    assert leeg["accounttype"] == set() and leeg["app_search_suggest"] == set()
+
+
+@pytest.mark.parametrize(("element", "attr", "waarde", "soort"), [
+    ("account-authenticator", "accountType", "org.jellyfin.mobile", "accounttype"),
+    ("sync-adapter", "contentAuthority", "org.jellyfin.mobile.sync", "authority"),
+    ("searchable", "searchSuggestAuthority", "org.jellyfin.mobile.debug.zoek", "app_search_suggest"),
+    ("searchable", "searchSuggestIntentData", "content://org.jellyfin.mobile.zoek/intent", "app_search_suggest"),
+])
+def test_android_officiele_waarde_in_een_xml_faalt(nep_aapt2, element, attr, waarde, soort):
+    cfg = ai.load_config(ROOT)
+    eigen = check(nep_aapt2, "android", nep_aapt2("eigen/app-libre-release.apk",
+                                                  met_xml(android_archief(ANDROID), "extra", element, {attr: waarde})))
+    assert any(f"xml/extra {attr} = '{waarde}' is een waarde van de officiële app" in v for v in eigen.violations)
+    officieel = [ai.check_apk(cfg, "android", nep_aapt2(f"off/{o}-x.apk", met_xml(android_archief(o), "extra", element,
+                                                                                    {attr: waarde})),
+                              nep_aapt2.aapt2, "debug" if o.endswith(".debug") else "release")
+                 for o in cfg["android"]["officieel"]]
+    v = ai.vergelijk_met_officieel(cfg, "android", [eigen], officieel)
+    assert any(f"{soort} '{waarde}' is gelijk aan" in x for x in v.violations), v.violations
+
+
+def test_twee_accounttypes_in_een_xml_tellen_beide(nep_aapt2):
+    archief = met_xml(android_archief(ANDROID), "accounts", "account-authenticator", {"accountType": f"{ANDROID}.a"})
+    archief["xmltree"]["res/xml/accounts.xml"] += (
+        f'  E: account-authenticator (line=9)\n    A: {NS}:accountType(0x0101028f)="org.jellyfin.mobile" '
+        '(Raw: "org.jellyfin.mobile")\n')
+    r = check(nep_aapt2, "android", nep_aapt2("app-libre-release.apk", archief))
+    assert ai.identiteitswaarden(r)["accounttype"] == {f"{ANDROID}.a", "org.jellyfin.mobile"}
+    assert any("accountType = 'org.jellyfin.mobile' is een waarde van de officiële app" in v for v in r.violations)
+
+
+def test_onleesbare_xml_resource_is_gebruiksfout(nep_aapt2):
+    """Een xml-resource die aapt2 niet kan lezen: niets gemeten is geen bewijs."""
+    archief = met_xml(android_archief(ANDROID), "kapot", "searchable", {})
+    del archief["xmltree"]["res/xml/kapot.xml"]
+    with pytest.raises(ToolError, match="aapt2 dump xmltree --file res/xml/kapot.xml"):
+        check(nep_aapt2, "android", nep_aapt2("app-libre-release.apk", archief))
+
+
+@pytest.mark.parametrize("tag", ["permission-tree", "permission-group"])
+def test_permission_tree_en_group_tellen_als_permissie(nep_aapt2, tag):
+    cfg = ai.load_config(ROOT)
+
+    def archief(pkg: str, naam: str) -> dict:
+        a = android_archief(pkg, permissions=[naam])
+        a["xmltree"]["AndroidManifest.xml"] = a["xmltree"]["AndroidManifest.xml"].replace(
+            "E: permission (line=50)", f"E: {tag} (line=50)")
+        return a
+
+    goed = check(nep_aapt2, "android", nep_aapt2("goed/app-libre-release.apk", archief(ANDROID, f"{ANDROID}.groep")))
+    assert goed.violations == [] and goed.permissies == [f"{ANDROID}.groep"]
+    fout = check(nep_aapt2, "android", nep_aapt2("fout/app-libre-release.apk",
+                                                 archief(ANDROID, "org.jellyfin.mobile.groep")))
+    assert any(f"eigen {tag} 'org.jellyfin.mobile.groep' begint niet met" in v for v in fout.violations)
+    officieel = [ai.check_apk(cfg, "android", nep_aapt2(f"off/{o}-x.apk", archief(o, "org.jellyfin.mobile.groep")),
+                              nep_aapt2.aapt2, "debug" if o.endswith(".debug") else "release")
+                 for o in cfg["android"]["officieel"]]
+    v = ai.vergelijk_met_officieel(cfg, "android", [fout], officieel)
+    assert any("permissie 'org.jellyfin.mobile.groep' is gelijk aan" in x for x in v.violations), v.violations
+
+
 def test_geen_authorities_is_geen_bewijs(nep_aapt2):
     r = check(nep_aapt2, "android", nep_aapt2("app-debug.apk", android_archief(f"{ANDROID}.debug", authorities=[])))
     assert any("geen enkele provider-authority" in v for v in r.violations)

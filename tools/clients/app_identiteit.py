@@ -22,9 +22,12 @@ Subcommando's:
 
 Controles per APK/.ap_ (aapt2 `dump packagename`, `dump xmltree`, `dump resources`):
   - pakketnaam = eigen ID (+ `.debug` bij debug) en nooit een officiële ID;
-  - elke provider-authority en elke zelf gedefinieerde `<permission>` begint met de pakketnaam (anders botsen ze met
-    de officiële app: INSTALL_FAILED_CONFLICTING_PROVIDER / DUPLICATE_PERMISSION);
+  - elke provider-authority en elke zelf gedefinieerde `<permission>` (ook `-tree`/`-group`) begint met de
+    pakketnaam (anders botsen ze met de officiële app: INSTALL_FAILED_CONFLICTING_PROVIDER / DUPLICATE_PERMISSION);
   - de sharedpref-namen in de back-upregels horen bij de pakketnaam (anders vallen instellingen buiten de back-up);
+  - elke xml-resource van elke client wordt gelezen op accounttype, zoek-authority/-data en sync-authority
+    (`accountType`, `searchSuggestAuthority`, `searchSuggestIntentData`, `contentAuthority`): geen ervan is een waarde
+    van de officiële app; een xml-resource die aapt2 niet kan lezen is een gebruiksfout (niets gemeten is geen bewijs);
   - androidtv: `string/app_id` = pakketnaam, `app_search_suggest_authority` = pakketnaam + `.content`,
     `app_search_suggest_intent_data` = `content://` + die authority + `/intent`; het accounttype in
     `xml/authenticator` en de zoek-authority/-data in `xml/searchable` verwijzen (opgelost) naar precies die waarden,
@@ -431,6 +434,16 @@ class ApkResult:
     violations: list[str] = field(default_factory=list)
 
 
+PERMISSIE_TAGS = {"permission", "permission-tree", "permission-group"}
+# attributen in res/xml met een waarde waarmee twee apps naar elkaar kunnen verwijzen: account (authenticator,
+# sync-adapter), zoeksuggesties (searchable) en de authority van een sync-adapter
+APK_XML_ATTRS = ("accountType", "searchSuggestAuthority", "searchSuggestIntentData", "contentAuthority")
+# androidtv: deze drie moeten er zijn en exact naar de eigen resValues verwijzen (JLC-0003)
+VASTE_XML = {("androidtv", "xml/authenticator", "accountType"): "app_id",
+             ("androidtv", "xml/searchable", "searchSuggestAuthority"): "app_search_suggest_authority",
+             ("androidtv", "xml/searchable", "searchSuggestIntentData"): "app_search_suggest_intent_data"}
+
+
 def variant_from_name(path: Path) -> str | None:
     name = path.name.lower()
     hits = [v for v in VARIANTEN if v in name]
@@ -467,22 +480,30 @@ def check_apk(cfg: dict, client: str, path: Path, aapt2: str, variant: str | Non
                 result.authorities.append(auth)
                 if not auth.startswith(pkg + "."):
                     out.append(f"provider-authority '{auth}' begint niet met '{pkg}.' (kan botsen met een andere app)")
-        elif el.tag == "permission":
+        elif el.tag in PERMISSIE_TAGS:
             name = el.attrs.get("name", "")
             result.permissies.append(name)
             if not name.startswith(pkg + "."):
                 out.append(f"eigen permissie '{name}' begint niet met '{pkg}.' (DUPLICATE_PERMISSION naast de "
-                           "officiële app)")
+                           "officiële app)" if el.tag == "permission" else
+                           f"eigen {el.tag} '{name}' begint niet met '{pkg}.' (zelfde naam als een andere app)")
     if not result.authorities:
         out.append("geen enkele provider-authority gevonden in het manifest (onverwacht; controle niet bewezen)")
 
     res = parse_resources(run_aapt2(aapt2, "dump", "resources", str(path)))
+    bomen: dict[str, list[XmlElement]] = {}
+
+    def boom(naam: str) -> list[XmlElement]:
+        if naam not in bomen:
+            bomen[naam] = parse_xmltree(run_aapt2(aapt2, "dump", "xmltree", "--file", res.files[naam], str(path)))
+        return bomen[naam]
+
     backup_files = [n for n in ("xml/backup_content", "xml/backup_rules") if n in res.files]
     if not backup_files:
         out.append("geen back-upregels (xml/backup_content) gevonden")
     base = pkg[: -len(c["debug_suffix"])] if variant == "debug" and pkg.endswith(c["debug_suffix"]) else pkg
     for name in backup_files:
-        tree = parse_xmltree(run_aapt2(aapt2, "dump", "xmltree", "--file", res.files[name], str(path)))
+        tree = boom(name)
         alle = [e.attrs.get("path", "") for e in tree
                 if e.tag in {"include", "exclude"} and e.attrs.get("domain") == "sharedpref"]
         result.sharedprefs = list(dict.fromkeys([*result.sharedprefs, *filter(None, alle)]))
@@ -496,6 +517,21 @@ def check_apk(cfg: dict, client: str, path: Path, aapt2: str, variant: str | Non
             if p not in expected_prefs(base, c["debug_suffix"]):
                 out.append(f"{name}: sharedpref '{p}' hoort niet bij '{pkg}'")
 
+    # Elke xml-resource, bij elke client: accounttype, zoek-authority/-data en sync-authority. Zo is "0 gevonden" bij
+    # android een meting en geen aanname, en valt een waarde op die een latere upstream in een ander bestand zet.
+    for xml_name in sorted(n for n in res.files if n.startswith("xml/") and n not in backup_files):
+        for el in boom(xml_name):
+            for attr in APK_XML_ATTRS:
+                if not el.attrs.get(attr):
+                    continue
+                actual = resolve(res, el.attrs[attr])
+                key = f"{xml_name}:{attr}"
+                while result.res_waarden.get(key, actual) != actual:  # tweede element met een andere waarde
+                    key += "+"
+                result.res_waarden[key] = actual
+                if (client, xml_name, attr) not in VASTE_XML and officiele_waarde(actual, c):
+                    out.append(f"{xml_name} {attr} = '{actual}' is een waarde van de officiële app")
+
     if client == "androidtv":
         verwacht = {"app_id": pkg, "app_search_suggest_authority": f"{pkg}.content",
                     "app_search_suggest_intent_data": f"content://{pkg}.content/intent"}
@@ -508,14 +544,11 @@ def check_apk(cfg: dict, client: str, path: Path, aapt2: str, variant: str | Non
         if zoek not in result.authorities:
             out.append(f"zoek-authority '{zoek}' bestaat niet als provider in het manifest (zoeksuggesties wijzen "
                        "naar een andere app of naar niets)")
-        for xml_name, attr, key in (("xml/authenticator", "accountType", "app_id"),
-                                    ("xml/searchable", "searchSuggestAuthority", "app_search_suggest_authority"),
-                                    ("xml/searchable", "searchSuggestIntentData", "app_search_suggest_intent_data")):
+        for (_client, xml_name, attr), key in VASTE_XML.items():
             if xml_name not in res.files:
                 out.append(f"{xml_name} ontbreekt in het archief")
                 continue
-            tree = parse_xmltree(run_aapt2(aapt2, "dump", "xmltree", "--file", res.files[xml_name], str(path)))
-            raw = next((e.attrs[attr] for e in tree if attr in e.attrs), "")
+            raw = next((e.attrs[attr] for e in boom(xml_name) if attr in e.attrs), "")
             actual = resolve(res, raw)
             result.res_waarden[f"{xml_name}:{attr}"] = actual
             if actual != verwacht[key]:
@@ -558,13 +591,17 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 def identiteitswaarden(r: ApkResult) -> dict[str, set[str]]:
     """De waarden waarmee twee apps op één apparaat kunnen botsen of naar elkaar kunnen verwijzen."""
+    def uit_xml(*attrs: str) -> set[str]:
+        einde = tuple(f":{a}" for a in attrs)
+        return {v for k, v in r.res_waarden.items() if k.rstrip("+").endswith(einde)}
+
     waarden = {
         "pakketnaam": {r.pakket},
-        "authority": set(r.authorities),
+        "authority": set(r.authorities) | uit_xml("contentAuthority"),
         "permissie": set(r.permissies),
-        "accounttype": {v for k, v in r.res_waarden.items() if k in {"app_id", "xml/authenticator:accountType"}},
-        "app_search_suggest": {v for k, v in r.res_waarden.items()
-                               if k.startswith("app_search_suggest_") or k.startswith("xml/searchable:")},
+        "accounttype": {r.res_waarden.get("app_id", "")} | uit_xml("accountType"),
+        "app_search_suggest": {v for k, v in r.res_waarden.items() if k.startswith("app_search_suggest_")}
+        | uit_xml("searchSuggestAuthority", "searchSuggestIntentData"),
         "sharedpref": set(r.sharedprefs),
     }
     return {k: {x for x in v if x} for k, v in waarden.items()}
