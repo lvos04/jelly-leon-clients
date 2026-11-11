@@ -531,5 +531,41 @@
   "NIET GEVALIDEERD (hardware)": "fork-app en officiële app naast elkaar op echte apparaten (D15); op de emulators wel, zie p4-0-jc3-android-emulator.json",
   "NIET GEVALIDEERD (Mac/Xcode)": "Swiftfin org.jellyfin.swiftfin.jellyleon: op deze machine alleen de bron-controle (`app_identiteit.py bron`); de effectieve build-instelling leest alleen de GitHub-workflow Clients / Swiftfin (macOS-runner, simulatorbuild zonder ondertekening). Nooit ondertekend of op een apparaat gezet",
   "NIET GEVALIDEERD (account)": "registratie van de bundle-id bij Apple (Apple Developer-account van de gebruiker; mogelijk betaald, alleen met diens akkoord)"
+ },
+ "github_actions": {
+  "commit": "13ff0eb",
+  "branch": "ccr-c133d7a0-kuz1cv",
+  "runs": {
+   "Clients / Android": {
+    "run": 42969899255,
+    "conclusie": "success",
+    "gestart": "2026-11-11T06:04:43Z",
+    "klaar": "2026-11-11T06:07:33Z",
+    "gemeten": "BUILD SUCCESSFUL in 2m 4s, 129 actionable tasks: 129 executed; bouwmap: 4 artefact(en) gecontroleerd, 0 overtreding(en); vergelijk: 4 eigen artefact(en) tegen 4 officiële APK('s): 0 gelijke identiteitswaarde(n)"
+   },
+   "Clients / Android TV": {
+    "run": 42969899236,
+    "conclusie": "success",
+    "gestart": "2026-11-11T06:04:43Z",
+    "klaar": "2026-11-11T06:08:04Z",
+    "gemeten": "BUILD SUCCESSFUL in 2m 44s, 317 actionable tasks: 317 executed; bouwmap: 2 artefact(en) gecontroleerd, 0 overtreding(en); vergelijk: 2 eigen artefact(en) tegen 2 officiële APK('s): 0 gelijke identiteitswaarde(n), 4 keer 'gelijk, toegestaan' (systemprefs, AuthenticationPreferences)"
+   },
+   "Clients / Forkregels": {
+    "run": 42969899251,
+    "conclusie": "success",
+    "gestart": "2026-11-11T06:04:43Z",
+    "klaar": "2026-11-11T06:05:24Z",
+    "gemeten": "ruff: All checks passed; pytest tools/clients/tests: 326 passed, 3 skipped (de byte-vergelijking met de bron, die in CI niet naast de repo staat); forkregels en app-identiteit in de bron in orde; actionlint zonder bevindingen"
+   },
+   "Clients / Swiftfin": {
+    "run": 42969899181,
+    "conclusie": "success",
+    "gestart": "2026-11-11T06:04:43Z",
+    "klaar": "2026-11-11T06:20:21Z",
+    "gemeten": "macOS-runner, simulatorbuild zonder ondertekening: iOS en tvOS BUILD SUCCEEDED; effectieve build-instelling Debug en Release = org.jellyfin.swiftfin.jellyleon, Info.plist van de simulator-app idem; per platform 2 app-doel(en) gecontroleerd, 0 overtreding(en)",
+    "niet_gevalideerd": "ondertekenen, registreren bij Apple en installeren op een apparaat: NIET GEVALIDEERD (Mac/Xcode); NIET GEVALIDEERD (account)"
+   }
+  },
+  "betekenis": "schone runners: build vanaf nul (alle Gradle-taken uitgevoerd), officiële APK's in de run gedownload en op SHA-256 gecontroleerd; niets ondertekend of verspreid"
  }
 }
