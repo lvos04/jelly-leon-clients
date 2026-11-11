@@ -46,22 +46,24 @@ De officiële bouwinstructies staan in de README van elke client. Onze CI (GitHu
 
 | Client | Workflow | Wat |
 |---|---|---|
-| android | `Clients / Android` | JDK 21, `./gradlew --max-workers=2 assembleDebug test` + release-resources, `aapt2`-controle app-identiteit, debug-APK's als artefact |
-| androidtv | `Clients / Android TV` | JDK 21, idem (ook `app_id` en zoek-authority), debug-APK als artefact |
+| android | `Clients / Android` | JDK 21, `./gradlew --max-workers=2 assembleDebug test` + release-resources, `aapt2`-controle app-identiteit, vergelijking met de officiële upstream-APK's (contract 1.3), debug-APK's als artefact |
+| androidtv | `Clients / Android TV` | JDK 21, idem (ook `app_id`, accounttype en zoek-authority), debug-APK als artefact |
 | desktop | `Clients / Desktop` | Ubuntu 24.04, afhankelijkheden uit `debian/control`, `-DUSE_STATIC_MPVQT=ON`, `ctest` |
 | swiftfin | `Clients / Swiftfin` | macOS 26 + Xcode 26.6, Carthage, `xcodebuild` voor iOS- en tvOS-simulator zonder signing, bundle-id uit de build-instellingen |
 
 Lokaal voor ontwikkelaars (Linux): `make help`. `make android-bouw` / `make androidtv-bouw` (JDK 21 en `ANDROID_HOME`
 met platform 36) bouwen de debug-APK's, draaien de unit-tests en controleren met `aapt2` de eigen app-identiteit
-(debug en release); `make check` controleert die ook in de bron; de desktop-client is in een container te bouwen met
-`make desktop-bouw` (alleen ontwikkeling; geen installatiemethode). Op een gedeelde machine: `GRADLE_LOCK=<bestand>` en
-`DOCKER_LOCK=<bestand>` serialiseren de zware stappen met `flock`. Debug-APK's houden de upstream-suffix `.debug`
-(`org.jellyfin.*.jellyleon.debug`) en zijn alleen bedoeld om te testen.
+(debug en release), ook tegen de officiële upstream-APK's van dezelfde versie (SHA-256-gepind in
+`tools/clients/app_identiteit.json`; eenmalig gedownload naar `.bouw/officiele-apks`); `make check` controleert die
+ook in de bron; de desktop-client is in een container te bouwen met `make desktop-bouw` (alleen ontwikkeling; geen
+installatiemethode). Op een gedeelde machine: `GRADLE_LOCK=<bestand>` en `DOCKER_LOCK=<bestand>` serialiseren de
+zware stappen met `flock`. Debug-APK's houden de upstream-suffix `.debug` (`org.jellyfin.*.jellyleon.debug`) en zijn
+alleen bedoeld om te testen.
 
-**Validatie:** android, androidtv (15/15 unit-tests per variant) en desktop-Linux (ctest 1/1) zijn lokaal gebouwd en
-getest en de vier client-workflows zijn groen op GitHub; Swiftfin bouwt in CI voor de simulator maar is **NIET
-GEVALIDEERD (Mac/Xcode)**; niets is op een apparaat gestart (**NIET GEVALIDEERD (hardware)**). Zie
-`BOUWVERIFICATIE_P0.md`.
+**Validatie:** android (upstream heeft geen unit-tests: `NO-SOURCE`), androidtv (15/15 unit-tests per variant) en
+desktop-Linux (ctest 1/1) zijn lokaal gebouwd en getest en de vier client-workflows zijn groen op GitHub; Swiftfin
+bouwt in CI voor de simulator maar is **NIET GEVALIDEERD (Mac/Xcode)**; niets is op een apparaat gestart (**NIET
+GEVALIDEERD (hardware)**). Zie `BOUWVERIFICATIE_P0.md`.
 
 ## Compatibiliteit met de server testen (alleen ontwikkeling)
 
@@ -96,7 +98,9 @@ builds wachten nog op een besluit over ondertekening en verspreidingskanaal (ADR
 
 1. **App-identiteit:** eigen `applicationId` voor Android en Android TV (naast de officiële app), eigen bundle-id voor
    iOS; concreet `org.jellyfin.mobile.jellyleon` en `org.jellyfin.androidtv.jellyleon` (keuzemenu). Uitgevoerd als
-   JLC-0002/0003; Swiftfin volgt hetzelfde patroon (JLC-0004). (ADR-0004, ADR-0010)
+   JLC-0002/0003; Swiftfin volgt hetzelfde patroon (JLC-0004). De drie ID's, ook de Swiftfin-bundle-id
+   `org.jellyfin.swiftfin.jellyleon`, zijn door de gebruiker **bevestigd op 2026-11-10**. (ADR-0004, ADR-0010,
+   ADR-0012)
 2. **Swiftfin 1.6.1 blijft**; de server gaat vóór P4 naar de nieuwste stabiele Jellyfin 12.x (.NET 10), in een aparte
    fase in `jelly-leon`/`jelly-leon-web`; de Android-clients worden dan op 12.x gecontroleerd. (ADR-0009)
 3. **Zichtbaarheid:** repos en images worden publiek na een scan van de volledige historie op geheimen en
@@ -104,8 +108,9 @@ builds wachten nog op een besluit over ondertekening en verspreidingskanaal (ADR
 
 ## Open vragen voor de gebruiker
 
-1. **Swiftfin-bundle-id** `org.jellyfin.swiftfin.jellyleon` bevestigen (afgeleid van het Android-besluit) en een
-   **Apple-account** voor builds op echte apparaten.
+1. Een **Apple-account** (Apple Developer) voor ondertekenen, registratie van de bundle-id en builds op echte
+   apparaten. De bundle-id zelf is bevestigd (besluit 1 hierboven); Swiftfin blijft tot dan NIET GEVALIDEERD
+   (Mac/Xcode) en NIET GEVALIDEERD (account).
 2. **Welke apparaten** (D15): tv-modellen, telefoons, Android TV/Apple TV — nodig voor de echte testmatrix.
 3. **Verspreidingskanaal** voor eigen APK's/IPA's/installers (ADR-0008).
 
