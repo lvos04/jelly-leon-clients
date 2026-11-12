@@ -21,8 +21,9 @@ from .jfapi import TICKS, Jellyfin, wacht_klaar
 from .scenario import beoordeel_migratie
 
 STOCK_12_4 = "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771"
-CORPUS = Path(os.environ.get("JLC_CORPUS", "/home/transcode/truenas-v2/.lokaal/media-corpus"))
-WERK = Path(os.environ.get("JLC_WERK", "/home/transcode/truenas-v2/.lokaal/jelly-leon-clients-jc3"))
+LOKAAL = Path(__file__).resolve().parents[4] / ".lokaal"  # .lokaal ligt naast de repo
+CORPUS = Path(os.environ.get("JLC_CORPUS", str(LOKAAL / "media-corpus")))
+WERK = Path(os.environ.get("JLC_WERK", str(LOKAAL / "jelly-leon-clients-jc3")))
 
 # Wegwerpaccounts in een wegwerpcontainer op 127.0.0.1 (geen echte gegevens). Alleen letters en cijfers: `adb shell
 # input text` vertaalt sommige leestekens niet betrouwbaar.

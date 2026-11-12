@@ -20,7 +20,7 @@ from typing import Any
 
 from .scenario import GESLAAGD
 
-LOCKS = Path("/home/transcode/truenas-v2/.lokaal")
+LOCKS = Path(__file__).resolve().parents[4] / ".lokaal"  # .lokaal ligt naast de repo
 GEHEIM_RE = re.compile(r'^AccessToken$|Token="[^"]+"|(?:api_key|ApiKey)=[0-9a-fA-F]{16,}')
 NIET_HIER = [
     {

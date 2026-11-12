@@ -22,9 +22,7 @@ from . import android, apk, bewijs
 from .server import BEHEER_WW, CORPUS, FILMS, KIJKER_WW, SERIES, STOCK_12_4, WERK, TestServer, docker
 
 REPO = Path(__file__).resolve().parents[3]
-APK_CACHE = Path(
-    "/home/transcode/truenas-v2/.lokaal/jelly-leon-b03-016/apk"
-)  # alleen lezen; sha256 wordt gecontroleerd
+APK_CACHE = REPO.parent / ".lokaal" / "jelly-leon-b03-016" / "apk"  # alleen lezen; sha256 wordt gecontroleerd
 
 
 def log(tekst: str) -> None:
