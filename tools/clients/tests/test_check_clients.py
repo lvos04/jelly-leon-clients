@@ -296,3 +296,64 @@ def test_ref_zonder_basislijn_valt_terug_op_werkboom_en_meldt_dat(simple_setup, 
     assert result.violations, "de eerste commit (zonder clients) voldoet niet"
     assert check_clients.main(["--repo-root", str(fork.path), "--ref", first]) == 1
     assert "LET OP: basislijn ontbreekt in" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ S-P40-72: getrackte buildbestanden (V-022)
+
+
+@pytest.mark.parametrize("pad", [
+    "app/.kotlin/sessions/kotlin-compiler-123.salive",  # Kotlin-sessiemap (de gemelde fout uit de review)
+    "app/.gradle/8.14/checksums/checksums.lock",
+    "app/app/build/outputs/apk/release/app-release-unsigned.apk",
+    "app/app/.cxx/Debug/abc/build.ninja",
+    "app/hs_err_pid4242.log",
+    "app/local.properties",
+    "app/Klasse.class",
+])
+def test_getrackt_buildbestand_in_een_clientmap_faalt_ook_als_het_geregistreerd_is(simple_setup, pad):
+    _up, fork = simple_setup
+    write_files(fork.path, {pad: "bouwuitvoer\n"})
+    # Ook een registratie in PATCHES.md maakt een buildbestand niet toegestaan.
+    fork.write_register(patch_block("JLC-0001", "app", [pad]))
+    fork.commit_all("buildbestand per ongeluk meegenomen")
+    result = check_clients.check(fork.path)
+    assert [v for v in result.violations if "buildbestand" in v] == [
+        v for v in result.violations if pad in v and "buildbestand" in v]
+    assert any("buildbestand" in v and pad in v for v in result.violations)
+
+
+def test_kotlin_proefmap_geeft_exitcode_1(simple_setup, capsys):
+    """Negatieve test uit de stap: check_clients.py faalt op een proefmap met een .kotlin-bestand."""
+    _up, fork = simple_setup
+    assert check_clients.main(["--repo-root", str(fork.path)]) == 0
+    write_files(fork.path, {"app/.kotlin/errors/errors-1.log": "x\n"})
+    fork.commit_all(".kotlin meegenomen")
+    capsys.readouterr()
+    assert check_clients.main(["--repo-root", str(fork.path)]) == 1
+    uit = capsys.readouterr().out
+    assert "buildbestand" in uit and "app/.kotlin/errors/errors-1.log" in uit
+
+
+def test_buildbestand_in_een_geneste_subtree_faalt(nested_setup):
+    _up, _dep, fork, _n1, _n2 = nested_setup
+    pad = "desk/external/dep/.kotlin/sessions/x.salive"
+    write_files(fork.path, {pad: "x\n"})
+    fork.commit_all("buildbestand in geneste subtree")
+    assert any("buildbestand" in v and pad in v for v in check_clients.check(fork.path).violations)
+
+
+def test_gewone_patch_met_build_in_de_naam_is_geen_buildbestand(simple_setup):
+    """Geen valse melding: build.gradle.kts of een map 'buildSrc' is broncode, geen bouwuitvoer."""
+    _up, fork = simple_setup
+    bestanden = ["app/app/build.gradle.kts", "app/buildSrc/src/main/kotlin/Versies.kt"]
+    write_files(fork.path, dict.fromkeys(bestanden, "broncode\n"))
+    fork.write_register(patch_block("JLC-0001", "app", bestanden))
+    fork.commit_all("broncode met build in de naam")
+    assert check_clients.check(fork.path).violations == []
+
+
+def test_buildbestand_dat_upstream_verwijderd_is_telt_niet():
+    """Alleen wat de fork zelf (mee)trackt telt: een verwijdering (D) is geen getrackt bestand."""
+    assert check_clients.buildbestand("app/build/x.apk") is not None
+    assert check_clients.buildbestand("app/src/build.gradle") is None
+    assert check_clients.buildbestand("app/src/BuildConfig.kt") is None

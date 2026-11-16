@@ -13,7 +13,12 @@ Controleert de opgegeven commit (standaard HEAD), met de basislijn en het patchr
   4. elke afwijking van upstream binnen een clientmap (gewijzigd, toegevoegd of verwijderd bestand, ook een
      vervangen gitlink) staat bij een actieve patch in docs/platform-v2/PATCHES.md;
   5. elk bestand bij een actieve patch wijkt ook echt af (anders is het register verouderd);
-  6. beschermde bestanden (licenties, credits) bestaan en wijken nooit af, ook niet met registratie.
+  6. beschermde bestanden (licenties, credits) bestaan en wijken nooit af, ook niet met registratie;
+  7. geen buildbestand dat de fork in een clientmap (mee)trackt: een `.kotlin`-sessiemap, Gradle- of CMake-uitvoer,
+     APK's, klassebestanden, JVM-crashlogs of `local.properties` (V-022: een `git add -A` tijdens een Gradle-build nam
+     een Kotlin-sessiebestand mee). Ook een registratie in PATCHES.md maakt dat niet toegestaan. Het herstel is
+     `git rm --cached <pad>`; de clientmappen krijgen hiervoor geen eigen `.gitignore` (de upstream-.gitignore blijft
+     ongewijzigd).
 
 Exitcodes: 0 = in orde, 1 = overtreding, 3 = gebruiks-/omgevingsfout.
 """
@@ -49,6 +54,12 @@ REQUIRED_FIELDS = ("Status", "Client", "Doel", "Bestanden", "Waarom nodig", "Ups
 PATCH_HEADING_RE = re.compile(r"^##\s+(JLC-\d{4})\b\s*[—-]?\s*(.*)$")
 ROW_RE = re.compile(r"^\|\s*([^|]+?)\s*\|\s*(.*?)\s*\|\s*$")
 BACKTICK_RE = re.compile(r"`([^`]+)`")
+# Punt 7: mappen met bouwuitvoer (een padonderdeel vóór de bestandsnaam) en bestandsnamen van bouwuitvoer.
+BUILD_DIRS = {".kotlin", ".gradle", ".cxx", ".externalNativeBuild", "build", "DerivedData", "xcuserdata",
+              "CMakeFiles", "node_modules", ".build"}
+BUILD_FILE_RE = re.compile(
+    r"(\.(?:class|dex|apk|aab|ap_|salive|o)$)|(^hs_err_pid\d*\.log$)|(^replay_pid\d*\.log$)"
+    r"|(^local\.properties$)|(^CMakeCache\.txt$)")
 
 
 @dataclass
@@ -99,6 +110,18 @@ def covers(entry: str, path: str) -> bool:
     if entry.endswith("/"):
         return path.startswith(entry)
     return path == entry
+
+
+def buildbestand(path: str) -> str | None:
+    """De reden als ``path`` bouwuitvoer is (map of bestandsnaam), anders None. ``build.gradle.kts`` en ``buildSrc/``
+    zijn broncode: alleen een map die precies zo heet telt."""
+    *mappen, naam = path.split("/")
+    for m in mappen:
+        if m in BUILD_DIRS:
+            return f"map '{m}/'"
+    if BUILD_FILE_RE.search(naam):
+        return f"bestand '{naam}'"
+    return None
 
 
 def tree_exists(repo: Path, spec: str) -> bool:
@@ -291,6 +314,16 @@ def check(repo: Path, ref: str = "HEAD") -> Result:
             result.violations.append(f"{patch.patch_id}: onbekende client '{client_key}'")
         if patch.active and not patch.files:
             result.violations.append(f"{patch.patch_id}: geen bestanden (tussen backticks) bij 'Bestanden'")
+
+    # Punt 7: elk pad dat de fork in een clientmap toevoegt of wijzigt (de afwijkingen hierboven, ook in geneste
+    # subtrees) mag geen bouwuitvoer zijn, ook niet geregistreerd. Gelezen uit de commit (``--ref``), niet uit de index.
+    for path, status in sorted(result.changed.items()):
+        if status in {"D", "gitlink→subtree"}:
+            continue
+        reden = buildbestand(path)
+        if reden:
+            result.violations.append(
+                f"buildbestand getrackt in een clientmap ({reden}): {path} — verwijderen met 'git rm --cached'")
 
     active = [p for p in patches if p.active]
     for path, status in sorted(result.changed.items()):
