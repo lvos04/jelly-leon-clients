@@ -26,7 +26,7 @@ from typing import Any
 
 from . import scenario as sc
 from .jfapi import Http
-from .server import BEHEER_WW, BEHEERDER, KIJKER, KIJKER_WW, TestServer
+from .server import BEHEERDER, KIJKER, TestServer
 
 SDK_API = "12.0.0"
 APPVERSIE = "1.6.1"
@@ -94,7 +94,7 @@ def run(server: TestServer) -> dict[str, Any]:
     )
 
     auth = Http(server.url, {"Authorization": kop()}).doe(
-        "POST", "/Users/AuthenticateByName", body={"Username": KIJKER, "Pw": KIJKER_WW}
+        "POST", "/Users/AuthenticateByName", body={"Username": KIJKER, "Pw": server.kijker_ww}
     )
     token = auth["AccessToken"]
     app = Http(server.url, {"Authorization": kop(token)})
@@ -169,7 +169,7 @@ def run(server: TestServer) -> dict[str, Any]:
 
     # Beheerweergave 'serverlog openen': alleen voor een beheerder, dus aangemeld als de beheerder (zelfde kopvorm).
     beheer_auth = Http(server.url, {"Authorization": kop()}).doe(
-        "POST", "/Users/AuthenticateByName", body={"Username": BEHEERDER, "Pw": BEHEER_WW}
+        "POST", "/Users/AuthenticateByName", body={"Username": BEHEERDER, "Pw": server.beheer_ww}
     )
     beheer_token = beheer_auth["AccessToken"]
     beheer = Http(server.url, {"Authorization": kop(beheer_token)})

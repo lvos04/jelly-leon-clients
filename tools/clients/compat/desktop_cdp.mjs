@@ -2,7 +2,9 @@
 // Eén actie per aanroep; uitvoer is één JSON-regel. Alleen voor ontwikkeling (compat/desktop.py), nooit op de NAS.
 // Playwright connectOverCDP werkt niet op QtWebEngine ("Browser context management is not supported"); daarom de
 // Node 22-WebSocket rechtstreeks op het paginadoel.
-//   node desktop_cdp.mjs '{"poort":9333,"actie":"verbind","server":"http://127.0.0.1:8096"}'
+//   node desktop_cdp.mjs '{"poort":<doorgiftepoort>,"actie":"verbind","server":"http://testserver:8096"}'
+// "poort" is de CDP-doorgifte van compat/desktop.py op 127.0.0.1 van de host (CDP zelf luistert alleen in de container);
+// "server" is het adres van de testserver op het eigen testnetwerk, zoals de app in de container het gebruikt.
 //   acties: doelen | verbind | inloggen | teksten | hash | klik | opslag | wacht_op | fouten
 const cfg = JSON.parse(process.argv[2]);
 const basis = `http://127.0.0.1:${cfg.poort}`;

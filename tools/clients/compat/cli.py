@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import android, apk, bewijs
-from .server import BEHEER_WW, CORPUS, FILMS, KIJKER_WW, SERIES, STOCK_12_4, WERK, TestServer, docker
+from .server import CORPUS, FILMS, SERIES, STOCK_12_4, WERK, TestServer, docker, run_wachtwoorden
 
 REPO = Path(__file__).resolve().parents[3]
 APK_CACHE = REPO.parent / ".lokaal" / "jelly-leon-b03-016" / "apk"  # alleen lezen; sha256 wordt gecontroleerd
@@ -204,7 +204,9 @@ def android_cmd(a: argparse.Namespace) -> int:
             for k, v in apks.items()
         },
         "regels": "emulator in een container met --device /dev/kvm, 4 GiB (geheugen = swap), --cap-drop ALL, headless, "
-        "onder stack.lock en gradle.lock, één tegelijk; per client een verse wegwerpserver op 127.0.0.1",
+        "onder stack.lock en gradle.lock, één tegelijk; per client een verse wegwerpserver (voor het harnas alleen op "
+        "127.0.0.1) met een eigen Docker-netwerk (--internal, bridge zonder IPv4-adres op de host) waaraan alleen de "
+        "server en de emulator hangen; testwachtwoorden per server willekeurig",
         "resultaten": {},
         "niet_hier": bewijs.NIET_HIER,
     }
@@ -257,7 +259,7 @@ def android_cmd(a: argparse.Namespace) -> int:
     # B03-019: een afwijking telt als Sim-mislukt, een uitzondering alleen met een ADR. Een vervangen mislukte run
     # blijft daarom ook in de samenvatting zichtbaar; het eindoordeel erover staat in de ADR, niet in dit document.
     document["vervangen_mislukt"] = vervangen_mislukt(document)
-    bewijs.schrijf(a.uit, document, geheimen=[KIJKER_WW, BEHEER_WW])
+    bewijs.schrijf(a.uit, document, geheimen=run_wachtwoorden())
     log(f"bewijs geschreven: {a.uit} — {document['validatie']}"
         + (f" (vervangen mislukte runs: {', '.join(document['vervangen_mislukt'])})"
            if document["vervangen_mislukt"] else ""))
@@ -286,7 +288,7 @@ def hervatproef_cmd(a: argparse.Namespace) -> int:
         r = document["resultaten"][label]
         log(f"hervatproef {label}: {r.get('geslaagd')}/{r.get('n')}")
     document["eind"] = bewijs.nu()
-    bewijs.schrijf(a.uit, document, geheimen=[KIJKER_WW, BEHEER_WW])
+    bewijs.schrijf(a.uit, document, geheimen=run_wachtwoorden())
     log(f"bewijs geschreven: {a.uit}")
     return 0
 
@@ -317,7 +319,7 @@ def swiftfin_cmd(a: argparse.Namespace) -> int:
         "Sim-geslaagd" if jl["oordeel"]["validatie"] == "Sim-geslaagd" and not document["regressies"] else "Sim-mislukt"
     )
     document["eind"] = bewijs.nu()
-    bewijs.schrijf(a.uit, document, geheimen=[KIJKER_WW, BEHEER_WW])
+    bewijs.schrijf(a.uit, document, geheimen=run_wachtwoorden())
     log(f"bewijs geschreven: {a.uit} — {document['validatie']} (app zelf: NIET GEVALIDEERD (Mac/Xcode))")
     return 0
 

@@ -4,6 +4,11 @@ Regels: alleen in een container met ``--device /dev/kvm`` (groep via ``--group-a
 ``gradle.lock`` (machinebreed), 4 GiB (geheugenlimiet = swaplimiet), geen ``--privileged``, geen Docker-socket, de
 Android SDK alleen-lezen gekoppeld, headless (``-no-window``). De AVD's staan in de werkmap buiten de repo en gaan na
 de run weg. De runner-image (``emulator.Dockerfile``) bevat alleen de gedeelde bibliotheken van de emulator.
+
+Netwerk (S-P40-72): nooit het hostnetwerk. De container hangt alleen aan het eigen testnetwerk van de server
+(``netwerk.py``); de app bereikt de server op ``http://testserver:8096`` (``TestServer.intern_url``; ``10.0.2.2`` is in
+de emulator de loopback van de container, niet de host). Vóór het opstarten toont ``netwerk.eis_afscherming`` aan dat
+de container geen poort van de host bereikt en de testserver wel; anders stopt de run.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import netwerk as nw
 from .server import WERK, docker
 
 SDK = Path(os.environ.get("ANDROID_HOME", str(Path.home() / "android-sdk")))
@@ -145,13 +151,22 @@ def maak_avd(soort: str, avd_map: Path) -> str:
 
 
 class Emulator:
-    def __init__(self, soort: str, apk_map: Path, avd_map: Path = WERK / "avd", geheugen_gib: int = 4) -> None:
+    def __init__(
+        self,
+        soort: str,
+        apk_map: Path,
+        avd_map: Path = WERK / "avd",
+        geheugen_gib: int = 4,
+        netwerk: nw.Testnetwerk | None = None,
+    ) -> None:
         self.soort = soort
         self.apk_map = apk_map
         self.avd_map = avd_map
         self.geheugen_gib = geheugen_gib
+        self.netwerk = netwerk
         self.avd = ""
         self.cid = ""
+        self.afscherming: dict[str, Any] = {}
 
     def adb(self, *args: str, timeout: float = 120) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -166,6 +181,8 @@ class Emulator:
         return self.adb("shell", opdracht, timeout=timeout).stdout
 
     def start(self) -> float:
+        if self.netwerk is None:  # fail-closed: zonder eigen testnetwerk nooit starten (ook niet op het hostnetwerk)
+            raise RuntimeError("geen testnetwerk: de emulator start alleen op het afgeschermde netwerk van de server")
         self.avd = maak_avd(self.soort, self.avd_map)
         docker("rm", "-f", NAAM, check=False)
         kvm_gid = kvm_groep()
@@ -185,7 +202,7 @@ class Emulator:
             "--memory-swap",
             f"{self.geheugen_gib}g",
             "--network",
-            "host",
+            self.netwerk.naam,
             "--security-opt",
             "no-new-privileges",
             "--cap-drop",
@@ -206,6 +223,7 @@ class Emulator:
             "sleep",
             "infinity",
         ).stdout.strip()
+        self.afscherming = nw.eis_afscherming(NAAM, self.netwerk)
         # Eerst de adb-server (maakt /tmp/.android/adbkey): de emulator zet die sleutel bij het starten in het image;
         # zonder dit blijft het Android TV-image (ro.adb.secure) op 'unauthorized' (gemeten in jelly-leon B03-016).
         self.adb("start-server")

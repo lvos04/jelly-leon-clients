@@ -24,7 +24,7 @@ from . import scenario as sc
 from .apk import FORK, OFFICIEEL
 from .emulator import AVDS, Emulator, Knoop, zoek
 from .jfapi import TICKS, Jellyfin
-from .server import KIJKER, KIJKER_WW, TestServer
+from .server import KIJKER, TestServer
 
 CLIENTNAAM = {"android": "Jellyfin for Android", "androidtv": "Jellyfin Android TV"}
 VEREIST = [
@@ -144,7 +144,7 @@ def stap_uit(ok: bool, **gegevens: Any) -> dict[str, Any]:
 # --- inloggen -----------------------------------------------------------------------------------------------------
 
 
-def inloggen_telefoon(emu: Emulator, pakket: str, url: str) -> dict[str, Any]:
+def inloggen_telefoon(emu: Emulator, pakket: str, url: str, wachtwoord: str) -> dict[str, Any]:
     emu.sh(f"monkey -p {pakket} -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1")
     stappen = []
     for _ in range(2):  # meldingentoestemming (API 33+) wegklikken als die verschijnt
@@ -173,7 +173,7 @@ def inloggen_telefoon(emu: Emulator, pakket: str, url: str) -> dict[str, Any]:
     # (oude coördinaten kloppen dan niet meer).
     emu.toets("KEYCODE_TAB")
     time.sleep(1)
-    emu.typ(KIJKER_WW)
+    emu.typ(wachtwoord)
     emu.toets("KEYCODE_ENTER")  # niet op 'Sign In' tikken: de batterijmelding kan erover liggen
     thuis = emu.wacht_op(THUIS, timeout=60)
     stappen.append(
@@ -184,7 +184,7 @@ def inloggen_telefoon(emu: Emulator, pakket: str, url: str) -> dict[str, Any]:
     )
 
 
-def inloggen_tv(emu: Emulator, pakket: str, url: str) -> dict[str, Any]:
+def inloggen_tv(emu: Emulator, pakket: str, url: str, wachtwoord: str) -> dict[str, Any]:
     """androidtv 0.19.10: 'Enter server address' → adres → 'Add account' → 'Use a password' → naam + wachtwoord."""
     emu.sh(f"monkey -p {pakket} -c android.intent.category.LEANBACK_LAUNCHER 1 >/dev/null 2>&1")
     stappen = []
@@ -207,7 +207,7 @@ def inloggen_tv(emu: Emulator, pakket: str, url: str) -> dict[str, Any]:
     emu.tik(naam)
     emu.typ(KIJKER)
     emu.tik(ww)
-    emu.typ(KIJKER_WW)
+    emu.typ(wachtwoord)
     emu.toets("KEYCODE_ENTER")
     thuis = emu.wacht_op(THUIS, timeout=60)
     stappen.append("ingelogd met gebruikersnaam en wachtwoord (native tv-app)" if thuis else "niet ingelogd")
@@ -300,13 +300,14 @@ def run(
         "officiele_apk": {k: officieel[k] for k in ("bestand", "sha256", "pakket", "versionName")},
         "stappen": {},
     }
-    emu = Emulator(soort, Path(fork["pad"]).parent, geheugen_gib=geheugen_gib)
+    emu = Emulator(soort, Path(fork["pad"]).parent, geheugen_gib=geheugen_gib, netwerk=server.netwerk)
     try:
         _stappen(emu, res, server, app, apks, uitmap, label, doel)
     except Exception as fout:  # noqa: BLE001 - elke harnas- of emulatorfout eerlijk in het bewijs, nooit stil
         res["fout"] = f"{type(fout).__name__}: {str(fout)[:600]}"
     finally:
         res["geheugen"] = emu.geheugen()
+        res["netwerkafscherming"] = emu.afscherming or {"uitkomst": sc.MISLUKT, "reden": "niet gemeten"}
         emu.stop()
     if res["geheugen"].get("oom_kill"):
         res["stappen"]["geheugen"] = {
@@ -353,8 +354,10 @@ def _stappen(
         versies=versies,
         installatie=installatie,
     )
-    url = f"http://10.0.2.2:{server.poort}"
-    st["inloggen"] = (inloggen_telefoon if app == "android" else inloggen_tv)(emu, doel["pakket"], url)
+    # Het adres van de server op het eigen testnetwerk (niet 10.0.2.2, want dat is de loopback van de container).
+    st["inloggen"] = (inloggen_telefoon if app == "android" else inloggen_tv)(
+        emu, doel["pakket"], server.intern_url, server.kijker_ww
+    )
     schot("startscherm")
     sessie = volger.bestuurbaar() if st["inloggen"]["uitkomst"] == sc.GESLAAGD else None
     if sessie is None:

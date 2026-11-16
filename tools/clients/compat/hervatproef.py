@@ -26,7 +26,7 @@ def herhaal(server: TestServer, soort: str, apks: dict[str, Any], bediend: str, 
     jf, it = server.jf, server.items
     app = AVDS[soort]["app"]
     doel = apks[app]["fork" if bediend == "fork" else "officieel"]
-    emu = Emulator(soort, Path(apks[app]["fork"]["pad"]).parent)
+    emu = Emulator(soort, Path(apks[app]["fork"]["pad"]).parent, netwerk=server.netwerk)
     volger = Volger(jf, CLIENTNAAM[app])
     uit: dict[str, Any] = {
         "emulator": soort,
@@ -40,7 +40,7 @@ def herhaal(server: TestServer, soort: str, apks: dict[str, Any], bediend: str, 
         emu.installeer(Path(apks[app]["officieel"]["pad"]))
         emu.installeer(Path(apks[app]["fork"]["pad"]))
         login = (inloggen_telefoon if app == "android" else inloggen_tv)(
-            emu, doel["pakket"], f"http://10.0.2.2:{server.poort}"
+            emu, doel["pakket"], server.intern_url, server.kijker_ww
         )
         uit["inloggen"] = login["uitkomst"]
         knop_patroon = r"^Resume$" if app == "android" else r"^Resume from"
@@ -71,6 +71,7 @@ def herhaal(server: TestServer, soort: str, apks: dict[str, Any], bediend: str, 
             log(f"hervatproef {soort} poging {i + 1}: {uit['pogingen'][-1]['uitkomst']}")
     finally:
         uit["geheugen"] = emu.geheugen()
+        uit["netwerkafscherming"] = emu.afscherming or {"uitkomst": sc.MISLUKT, "reden": "niet gemeten"}
         emu.stop()
     # n = het gevraagde aantal: een niet uitgevoerde poging (bv. inloggen mislukt) telt nooit als geslaagd.
     uit["geslaagd"] = sum(p["uitkomst"] == sc.GESLAAGD for p in uit["pogingen"])

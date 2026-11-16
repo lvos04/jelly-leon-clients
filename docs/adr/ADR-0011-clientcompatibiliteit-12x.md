@@ -1,6 +1,7 @@
 # ADR-0011 — Clientcompatibiliteit met de Jelly Leon 12.x-server (P4-0, JC3): harnas, controlegroep en meetregels
 
-- **Status:** Aanvaard (2026-11-10, P4-0)
+- **Status:** Aanvaard (2026-11-10, P4-0); aangevuld met besluit 15 (2026-11-16, S-P40-72: eigen testnetwerk,
+  willekeurige testwachtwoorden, controle op buildbestanden)
 - **Context:** de server is in P4-0 naar Jellyfin 12.4 gegaan (`jelly-leon` 12.4.0-jl.0, met de web-client van
   `jelly-leon-web` 12.4; ADR-0027 en ADR-0011 in jelly-leon). `CONTRACT_1.2_CONFORMITEIT.md` §11 JC3 vraagt de
   Android-clients op compatibiliteit met 12.x te controleren en Swiftfin 1.6.1 te herbeoordelen; ADR-0009 legt het
@@ -72,6 +73,23 @@
 14. **CI:** de statische controle draait als workflow *Clients / Compat 12.x (statisch)*; de SDK-versies komen uit de
     clientbronnen. Het dynamische deel draait alleen lokaal: het mediacorpus komt nooit in een repo of CI-image
     (BG-37/BG-38) en de jelly-leon-image wordt (nog) niet gepubliceerd.
+15. **Netwerk en testwachtwoorden (S-P40-72, 2026-11-16):** de emulator- en de desktopcontainer draaien nooit meer
+    op het hostnetwerk. Elke testserver krijgt een eigen Docker-netwerk (`tools/clients/compat/netwerk.py`):
+    `--internal` plus de bridge-optie `com.docker.network.bridge.inhibit_ipv4=true`, zodat de bridge op de host geen
+    IPv4-adres heeft. Gemeten op de ontwikkelmachine (Docker 29.1.3): met alleen `--internal` bereikte een container
+    de host nog via het gateway-adres (een luisteraar op alle adressen kreeg de verbinding); met `inhibit_ipv4` gaf
+    elk hostadres "Network is unreachable". De server hangt daarnaast aan het standaard-bridgenetwerk met de poort
+    alleen op 127.0.0.1 (voor het harnas); de app gebruikt `http://testserver:8096` (netwerkalias). `10.0.2.2` (in de
+    emulator de loopback van de container) is vervallen. De CDP-poort van de desktop luistert alleen in de container
+    en wordt niet gepubliceerd; het harnas bereikt hem via een doorgifte met `docker exec` (bash `/dev/tcp`). Vóór elke
+    emulator- en desktopstart toont een afschermingsproef aan dat de container geen poort van de host bereikt (een
+    tijdelijke luisteraar op alle IPv4-adressen van de host; pogingen naar het eerste adres van het subnet en naar elk
+    hostadres) en de testserver wel; faalt dat, dan stopt de run (fail-closed) en staat de uitkomst in het bewijs
+    (`netwerkafscherming`, zonder adressen of interfacenamen). Het netwerk gaat met de server weg (`TestServer.verwijder`,
+    ook na een fout). De testwachtwoorden zijn per server willekeurig (24 letters en cijfers uit `secrets`, omdat
+    `adb input text` geen leestekens betrouwbaar typt); elk bewijsdocument wordt geweigerd als er een wachtwoord van
+    die run in staat. `check_clients.py` faalt op een buildbestand (`.kotlin`, `.gradle`, `build/`, APK, klassebestand,
+    crashlog, `local.properties` …) dat de fork in een clientmap trackt, ook als het in PATCHES.md staat.
 
 ## Gevolgen
 

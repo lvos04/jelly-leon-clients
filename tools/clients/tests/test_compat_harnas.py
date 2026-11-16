@@ -5,17 +5,27 @@ Bewaakt de veiligheidsregels van de containers (03_RISICO_AUTONOMIE en B03 §10.
 nooit ``--privileged`` of de Docker-socket; de testserver op 127.0.0.1 met het corpus alleen-lezen en zonder beperkt
 gelicentieerde testdata (BG-37); de desktop met ``--shm-size 1g`` (gemeten oorzaak van de eerdere blokkade). Verder:
 uiautomator-dumps lezen, de regressievergelijking met stock en de geheimencontrole van het bewijs.
+
+S-P40-72: nooit ``--network host``; emulator en desktop alleen op het eigen afgeschermde netwerk van de server (met de
+afschermingsproef vóór de start, fail-closed), CDP niet gepubliceerd maar via een doorgifte, en testwachtwoorden die per
+server willekeurig zijn en in geen enkel bewijs mogen staan.
 """
 
 from __future__ import annotations
 
+import json
+import re
+import socket
 import subprocess
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from compat import android, apk, bewijs, cli, desktop, emulator, server
+from compat import android, apk, bewijs, cli, desktop, emulator, netwerk, server
 from compat import scenario as sc
+
+COMPAT = Path(__file__).resolve().parents[1] / "compat"
 
 UI_XML = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0">
 <node index="0" text="" resource-id="" class="android.widget.FrameLayout" content-desc="" focused="false"
@@ -66,16 +76,30 @@ def test_dpad_bevat_kijkt_naar_het_midden_van_het_doel():
 
 # --- containers ---------------------------------------------------------------------------------------------------
 
+def _afscherming_ok(proeven: list | None = None):
+    def nep(container, net):
+        if proeven is not None:
+            proeven.append((container, net.naam))
+        return {"uitkomst": sc.GESLAAGD, "pogingen": []}
+    return nep
+
+
 def test_emulator_container_volgt_de_regels(monkeypatch, tmp_path):
     opname = DockerOpname()
+    proeven: list = []
     monkeypatch.setattr(emulator, "docker", opname)
     monkeypatch.setattr(emulator, "maak_avd", lambda soort, avd_map: f"jlc-jc3-{soort}")
     monkeypatch.setattr(emulator, "kvm_groep", lambda: 992)
+    monkeypatch.setattr(emulator.nw, "eis_afscherming", _afscherming_ok(proeven))
     monkeypatch.setattr(emulator.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="1\n", stderr=""))
-    e = emulator.Emulator("tv", tmp_path / "apk", avd_map=tmp_path / "avd")
+    e = emulator.Emulator("tv", tmp_path / "apk", avd_map=tmp_path / "avd", netwerk=netwerk.Testnetwerk("jlc-net-x"))
     assert e.start() >= 0
     args = opname.run()
+    # S-P40-72: alleen het eigen testnetwerk, nooit het hostnetwerk; de afschermingsproef draait vóór het opstarten.
+    assert waarde_na(args, "--network") == ["jlc-net-x"] and "host" not in args
+    assert proeven == [(emulator.NAAM, "jlc-net-x")] and e.afscherming["uitkomst"] == sc.GESLAAGD
+    assert not waarde_na(args, "-p")  # niets gepubliceerd
     assert "/dev/kvm" in waarde_na(args, "--device") and waarde_na(args, "--group-add") == ["992"]
     assert waarde_na(args, "--memory") == ["4g"] and waarde_na(args, "--memory-swap") == ["4g"]
     assert waarde_na(args, "--cap-drop") == ["ALL"] and "no-new-privileges" in waarde_na(args, "--security-opt")
@@ -83,6 +107,44 @@ def test_emulator_container_volgt_de_regels(monkeypatch, tmp_path):
     assert f"{emulator.SDK}:{emulator.SDK}:ro" in koppelingen and f"{tmp_path / 'apk'}:/apk:ro" in koppelingen
     assert not any("docker.sock" in k for k in koppelingen)
     assert "--privileged" not in args and emulator.RUNNER_IMAGE in args
+
+
+def test_emulator_zonder_testnetwerk_start_niet(monkeypatch, tmp_path):
+    opname = DockerOpname()
+    monkeypatch.setattr(emulator, "docker", opname)
+    monkeypatch.setattr(emulator, "maak_avd", lambda soort, avd_map: pytest.fail("geen AVD zonder netwerk"))
+    with pytest.raises(RuntimeError, match="testnetwerk"):
+        emulator.Emulator("telefoon", tmp_path / "apk", avd_map=tmp_path / "avd").start()
+    assert opname.aanroepen == []
+
+
+def test_emulator_stopt_als_het_netwerk_niet_afgeschermd_is(monkeypatch, tmp_path):
+    """Fail-closed: bereikt de container een poort van de host, dan start de emulator niet op."""
+    opname = DockerOpname()
+    opgestart = []
+    monkeypatch.setattr(emulator, "docker", opname)
+    monkeypatch.setattr(emulator, "maak_avd", lambda soort, avd_map: f"jlc-jc3-{soort}")
+    monkeypatch.setattr(emulator, "kvm_groep", lambda: 992)
+    monkeypatch.setattr(emulator.subprocess, "run", lambda *a, **k: opgestart.append(a))
+
+    def lek(container, net):
+        raise RuntimeError("testnetwerk niet afgeschermd: hostadres op eth0: bereikt")
+
+    monkeypatch.setattr(emulator.nw, "eis_afscherming", lek)
+    e = emulator.Emulator("telefoon", tmp_path / "apk", avd_map=tmp_path / "avd", netwerk=netwerk.Testnetwerk("n"))
+    with pytest.raises(RuntimeError, match="niet afgeschermd"):
+        e.start()
+    assert opgestart == []  # geen adb-server en geen emulator gestart
+
+
+def test_geen_hostnetwerk_meer_in_het_harnas():
+    """S-P40-72: geen enkele container van het harnas op het hostnetwerk (ook niet als ``--network=host``)."""
+    patroon = re.compile(r"""--network[\s"',=]+host\b|network_mode.{0,5}host""")
+    for bron in sorted(COMPAT.glob("*")):
+        if bron.suffix in {".py", ".mjs", ".sh"} or bron.name.endswith("Dockerfile"):
+            assert not patroon.search(bron.read_text(encoding="utf-8")), bron.name
+    assert "10.0.2.2:" not in (COMPAT / "android.py").read_text(encoding="utf-8")
+    assert "10.0.2.2:" not in (COMPAT / "hervatproef.py").read_text(encoding="utf-8")
 
 
 def test_avds_alleen_met_geinstalleerde_systeemimages_en_klein_scherm():
@@ -99,12 +161,21 @@ def test_testserver_corpus_alleen_lezen_en_alleen_vrije_testdata(monkeypatch, tm
         (tmp_path / bron).write_bytes(b"x")
     opname = DockerOpname()
     monkeypatch.setattr(server, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
     monkeypatch.setattr(server, "wacht_klaar", lambda url, **k: {"Version": "12.4.0"})
     s = server.TestServer("img@sha256:" + "0" * 64, werk=tmp_path / "werk", corpus=tmp_path)
     s.start()
     args = opname.run()
     poorten = waarde_na(args, "-p")
     assert len(poorten) == 1 and poorten[0].startswith("127.0.0.1:") and poorten[0].endswith(":8096")
+    assert waarde_na(args, "--network") == ["bridge"]
+    # Eigen afgeschermd netwerk: --internal én geen bridge-adres op de host; de server hangt eraan als 'testserver'.
+    maak = next(a for a in opname.aanroepen if a[:2] == ("network", "create"))
+    assert "--internal" in maak and "com.docker.network.bridge.inhibit_ipv4=true" in waarde_na(maak, "-o")
+    assert maak[-1] == s.netwerk.naam == f"{s.naam}-net"
+    assert ("network", "connect", "--alias", "testserver", s.netwerk.naam, s.naam) in opname.aanroepen
+    assert opname.aanroepen.index(maak) < opname.aanroepen.index(args)
+    assert s.intern_url == "http://testserver:8096" and s.url.startswith("http://127.0.0.1:")
     media = [k for k in waarde_na(args, "-v") if ":/media/" in k]
     assert len(media) == len(server.FILMS) + len(server.SERIES) and all(k.endswith(":ro") for k in media)
     assert waarde_na(args, "--cap-drop") == ["ALL"] and "--privileged" not in args
@@ -114,6 +185,45 @@ def test_testserver_corpus_alleen_lezen_en_alleen_vrije_testdata(monkeypatch, tm
 def test_twee_testservers_krijgen_elk_een_eigen_naam_en_map(tmp_path):
     a, b = server.TestServer("img", werk=tmp_path), server.TestServer("img", werk=tmp_path)
     assert a.naam != b.naam and a.map != b.map and a.naam.startswith("jlc-jc3-server-")
+    assert a.netwerk.naam != b.netwerk.naam  # ook een eigen netwerk per server (V-008)
+
+
+def test_testwachtwoorden_per_server_willekeurig_en_alleen_letters_en_cijfers(tmp_path):
+    a, b = server.TestServer("img", werk=tmp_path), server.TestServer("img", werk=tmp_path)
+    alle = [a.beheer_ww, a.kijker_ww, b.beheer_ww, b.kijker_ww]
+    assert len(set(alle)) == 4  # geen vaste waarde meer: per server en per account anders
+    for ww in alle:
+        assert len(ww) >= 20 and re.fullmatch(r"[A-Za-z0-9]+", ww)  # adb 'input text' typt alleen dit betrouwbaar
+        assert ww not in {"Jc3Beheer2026", "Jc3Kijker2026"}  # de oude vaste waarden
+    assert set(alle) <= set(server.run_wachtwoorden())
+    assert not hasattr(server, "KIJKER_WW") and not hasattr(server, "BEHEER_WW")
+
+
+def test_testserver_ruimt_container_en_netwerk_op(monkeypatch, tmp_path):
+    opname = DockerOpname()
+    monkeypatch.setattr(server, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+    s = server.TestServer("img", werk=tmp_path)
+    with s:
+        pass
+    assert opname.aanroepen[0] == ("rm", "-f", s.naam)
+    assert opname.aanroepen[1] == ("network", "rm", s.netwerk.naam)
+
+
+def test_netwerk_met_een_achtergebleven_container_wordt_toch_verwijderd(monkeypatch):
+    aanroepen = []
+
+    def nep(*args, check=True, timeout=600):
+        aanroepen.append(args)
+        if args[:2] == ("network", "rm") and len([a for a in aanroepen if a[:2] == ("network", "rm")]) == 1:
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr="has active endpoints")
+        return subprocess.CompletedProcess(args, 0, stdout="jlc-jc3-emulator " if args[1] == "inspect" else "",
+                                           stderr="")
+
+    monkeypatch.setattr(netwerk, "docker", nep)
+    netwerk.Testnetwerk("n1").verwijder()
+    assert ("network", "disconnect", "-f", "n1", "jlc-jc3-emulator") in aanroepen
+    assert aanroepen[-1] == ("network", "rm", "n1")
 
 
 def test_testserver_weigert_een_ontbrekend_corpusbestand(tmp_path):
@@ -123,14 +233,68 @@ def test_testserver_weigert_een_ontbrekend_corpusbestand(tmp_path):
 
 def test_desktop_container_met_grote_shm_en_zonder_rechten(monkeypatch, tmp_path):
     opname = DockerOpname()
+    proeven: list = []
     monkeypatch.setattr(desktop, "docker", opname)
-    d = desktop.Desktop(tmp_path)
+    monkeypatch.setattr(desktop.nw, "eis_afscherming", _afscherming_ok(proeven))
+    d = desktop.Desktop(tmp_path, netwerk=netwerk.Testnetwerk("jlc-net-d"))
     monkeypatch.setattr(d, "cdp", lambda actie, **k: {"doelen": [{"type": "page"}]})
     d.start()
-    args = opname.run()
-    assert waarde_na(args, "--shm-size") == ["1g"]
-    assert waarde_na(args, "--cap-drop") == ["ALL"] and "no-new-privileges" in waarde_na(args, "--security-opt")
-    assert waarde_na(args, "-v") == [f"{tmp_path}:/out:ro"] and "--privileged" not in args
+    try:
+        args = opname.run()
+        assert waarde_na(args, "--shm-size") == ["1g"]
+        assert waarde_na(args, "--cap-drop") == ["ALL"] and "no-new-privileges" in waarde_na(args, "--security-opt")
+        assert waarde_na(args, "-v") == [f"{tmp_path}:/out:ro"] and "--privileged" not in args
+        # S-P40-72: alleen het testnetwerk; CDP alleen in de container en niet gepubliceerd, wel een doorgifte.
+        assert waarde_na(args, "--network") == ["jlc-net-d"] and "host" not in args and not waarde_na(args, "-p")
+        assert f"--remote-debugging-port {desktop.CDP_POORT} " in args[-1]
+        assert proeven == [(desktop.NAAM, "jlc-net-d")]
+        assert d.doorgifte is not None and d.poort == d.doorgifte.poort != desktop.CDP_POORT
+    finally:
+        d.stop()
+
+
+def test_desktop_zonder_testnetwerk_start_niet(monkeypatch, tmp_path):
+    opname = DockerOpname()
+    monkeypatch.setattr(desktop, "docker", opname)
+    with pytest.raises(RuntimeError, match="testnetwerk"):
+        desktop.Desktop(tmp_path).start()
+    assert opname.aanroepen == []
+
+
+def test_cdp_doorgifte_geeft_bytes_heen_en_terug_door(monkeypatch):
+    """De doorgifte met bash /dev/tcp (hier zonder docker: hetzelfde script op de host tegen een echoserver)."""
+    echo = socket.socket()
+    echo.bind(("127.0.0.1", 0))
+    echo.listen(1)
+
+    def bedien():
+        k, _ = echo.accept()
+        with k:
+            while data := k.recv(1024):
+                k.sendall(data[::-1])
+
+    threading.Thread(target=bedien, daemon=True).start()
+    echt_popen = subprocess.Popen
+    gezien = []
+
+    def zonder_docker(args, **k):
+        gezien.append(args[:4])
+        assert args[:4] == ["docker", "exec", "-i", "jlc-jc3-desktop"]
+        return echt_popen(args[4:], **k)
+
+    monkeypatch.setattr(desktop.subprocess, "Popen", zonder_docker)
+    g = desktop.CdpDoorgifte("jlc-jc3-desktop", doelpoort=echo.getsockname()[1])
+    try:
+        with socket.create_connection(("127.0.0.1", g.poort), timeout=10) as c:
+            c.settimeout(10)
+            c.sendall(b"hallo cdp")
+            ontvangen = b""
+            while len(ontvangen) < 9 and (deel := c.recv(64)):
+                ontvangen += deel
+        assert ontvangen == b"pdc ollah" and gezien
+    finally:
+        g.sluit()
+        echo.close()
 
 
 def test_stockimage_en_desktopimage_vast(monkeypatch):
@@ -192,11 +356,14 @@ def test_vergelijking_telt_een_ontbrekende_of_verdwenen_stap_op_jelly_leon_als_r
     {"k": "MediaBrowser Client=\"x\", Token=\"abc123\""},
     {"AccessToken": "x"},
     {"url": "/Videos/1/master.m3u8?ApiKey=0123456789abcdef0123"},
-    {"lijst": ["Jc3Kijker2026"]},
+    {"lijst": ["<KIJKER_WW>"]},
+    {"app_log_staart": "login jc3kijker <BEHEER_WW> klaar"},
 ])
 def test_bewijs_met_geheim_wordt_geweigerd(document, tmp_path):
+    s = server.TestServer("img", werk=tmp_path)
+    tekst = json.dumps(document).replace("<KIJKER_WW>", s.kijker_ww).replace("<BEHEER_WW>", s.beheer_ww)
     with pytest.raises(ValueError):
-        bewijs.schrijf(tmp_path / "b.json", document, geheimen=[server.KIJKER_WW])
+        bewijs.schrijf(tmp_path / "b.json", json.loads(tekst), geheimen=server.run_wachtwoorden())
     assert not (tmp_path / "b.json").exists()
 
 
@@ -223,6 +390,26 @@ def test_comprimeer_houdt_alleen_jelly_leon_schermafdrukken(monkeypatch, tmp_pat
 
 
 # --- opdrachtregel --------------------------------------------------------------------------------------------------
+
+def test_android_bewijs_met_een_wachtwoord_van_de_run_wordt_niet_geschreven(monkeypatch, tmp_path):
+    """De opdrachtregel geeft de wachtwoorden van déze run aan de echte bewijscontrole mee (geen vaste lijst)."""
+    s = server.TestServer("img", werk=tmp_path)
+
+    def lekkende_run(label, image, soort, apks, uitmap, gib, migratie_van=None, bediend="fork"):
+        return {"oordeel": {"validatie": "Sim-geslaagd"}, "geheugen": {"oom_kill": 0},
+                "stappen": {"inloggen": {"uitkomst": "geslaagd", "reden": f"getypt: {s.kijker_ww}"}}}
+
+    monkeypatch.setattr(cli.apk, "bereid_voor", lambda *a, **k: {})
+    monkeypatch.setattr(cli, "een_android_run", lekkende_run)
+    monkeypatch.setattr(cli, "image_herkomst", lambda img: {"image": img})
+    monkeypatch.setattr(cli, "corpus_herkomst", lambda: [])
+    monkeypatch.setattr(cli.bewijs, "comprimeer_schermafdrukken", lambda m: [])
+    a = SimpleNamespace(soorten="telefoon", vergelijk_soorten="", uit=tmp_path / "b.json", image="jl",
+                        stock_image="stock", migratie_van=None, bediend="fork", aanvullen=False)
+    with pytest.raises(ValueError, match="wachtwoord"):
+        cli.android_cmd(a)
+    assert not (tmp_path / "b.json").exists()
+
 
 def test_cli_zonder_kvm_is_omgevingsfout(monkeypatch, capsys):
     monkeypatch.setattr(cli.Path, "exists", lambda self: str(self) != "/dev/kvm")
@@ -274,8 +461,11 @@ def test_aanvullen_bewaart_de_metingen_en_de_juiste_sessie_van_een_vervangen_run
 # --- hervatproef (review P4-0) ------------------------------------------------------------------------------------
 
 class _NepEmulator:
+    afscherming: dict = {"uitkomst": "geslaagd"}
+
     def __init__(self, *a, **k) -> None:
         self.gestopt = False
+        self.netwerk = k.get("netwerk")
 
     def start(self) -> float:
         return 1.0
@@ -311,7 +501,8 @@ class _NepVolger:
 def _nep_server():
     jf = SimpleNamespace(zet_userdata=lambda *a, **k: None, toon=lambda *a, **k: None)
     return SimpleNamespace(jf=jf, items=SimpleNamespace(hervat={"Id": "tos", "Name": "tos"}), kijker_id="k",
-                           HERVAT_S=300.0, poort=1)
+                           HERVAT_S=300.0, poort=1, netwerk=netwerk.Testnetwerk("jlc-net-h"),
+                           intern_url="http://testserver:8096", kijker_ww="Abc123willekeurig")
 
 
 def _apks():
@@ -328,14 +519,25 @@ def _apks():
 def test_hervatproef_telt_elke_gevraagde_poging(monkeypatch, login, reeksen, geslaagd, uitkomsten):
     from compat import hervatproef
 
-    monkeypatch.setattr(hervatproef, "Emulator", _NepEmulator)
+    emulators, logins = [], []
+
+    def nep_emulator(*a, **k):
+        emulators.append(_NepEmulator(*a, **k))
+        return emulators[-1]
+
+    monkeypatch.setattr(hervatproef, "Emulator", nep_emulator)
     monkeypatch.setattr(hervatproef, "Volger", lambda jf, client: _NepVolger(reeksen))
-    monkeypatch.setattr(hervatproef, "inloggen_tv", lambda *a, **k: {"uitkomst": login})
+    monkeypatch.setattr(hervatproef, "inloggen_tv", lambda *a, **k: (logins.append(a), {"uitkomst": login})[1])
     monkeypatch.setattr(hervatproef, "dpad_kies", lambda *a, **k: True)
     monkeypatch.setattr(hervatproef, "stop", lambda *a, **k: True)
     monkeypatch.setattr(hervatproef.time, "sleep", lambda s: None)
-    uit = hervatproef.herhaal(_nep_server(), "tv", _apks(), "officieel", 4)
+    srv = _nep_server()
+    uit = hervatproef.herhaal(srv, "tv", _apks(), "officieel", 4)
     assert (uit["geslaagd"], uit["n"], uit["gevraagd"]) == (geslaagd, 4, 4)
+    # S-P40-72: de emulator op het testnetwerk van de server, de app naar de testserver met het wachtwoord van de run.
+    assert emulators[0].netwerk is srv.netwerk
+    assert logins[0][2:] == ("http://testserver:8096", "Abc123willekeurig")
+    assert uit["netwerkafscherming"] == {"uitkomst": "geslaagd"}
     assert [p["uitkomst"] for p in uit["pogingen"]] == uitkomsten
     assert uit["pakket"] == "o" and uit["inloggen"] == login
     if reeksen:
@@ -376,9 +578,11 @@ def _android_apks():
 def test_android_run_die_afbreekt_is_nooit_geslaagd(monkeypatch, tmp_path, meting, geheugenstap):
     monkeypatch.setattr(_KapotteEmulator, "meting", meting)
     monkeypatch.setattr(android, "Emulator", _KapotteEmulator)
-    srv = SimpleNamespace(jf=SimpleNamespace(), items=SimpleNamespace())
+    monkeypatch.setattr(_KapotteEmulator, "afscherming", {})
+    srv = SimpleNamespace(jf=SimpleNamespace(), items=SimpleNamespace(), netwerk=netwerk.Testnetwerk("n"))
     res = android.run(srv, "tv", _android_apks(), tmp_path, "jelly-leon")
     assert res["fout"] == "RuntimeError: emulator startte niet"
+    assert res["netwerkafscherming"]["uitkomst"] == sc.MISLUKT  # niet gemeten = niet aangetoond
     assert res["oordeel"]["validatie"] == "Sim-mislukt"
     assert set(android.VEREIST) <= set(res["oordeel"]["mislukte_stappen"])  # elke ontbrekende stap telt als mislukt
     if geheugenstap:

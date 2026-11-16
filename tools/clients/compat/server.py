@@ -1,23 +1,27 @@
 """Wegwerpserver voor de clienttests: de jelly-leon-image (lokaal gebouwd of uit CI) of stock 12.x op digest.
 
-Regels (B03 §10.13/§10.14, 03_RISICO_AUTONOMIE): alleen op 127.0.0.1, media alleen-lezen en per bestand gekoppeld
-(nooit een schrijfpad in het corpus), eigen uid, ``--cap-drop ALL``, ``no-new-privileges``, geen Docker-socket, geen
-``--privileged``; datamap en cache in een werkmap buiten de repo die na de test weg gaat (BG-38). Het mediacorpus komt
-uit ``.lokaal/media-corpus`` en gaat nooit in een repo of image.
+Regels (B03 §10.13/§10.14, 03_RISICO_AUTONOMIE): voor het harnas alleen op 127.0.0.1; voor de emulator of desktop
+alleen via een eigen, afgeschermd netwerk per server (``netwerk.py``, alias ``testserver``); media alleen-lezen en per
+bestand gekoppeld (nooit een schrijfpad in het corpus), eigen uid, ``--cap-drop ALL``, ``no-new-privileges``, geen
+Docker-socket, geen ``--privileged``; datamap en cache in een werkmap buiten de repo die na de test weg gaat (BG-38).
+Het mediacorpus komt uit ``.lokaal/media-corpus`` en gaat nooit in een repo of image.
 """
 
 from __future__ import annotations
 
 import itertools
 import os
+import secrets
 import shutil
 import socket
+import string
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .jfapi import TICKS, Jellyfin, wacht_klaar
+from .netwerk import SERVER_ALIAS, SERVER_POORT, Testnetwerk
 from .scenario import beoordeel_migratie
 
 STOCK_12_4 = "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771"
@@ -25,10 +29,26 @@ LOKAAL = Path(__file__).resolve().parents[4] / ".lokaal"  # .lokaal ligt naast d
 CORPUS = Path(os.environ.get("JLC_CORPUS", str(LOKAAL / "media-corpus")))
 WERK = Path(os.environ.get("JLC_WERK", str(LOKAAL / "jelly-leon-clients-jc3")))
 
-# Wegwerpaccounts in een wegwerpcontainer op 127.0.0.1 (geen echte gegevens). Alleen letters en cijfers: `adb shell
-# input text` vertaalt sommige leestekens niet betrouwbaar.
-BEHEERDER, BEHEER_WW = "jc3beheer", "Jc3Beheer2026"
-KIJKER, KIJKER_WW = "jc3kijker", "Jc3Kijker2026"
+# Wegwerpaccounts in een wegwerpcontainer (geen echte gegevens). De wachtwoorden zijn per server willekeurig (S-P40-72;
+# ``TestServer.beheer_ww``/``kijker_ww``): alleen letters en cijfers, omdat `adb shell input text` sommige leestekens
+# niet betrouwbaar vertaalt. Elk bewijs met een wachtwoord van deze run wordt geweigerd (``run_wachtwoorden``).
+BEHEERDER = "jc3beheer"
+KIJKER = "jc3kijker"
+WW_TEKENS = string.ascii_letters + string.digits
+WW_LENGTE = 24
+_RUN_WACHTWOORDEN: list[str] = []
+
+
+def nieuw_wachtwoord(lengte: int = WW_LENGTE) -> str:
+    """Willekeurig testwachtwoord (``secrets``); wordt onthouden voor de geheimencontrole van het bewijs."""
+    ww = "".join(secrets.choice(WW_TEKENS) for _ in range(lengte))
+    _RUN_WACHTWOORDEN.append(ww)
+    return ww
+
+
+def run_wachtwoorden() -> list[str]:
+    """Alle testwachtwoorden die dit proces heeft gemaakt: ``bewijs.schrijf(..., geheimen=run_wachtwoorden())``."""
+    return list(_RUN_WACHTWOORDEN)
 
 # Testbibliotheek: bestand in de container → bron onder het corpus (sha256 in CORPUS/SHA256SUMS.*). Alle bronnen zijn
 # vrij gelicentieerd (CC BY); geen Pioneer One of andere beperkte testdata (BG-37).
@@ -95,10 +115,19 @@ class TestServer:
         self.info: dict[str, Any] = {}
         self.kijker_id = ""
         self.items = Testitems()
+        self.beheer_ww = nieuw_wachtwoord()
+        self.kijker_ww = nieuw_wachtwoord()
+        self.netwerk = Testnetwerk(f"{self.naam}-net")
 
     @property
     def url(self) -> str:
+        """Adres voor het harnas op de host."""
         return f"http://127.0.0.1:{self.poort}"
+
+    @property
+    def intern_url(self) -> str:
+        """Adres voor de app in de emulator- of desktopcontainer (alleen op het eigen testnetwerk)."""
+        return f"http://{SERVER_ALIAS}:{SERVER_POORT}"
 
     def koppelingen(self) -> list[str]:
         uit: list[str] = []
@@ -114,18 +143,21 @@ class TestServer:
         for sub in ("config", "cache"):
             (self.map / sub).mkdir(parents=True, exist_ok=True)
         self.poort = vrije_poort()
+        self.netwerk.maak()
         self._draai()
         return self
 
     def _draai(self, timeout: float = 300) -> None:
-        """Container op de bestaande datamap (``self.map``) starten en wachten tot de server antwoordt."""
+        """Container op de bestaande datamap (``self.map``) starten en wachten tot de server antwoordt. Standaard-bridge
+        met de poort alleen op 127.0.0.1 (voor het harnas) plus het eigen testnetwerk (voor de app)."""
         docker("rm", "-f", self.naam, check=False)
         docker(
-            "run", "-d", "--name", self.naam, "--user", f"{os.getuid()}:{os.getgid()}",
+            "run", "-d", "--name", self.naam, "--user", f"{os.getuid()}:{os.getgid()}", "--network", "bridge",
             "--memory", self.geheugen, "--cpus", self.cpus, "--security-opt", "no-new-privileges", "--cap-drop", "ALL",
-            "-p", f"127.0.0.1:{self.poort}:8096", "-v", f"{self.map / 'config'}:/config",
+            "-p", f"127.0.0.1:{self.poort}:{SERVER_POORT}", "-v", f"{self.map / 'config'}:/config",
             "-v", f"{self.map / 'cache'}:/cache", "-e", "TZ=UTC", *self.koppelingen(), self.image,
         )  # fmt: skip
+        self.netwerk.verbind(self.naam, alias=SERVER_ALIAS)
         self.info = wacht_klaar(self.url, timeout=timeout)
         self.jf = Jellyfin(self.url)
 
@@ -136,11 +168,11 @@ class TestServer:
         """Wizard, bibliotheken, scan, de kijker en zijn kijkgeschiedenis (alsof die net is overgenomen)."""
         assert self.jf
         jf = self.jf
-        jf.wizard(BEHEERDER, BEHEER_WW)
+        jf.wizard(BEHEERDER, self.beheer_ww)
         jf.bibliotheek("Films", "movies", ["/media/films"])
         jf.bibliotheek("Series", "tvshows", ["/media/series"])
         scan_s = jf.scan(verwacht_minimaal=len(FILMS) - 2 + 5)  # 2 srt-bestanden, 5 afleveringen
-        self.kijker_id = jf.gebruiker(KIJKER, KIJKER_WW)
+        self.kijker_id = jf.gebruiker(KIJKER, self.kijker_ww)
         aantal = self.items_opzoeken()
         return {"scan_s": round(scan_s, 1), "items": aantal, "kijkgeschiedenis": self.zaai_kijkgeschiedenis(voorkeuren)}
 
@@ -198,7 +230,7 @@ class TestServer:
         self.image = nieuw
         self._draai(timeout=600)
         assert self.jf
-        self.jf.login_admin(BEHEERDER, BEHEER_WW)
+        self.jf.login_admin(BEHEERDER, self.beheer_ww)
         self.items_opzoeken()
         na = self.kijkgegevens()
         oordeel = beoordeel_migratie(
@@ -257,7 +289,9 @@ class TestServer:
         return docker("logs", "--tail", str(regels), self.naam, check=False).stdout
 
     def verwijder(self) -> None:
+        """Container, testnetwerk en datamap weg (ook na een fout: altijd vanuit ``finally``/``__exit__``, V-088)."""
         docker("rm", "-f", self.naam, check=False)
+        self.netwerk.verwijder()
         shutil.rmtree(self.map, ignore_errors=True)
 
     def __enter__(self) -> TestServer:

@@ -2,9 +2,15 @@
 
 De app is uit ``desktop/`` gebouwd met de bouwomgeving van deze repo (``make desktop-bouw``, Release) en draait in het
 doel ``test`` van ``bouwverificatie/desktop.Dockerfile`` (Xvfb en de QML-runtimemodules uit ``debian/control``), als
-niet-root, zonder capabilities, met de build alleen-lezen, op het hostnetwerk (alleen 127.0.0.1) en met
-``--shm-size 1g``. Besturing via ruwe CDP (``desktop_cdp.mjs``); afspelen gaat via libmpv, dus beoordeeld wordt wat de
-server ziet en het beeld komt van het X-scherm (``xwd``).
+niet-root, zonder capabilities, met de build alleen-lezen, alleen op het eigen testnetwerk van de server (S-P40-72;
+``netwerk.py``: geen hostnetwerk, de app gebruikt ``http://testserver:8096``) en met ``--shm-size 1g``. Besturing via
+ruwe CDP (``desktop_cdp.mjs``); afspelen gaat via libmpv, dus beoordeeld wordt wat de server ziet en het beeld komt van
+het X-scherm (``xwd``).
+
+CDP luistert alleen op 127.0.0.1 ín de container (QtWebEngine, poort ``CDP_POORT``) en wordt niet gepubliceerd: het
+afgeschermde netwerk heeft geen adres op de host. ``CdpDoorgifte`` geeft een poort op 127.0.0.1 van de host door via
+``docker exec`` (bash ``/dev/tcp`` in de container); de WebSocket-adressen in ``/json/list`` volgen de Host-kop en
+wijzen dus naar die doorgiftepoort.
 
 Gemeten oorzaak van de eerdere blokkade (jelly-leon B03-016, desktop-spike): met de standaard ``/dev/shm`` van Docker
 (64 MiB) laadt QtWebEngine de web-client van de server niet (``net::ERR_INSUFFICIENT_RESOURCES`` op elke bundle) en
@@ -14,24 +20,28 @@ blijft de app op ``find-webclient.html`` hangen. Met ``--shm-size 1g`` werkt het
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import socket
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any
 
 from . import bewijs
+from . import netwerk as nw
 from . import scenario as sc
 from .android import Volger, log
 from .jfapi import TICKS
-from .server import BEHEER_WW, KIJKER, KIJKER_WW, TestServer, docker
+from .server import KIJKER, TestServer, docker, run_wachtwoorden
 
 IMAGE = os.environ.get("JLC_DESKTOP_IMAGE", "jelly-leon-clients/desktop-test:dev")
 NAAM = "jlc-jc3-desktop"
 CDP_JS = Path(__file__).resolve().parent / "desktop_cdp.mjs"
 CLIENT = "Jellyfin Desktop"
+CDP_POORT = 9222  # in de eigen netwerknamespace van de container: botst niet met andere agents (V-008)
 VEREIST = [
     "inloggen",
     "bladeren",
@@ -46,19 +56,93 @@ VEREIST = [
 LAGE_BITRATE = {"enableautobitratebitrate-Video-true": "false", "maxbitrate-Video-true": "400000"}
 
 
-def vrije_poort() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+class CdpDoorgifte:
+    """127.0.0.1:<vrije poort> op de host → 127.0.0.1:``CDP_POORT`` in de container, per verbinding één
+    ``docker exec -i`` met bash ``/dev/tcp``. Niets wordt gepubliceerd; de container krijgt geen route naar de host."""
+
+    SCRIPT = 'exec 3<>/dev/tcp/127.0.0.1/"$0" || exit 1; cat <&3 & cat >&3; kill $! 2>/dev/null; wait'
+
+    def __init__(self, container: str, doelpoort: int = CDP_POORT) -> None:
+        self.container = container
+        self.doelpoort = doelpoort
+        self.sock = socket.socket()
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(32)
+        self.sock.settimeout(0.5)
+        self.poort: int = self.sock.getsockname()[1]
+        self._stop = threading.Event()
+        self._processen: list[subprocess.Popen[bytes]] = []
+        self._draad = threading.Thread(target=self._accepteer, daemon=True)
+        self._draad.start()
+
+    def _accepteer(self) -> None:
+        while not self._stop.is_set():
+            try:
+                klant, _ = self.sock.accept()
+            except (TimeoutError, OSError):
+                continue
+            threading.Thread(target=self._bedien, args=(klant,), daemon=True).start()
+
+    def _bedien(self, klant: socket.socket) -> None:
+        p = subprocess.Popen(
+            ["docker", "exec", "-i", self.container, "bash", "-c", self.SCRIPT, str(self.doelpoort)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=0,
+        )
+        self._processen.append(p)
+        invoer, uitvoer = p.stdin, p.stdout
+        assert invoer is not None and uitvoer is not None
+
+        def naar_container() -> None:
+            try:
+                while data := klant.recv(65536):
+                    invoer.write(data)
+            except OSError:
+                pass
+            finally:
+                with contextlib.suppress(OSError):
+                    invoer.close()
+
+        heen = threading.Thread(target=naar_container, daemon=True)
+        heen.start()
+        try:
+            while data := uitvoer.read(65536):  # ongebufferd (bufsize=0): geeft wat er is
+                klant.sendall(data)
+        except OSError:
+            pass
+        finally:
+            with contextlib.suppress(OSError):
+                klant.shutdown(socket.SHUT_RDWR)
+            klant.close()
+            heen.join(timeout=5)
+            if p.poll() is None:
+                p.kill()
+            p.wait(timeout=10)
+
+    def sluit(self) -> None:
+        self._stop.set()
+        self._draad.join(timeout=5)
+        self.sock.close()
+        for p in self._processen:
+            if p.poll() is None:
+                p.kill()
 
 
 class Desktop:
-    def __init__(self, build: Path) -> None:
+    def __init__(self, build: Path, netwerk: nw.Testnetwerk | None = None) -> None:
         self.build = build
-        self.poort = vrije_poort()
+        self.netwerk = netwerk
+        self.poort = 0  # doorgiftepoort op de host (CdpDoorgifte)
         self.cid = ""
+        self.afscherming: dict[str, Any] = {}
+        self.doorgifte: CdpDoorgifte | None = None
 
     def start(self) -> None:
+        if self.netwerk is None:  # fail-closed: nooit zonder eigen testnetwerk (ook niet op het hostnetwerk)
+            raise RuntimeError("geen testnetwerk: de desktop start alleen op het afgeschermde netwerk van de server")
         docker("rm", "-f", NAAM, check=False)
         self.cid = docker(
             "run",
@@ -66,7 +150,7 @@ class Desktop:
             "--name",
             NAAM,
             "--network",
-            "host",
+            self.netwerk.naam,
             "--shm-size",
             "1g",
             "--user",
@@ -88,8 +172,11 @@ class Desktop:
             "-c",
             "Xvfb :99 -screen 0 1600x900x24 >/tmp/xvfb.log 2>&1 & sleep 2; DISPLAY=:99 "
             "QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox /out/build/src/jellyfin-desktop "
-            f"--remote-debugging-port {self.poort} > /tmp/app.log 2>&1",
+            f"--remote-debugging-port {CDP_POORT} > /tmp/app.log 2>&1",
         ).stdout.strip()
+        self.afscherming = nw.eis_afscherming(NAAM, self.netwerk)
+        self.doorgifte = CdpDoorgifte(NAAM)
+        self.poort = self.doorgifte.poort
         for _ in range(60):
             if self.cdp("doelen").get("doelen"):
                 return
@@ -141,6 +228,8 @@ class Desktop:
             return {"fout": str(fout)}
 
     def stop(self) -> None:
+        if self.doorgifte:
+            self.doorgifte.sluit()
         docker("rm", "-f", NAAM, check=False)
 
 
@@ -151,10 +240,10 @@ def stap(ok: bool, **gegevens: Any) -> dict[str, Any]:
 def run(server: TestServer, build: Path, uitmap: Path, label: str) -> dict[str, Any]:
     res: dict[str, Any] = {
         "client": "jellyfin-desktop 2.0.0 (forkbron desktop/, 2.0.0-jl.0; Release-build in container)",
-        "omgeving": "Xvfb 1600x900, QtWebEngine, libmpv (software), container --shm-size 1g",
+        "omgeving": "Xvfb 1600x900, QtWebEngine, libmpv (software), container --shm-size 1g; " + nw.BESCHRIJVING,
         "stappen": {},
     }
-    d = Desktop(build)
+    d = Desktop(build, netwerk=server.netwerk)
     try:
         _stappen(d, res, server, uitmap, label)
     except Exception as fout:  # noqa: BLE001 - eerlijk in het bewijs
@@ -162,6 +251,7 @@ def run(server: TestServer, build: Path, uitmap: Path, label: str) -> dict[str, 
     finally:
         res["app_log_staart"] = "\n".join(r for r in d.log(15).splitlines() if "Token" not in r)[-1200:]
         res["geheugen"] = d.geheugen()
+        res["netwerkafscherming"] = d.afscherming or {"uitkomst": sc.MISLUKT, "reden": "niet gemeten"}
         d.stop()
     res["oordeel"] = sc.eindoordeel(res["stappen"], VEREIST)
     return res
@@ -173,8 +263,12 @@ def _stappen(d: Desktop, res: dict[str, Any], server: TestServer, uitmap: Path, 
     volger = Volger(jf, CLIENT)
     schot = lambda naam: d.schermafdruk(uitmap / f"{label}-desktop-{naam}.png")  # noqa: E731
     d.start()
-    v = d.cdp("verbind", server=server.url)
-    i = d.cdp("inloggen", server=server.url, gebruiker=KIJKER, wachtwoord=KIJKER_WW) if v.get("ok") else {}
+    v = d.cdp("verbind", server=server.intern_url)
+    i = (
+        d.cdp("inloggen", server=server.intern_url, gebruiker=KIJKER, wachtwoord=server.kijker_ww)
+        if v.get("ok")
+        else {}
+    )
     sessie = volger.bestuurbaar(30) if i.get("ok") else None
     st["inloggen"] = stap(
         bool(v.get("ok") and i.get("ok") and i.get("thuis") and sessie),
@@ -191,16 +285,16 @@ def _stappen(d: Desktop, res: dict[str, Any], server: TestServer, uitmap: Path, 
         return
     log(f"desktop: ingelogd ({sessie.get('Client')} {sessie.get('ApplicationVersion')})")
 
-    thuis = d.cdp("teksten", server=server.url).get("teksten", [])
+    thuis = d.cdp("teksten", server=server.intern_url).get("teksten", [])
     films = sorted(x["Name"] for x in jf.items(server.kijker_id) if x.get("Type") == "Movie")
     views = {x["Name"]: x for x in jf.a.doe("GET", "/UserViews", {"userId": server.kijker_id})["Items"]}
     jf.toon(volger.id(), views["Films"])
-    bib = d.cdp("teksten", server=server.url, wacht_ms=4000).get("teksten", [])
+    bib = d.cdp("teksten", server=server.intern_url, wacht_ms=4000).get("teksten", [])
     serie_id = it.afleveringen[0].get("SeriesId") if it.afleveringen else None
     serie: list[str] = []
     if serie_id:
         jf.toon(volger.id(), {"Type": "Series", "Id": serie_id, "Name": "B03 Testserie"})
-        serie = d.cdp("teksten", server=server.url, wacht_ms=4000).get("teksten", [])
+        serie = d.cdp("teksten", server=server.intern_url, wacht_ms=4000).get("teksten", [])
     gezien = {
         "films_tegel": "Films" in thuis,
         "series_tegel": "Series" in thuis,
@@ -220,7 +314,7 @@ def _stappen(d: Desktop, res: dict[str, Any], server: TestServer, uitmap: Path, 
     log(f"desktop: bladeren {st['bladeren']['uitkomst']}")
 
     jf.toon(volger.id(), it.hervat)
-    knop = d.cdp("klik", server=server.url, selector=".mainDetailButtons .btnPlay[title='Resume']")
+    knop = d.cdp("klik", server=server.intern_url, selector=".mainDetailButtons .btnPlay[title='Resume']")
     monsters = volger.volg(it.hervat["Id"], 25, minimaal_s=6) if knop.get("ok") else []
     st["hervatten"] = {
         **sc.beoordeel_hervatten(monsters, it.hervat["Id"], server.HERVAT_S),
@@ -246,12 +340,12 @@ def _stappen(d: Desktop, res: dict[str, Any], server: TestServer, uitmap: Path, 
 
     st["direct_play"] = speel(it.direct_play, "DirectPlay", "direct_play")
     # mpv speelt alles direct; transcode alleen via de gebruikersinstelling 'maximale streamingbitrate' (400 kbit/s).
-    d.cdp("opslag", server=server.url, zet=LAGE_BITRATE)
+    d.cdp("opslag", server=server.intern_url, zet=LAGE_BITRATE)
     st["transcode"] = {
         **speel(it.transcode[0], "Transcode", "transcode"),
         "route": "Instellingen → Afspelen: maximale streamingbitrate 400 kbit/s (appSettings)",
     }
-    d.cdp("opslag", server=server.url, zet=dict.fromkeys(LAGE_BITRATE))
+    d.cdp("opslag", server=server.intern_url, zet=dict.fromkeys(LAGE_BITRATE))
     log(f"desktop: direct_play {st['direct_play']['uitkomst']}, transcode {st['transcode']['uitkomst']}")
 
     jf.gebruikersconfig(server.kijker_id, {"SubtitleMode": "Always", "SubtitleLanguagePreference": "nld"})
@@ -302,7 +396,7 @@ def _stappen(d: Desktop, res: dict[str, Any], server: TestServer, uitmap: Path, 
         f"extern {st['ondertitel_extern']['uitkomst']}"
     )
     st["skip_segmenten"] = sc.beoordeel_segmenten({x["Name"]: jf.segmenten(x["Id"]) for x in it.afleveringen})
-    res["webfouten"] = d.cdp("fouten", server=server.url).get("fouten", [])
+    res["webfouten"] = d.cdp("fouten", server=server.intern_url).get("fouten", [])
 
 
 def main(a: argparse.Namespace) -> int:
@@ -347,6 +441,6 @@ def main(a: argparse.Namespace) -> int:
     document["eind"] = bewijs.nu()
     jl = document["resultaten"]["jelly-leon"]["oordeel"]["validatie"]
     document["validatie"] = "Sim-geslaagd" if jl == "Sim-geslaagd" and not document.get("regressies") else "Sim-mislukt"
-    bewijs.schrijf(a.uit, document, geheimen=[KIJKER_WW, BEHEER_WW])
+    bewijs.schrijf(a.uit, document, geheimen=run_wachtwoorden())
     log(f"bewijs geschreven: {a.uit} — {document['validatie']}")
     return 0
