@@ -289,3 +289,35 @@ Niet opnieuw gedaan in de review (tijd en geheugen op de gedeelde machine): tabl
 fork-app, de migratieproef 10.11.11 → 12.4, de desktop onder Xvfb en het Swiftfin-protocol; daarvoor geldt het bewijs
 van de bouwer (§2–§4), nagerekend maar niet herhaald.
 
+
+## 9. Harnas veiliger: eigen testnetwerk, willekeurige testwachtwoorden, controle op buildbestanden (S-P40-72, 2026-11-16)
+
+Drie verbeteringen uit de review van P4-0 (ADR-0011, besluit 15). Alles **Sim-getest** op de ontwikkelmachine; echte
+apparaten **NIET GEVALIDEERD (hardware)**, Swiftfin **NIET GEVALIDEERD (Mac/Xcode)**.
+
+1. **Geen hostnetwerk meer.** Emulator en desktop hangen alleen aan een eigen Docker-netwerk per testserver
+   (`compat/netwerk.py`: `--internal` en `com.docker.network.bridge.inhibit_ipv4=true`); de app gebruikt
+   `http://testserver:8096`. Gemeten (Docker 29.1.3): met alleen `--internal` bereikte een container een luisteraar
+   op de host via het gateway-adres; de afschermingsproef gaf daar terecht *mislukt* (de host heeft dan een adres in
+   het subnet, twee verbindingen bij de luisteraar). Met `inhibit_ipv4`: elk hostadres "Network is unreachable", de
+   testserver bereikbaar. Die proef draait nu vóór elke emulator- en desktopstart (fail-closed) en staat per run in
+   het bewijs (`netwerkafscherming`, zonder adressen of interfacenamen). CDP van de desktop luistert alleen in de
+   container; het harnas gebruikt een doorgifte via `docker exec`.
+2. **Testwachtwoorden per server willekeurig** (24 letters en cijfers); `bewijs.schrijf` krijgt de wachtwoorden van
+   de run mee en weigert elk document waar er een in staat.
+3. **`check_clients.py` faalt op een getrackt buildbestand in een clientmap** (`.kotlin`, `.gradle`, `build/`, APK,
+   klassebestand, crashlog, `local.properties` …), ook als het in PATCHES.md geregistreerd is. De controle leest de
+   commit (`--ref`, `git ls-tree`/`git diff`), niet de index.
+
+Vergelijkingsrun met dezelfde serverbron als het vorige bewijs (besluit van de regisseur):
+
+| Stap | Uitkomst |
+|---|---|
+| jelly-leon-image uit `git archive` van jelly-leon `e294f84ea` + jelly-leon-web `5ced8a246` (Dockerfile van die commit, `BUILD_JOBS=2`, `WEB_BUILD_JOBS=2`, onder `docker-build.lock`) | gebouwd; image-ID `sha256:36d2bec6b653…` (andere ID dan eerder: tijdstempels in de lagen), labels `12.4.0-jl.0`, revisies `e294f84…`/`5ced8a2…`; na de proef verwijderd |
+| `make release-apks`, `make emulator-image`, `make desktop-test-image`, `make desktop-image`; desktop `JOBS=4 BUILD_TYPE=Release` met `desktop_bouw.sh` | BUILD SUCCESSFUL (2 min 1 s en 1 min 28 s); desktop 62/62, `ctest` 1/1 |
+| `client_compat.py android --soorten telefoon --vergelijk-soorten telefoon` (`test-evidence/p4-0-s-p40-72-android-telefoon.json` + schermafdrukken) | Jelly Leon en stock **Sim-geslaagd**, 0 regressies; afscherming op beide geslaagd; hervatten eerste melding 300,0 s na 0,01 s, bewaard 306,59 s; elke stap dezelfde uitkomst als in `p4-0-review-android-telefoon.json` (ook `ondertitel_wisselen_op_afstand` blijft op beide servers *mislukt*, zoals eerder; geen verplichte stap) |
+| `client_compat.py desktop --met-stock` (`test-evidence/p4-0-s-p40-72-desktop.json` + schermafdrukken) | Jelly Leon en stock **Sim-geslaagd**, 0 regressies; afscherming geslaagd; elke stap dezelfde uitkomst als in `p4-0-jc3-desktop.json`; nieuw: één webfout `net::ERR_NAME_NOT_RESOLVED` voor het Cast-script van gstatic.com — gevolg van het afgeschermde netwerk (geen internet in de container), geen stap afhankelijk |
+
+Geen scenario ging van geslaagd naar mislukt. Niet herhaald in deze stap: tablet, Android TV, de migratieproef,
+de hervatproef en het Swiftfin-protocol (de stap vraagt telefoon en desktop); hervatproef en Swiftfin gebruiken
+dezelfde gewijzigde code en zijn alleen met unit-tests gedekt.
