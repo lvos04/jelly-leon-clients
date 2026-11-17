@@ -321,3 +321,45 @@ Vergelijkingsrun met dezelfde serverbron als het vorige bewijs (besluit van de r
 Geen scenario ging van geslaagd naar mislukt. Niet herhaald in deze stap: tablet, Android TV, de migratieproef,
 de hervatproef en het Swiftfin-protocol (de stap vraagt telefoon en desktop); hervatproef en Swiftfin gebruiken
 dezelfde gewijzigde code en zijn alleen met unit-tests gedekt.
+
+### 9.1 Herstel na de review van S-P40-72 (2026-11-17)
+
+De reviews vonden acht bevindingen (vijf van R-VEILIG, drie van R-TECH) en één vervolgpunt; alles is hersteld, elk
+met een test die zonder het herstel faalt (mutatieproef: 22 mutaties in een kopie, alle rood). ADR-0011 besluit 15
+is bijgewerkt. Alles **Sim-getest**; echte apparaten **NIET GEVALIDEERD (hardware)**.
+
+1. **CDP vertrouwt geen adres uit de container (R-VEILIG-1).** Een nep-CDP in de desktopcontainer liet het harnas op
+   de host een dienst openen die alleen op 127.0.0.1 luistert (via `webSocketDebuggerUrl` en via een doorverwijzing
+   van `/json/list`). `desktop_cdp.mjs` volgt nu geen doorverwijzing, neemt van `webSocketDebuggerUrl` alleen een pad
+   `/devtools/page/<id>` en verbindt altijd met `ws://127.0.0.1:<doorgiftepoort><pad>`; al het andere geeft
+   `ok: false`. Test: `tools/clients/tests/test_compat_cdp.py` (echte Node tegen een nep-CDP en een lokker op
+   127.0.0.1; de lokker krijgt niets). De Forkregels-workflow zet daarvoor Node 22.22.1 klaar.
+2. **IPv6 dicht en getoetst (R-VEILIG-2).** Het testnetwerk is expliciet zonder IPv6 (`--ipv6=false`). De
+   afschermingsproef luistert dual-stack (`::`), probeert ook elk IPv6-adres van de host en eist dat de container
+   geen IPv6-adres buiten `lo` heeft. Een netwerk met IPv6 geeft nu *mislukt* (eerder *geslaagd*).
+3. **Desktop: eerst de proef, dan de app (R-VEILIG-3).** De desktopcontainer start met `sleep infinity`; Xvfb en de
+   app starten pas na de afschermingsproef met `docker exec -d`.
+4. **Wachtwoordweigering per schrijfpad (R-VEILIG-4, R-TECH-2).** Tests voor desktop, hervatproef en Swiftfin (naast
+   Android) en een test dat de desktop- en de telefoon-app `http://testserver:8096` krijgen, niet het hostadres.
+5. **Meer buildbestanden (R-VEILIG-5).** `.hprof`, `.ninja_log`, `compile_commands.json`,
+   `release/output-metadata.json`; mapnamen zonder hoofdlettergevoeligheid. De source set `src/release` blijft
+   toegestaan.
+6. **Mislukte serverstart ruimt zelf op (R-TECH-1).** Faalt `TestServer.start` (bv. `docker run`, ontbrekend
+   corpusbestand, time-out), dan gaan container, netwerk en map weg.
+7. **Verwijderd buildbestand van upstream (R-TECH-3).** Echte test: upstream trackt `app/build/x.apk`, de fork
+   verwijdert het en registreert dat; geen melding.
+8. **Opruimen na een afgebroken proces (vervolgpunt R-TECH).** Elk testnetwerk krijgt het eigenaarproces (pid en
+   starttijd) als label; vóór een nieuw netwerk gaan de netwerken van een proces dat niet meer bestaat weg, die van een
+   lopend proces nooit (ook echt met Docker geprobeerd).
+
+Opnieuw gedraaid met dezelfde serverbron als het vorige bewijs:
+
+| Stap | Uitkomst |
+|---|---|
+| jelly-leon-image uit `git archive` van jelly-leon `e294f84ea` + jelly-leon-web `5ced8a246` (zelfde Dockerfile en argumenten als in §9, onder `docker-build.lock`); emulator- en desktop-testimage | gebouwd (uit de buildcache); image-ID `sha256:7c389e15a00e…`, labels `12.4.0-jl.0`, revisies `e294f84…`/`5ced8a2…`; na de proef verwijderd |
+| release-APK's en desktop-build | niet opnieuw gebouwd: de ongetekende APK's zijn byte-gelijk aan die van de review (`07b9e65f…`/`f3b6bf39…`); de desktop-build (Release) is die van §9, uit dezelfde bron `desktop/` |
+| `client_compat.py android --soorten telefoon --vergelijk-soorten telefoon` (`test-evidence/p4-0-s-p40-72-herstel-android-telefoon.json` + schermafdrukken) | Jelly Leon en stock **Sim-geslaagd**, 0 regressies; afscherming op beide geslaagd (IPv6 in de container: alleen `lo`; 0 verbindingen bij de dual-stack-luisteraar); hervatten op Jelly Leon eerste positie 300,02 s, bewaard 306,99 s; elke stap dezelfde uitkomst als in `p4-0-review-android-telefoon.json` en `p4-0-s-p40-72-android-telefoon.json` |
+| `client_compat.py desktop --met-stock` (`test-evidence/p4-0-s-p40-72-herstel-desktop.json` + schermafdrukken) | Jelly Leon en stock **Sim-geslaagd**, 0 regressies; afscherming geslaagd (zelfde metingen); elke stap dezelfde uitkomst als in `p4-0-jc3-desktop.json` en `p4-0-s-p40-72-desktop.json`; dezelfde ene webfout voor het Cast-script van gstatic.com als in §9 |
+
+Geen scenario ging van geslaagd naar mislukt. Na de runs: geen testnetwerk en geen testcontainer over. Niet herhaald:
+tablet, Android TV, de migratieproef, de hervatproef en het Swiftfin-protocol (alleen unit-tests, zoals in §9).

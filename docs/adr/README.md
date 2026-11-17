@@ -12,7 +12,7 @@
 | [ADR-0008](ADR-0008-geen-truenas-app-voor-clients.md) | Geen image/Custom App/OpenAPI voor apparaat-apps | Aanvaard (contractpunt) |
 | [ADR-0009](ADR-0009-swiftfin-servercompatibiliteit.md) | Swiftfin 1.6.1 blijft; server vóór P4 naar Jellyfin 12.x | Aanvaard (besluit gebruiker 2026-11-09); herbeoordeeld 2026-11-10 tegen 12.4 |
 | [ADR-0010](ADR-0010-contract-1-2-in-de-clients.md) | Contract 1.2 in de clients (JC1–JC5), eigen app-identiteit, drifttest | Aanvaard |
-| [ADR-0011](ADR-0011-clientcompatibiliteit-12x.md) | Clientcompatibiliteit met de Jelly Leon 12.x-server (JC3): harnas, controlegroep stock, meetregels; eigen testnetwerk en willekeurige testwachtwoorden (besluit 15) | Aanvaard (P4-0, 2026-11-10; aangevuld 2026-11-16) |
+| [ADR-0011](ADR-0011-clientcompatibiliteit-12x.md) | Clientcompatibiliteit met de Jelly Leon 12.x-server (JC3): harnas, controlegroep stock, meetregels; eigen testnetwerk en willekeurige testwachtwoorden (besluit 15) | Aanvaard (P4-0, 2026-11-10; aangevuld 2026-11-16 en 2026-11-17) |
 | [ADR-0012](ADR-0012-contract-1-3-in-de-clients.md) | Contract 1.3 in de clients (C1.3-JLC-01…03): kopie en pin, EVIDENCE-regels, ID-regel gemeten tegen de officiële APK's, bevestigde app-ID's | Aanvaard (2026-11-10) |
 
 ## B03 2.0 — besluiten in jelly-leon die de clients raken (verwijzing)
