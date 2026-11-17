@@ -1,6 +1,6 @@
 # Jelly Leon clients — CI voor swiftfin/ (fork van Swiftfin, iOS en tvOS, zie tools/clients/baseline.json).
-# Bouwt beide schema's voor de simulator zonder code signing, zoals upstream ci.yml (macos-26, Xcode 26.6,
-# Brewfile, Carthage voor VLCKit), maar met gewone xcodebuild in plaats van fastlane.
+# Bouwt beide schema's voor de simulator zonder code signing, zoals upstream ci.yml (Xcode 27.1, Brewfile,
+# Swift-pakketten; sinds Swiftfin 1.7.1 geen Carthage meer), maar met gewone xcodebuild in plaats van fastlane.
 #
 # Lokaal niet uit te voeren (geen macOS/Xcode): NIET GEVALIDEERD (Mac/Xcode). Op een GitHub-macOS-runner is deze
 # workflow groen (zie EVIDENCE.json); dat is alleen een simulatorbuild zonder signing: de app wordt niet gestart of
@@ -52,7 +52,7 @@ jobs:
           - schema: "Swiftfin tvOS"
             bestemming: "generic/platform=tvOS Simulator"
     env:
-      XCODE_VERSION: "26.6"
+      XCODE_VERSION: "27.1"
       SCHEMA: ${{ matrix.schema }}
       BESTEMMING: ${{ matrix.bestemming }}
     defaults:
@@ -68,22 +68,20 @@ jobs:
         run: |
           sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
           xcodebuild -version
-      - name: Hulpmiddelen uit de upstream-Brewfile (carthage, swiftgen, swiftformat, swiftlint)
+      - name: Hulpmiddelen uit de upstream-Brewfile (swiftformat, swiftlint)
         run: brew bundle --file Brewfile
-      - name: Carthage-cache (lezen en schrijven; niet voor een syncbranch)
+      - name: Swift-pakketcache (lezen en schrijven; niet voor een syncbranch)
         if: inputs.ref == ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: swiftfin/Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('swiftfin/Cartfile') }}
-      - name: Carthage-cache (alleen lezen voor een syncbranch met nog niet beoordeelde upstream-code)
+          path: swiftfin/build/SourcePackages
+          key: ${{ runner.os }}-spm-${{ env.XCODE_VERSION }}-${{ hashFiles('swiftfin/Swiftfin.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+      - name: Swift-pakketcache (alleen lezen voor een syncbranch met nog niet beoordeelde upstream-code)
         if: inputs.ref != ''
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: swiftfin/Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('swiftfin/Cartfile') }}
-      - name: Carthage (VLCKit als binaire xcframeworks)
-        run: carthage update --use-xcframeworks --cache-builds
+          path: swiftfin/build/SourcePackages
+          key: ${{ runner.os }}-spm-${{ env.XCODE_VERSION }}-${{ hashFiles('swiftfin/Swiftfin.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
       - name: Bouwen voor de simulator zonder code signing
         run: |
           set -o pipefail
@@ -93,6 +91,7 @@ jobs:
             -configuration Debug \
             -destination "$BESTEMMING" \
             -skipMacroValidation -skipPackagePluginValidation \
+            -clonedSourcePackagesDirPath build/SourcePackages \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             | tee "$RUNNER_TEMP/xcodebuild.log"
       - name: Eigen bundle-id controleren (Debug en Release, JLC-0004)
@@ -105,6 +104,7 @@ jobs:
               -configuration "$configuratie" \
               -destination "$BESTEMMING" \
               -skipMacroValidation -skipPackagePluginValidation \
+              -clonedSourcePackagesDirPath build/SourcePackages \
               > "$RUNNER_TEMP/instellingen-$configuratie.json"
           done
           python3 ../tools/clients/app_identiteit.py xcode --plist \
