@@ -286,6 +286,10 @@ def test_bron_swiftfin_testbundel_met_eigen_id_is_geen_app(tmp_path):
     voeg_doel_toe(repo / "swiftfin/Swiftfin.xcodeproj/project.pbxproj", "com.apple.product-type.bundle.ui-testing",
                   "org.jellyfin.swiftfin.screenshots")
     assert ai.check_bron(repo) == []
+    # Alleen testbundels met een ID en geen app-doel meer: niets van de app gemeten is geen bewijs.
+    rel = "swiftfin/Swiftfin.xcodeproj/project.pbxproj"
+    vervang(repo / rel, "PRODUCT_BUNDLE_IDENTIFIER = org.jellyfin.swiftfin.jellyleon;", "")
+    assert ai.check_bron(repo) == [f"{rel}: geen PRODUCT_BUNDLE_IDENTIFIER gevonden"]
 
 
 @pytest.mark.parametrize(("product_type", "bundle_id", "soort"), [

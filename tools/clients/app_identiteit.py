@@ -330,13 +330,14 @@ def check_bron(repo: Path, cfg: dict | None = None) -> list[str]:
         text = _read(repo, rel, out)
         if text is None:
             continue
-        values = [(m.start(), m.group(1)) for m in regex.finditer(text)]
+        testbundels = pbx_testbundel_bereiken(text) if regex is PBX_BUNDLE_RE else []
+        values = []
+        for m in regex.finditer(text):
+            if m.group(1) in s["officieel"] or not any(a <= m.start() < b for a, b in testbundels):
+                values.append(m.group(1))  # testbundel met een niet-officiële ID telt niet: geen app
         if not values:
             out.append(f"{rel}: geen PRODUCT_BUNDLE_IDENTIFIER gevonden")
-        testbundels = pbx_testbundel_bereiken(text) if regex is PBX_BUNDLE_RE else []
-        for pos, value in values:
-            if value not in s["officieel"] and any(a <= pos < b for a, b in testbundels):
-                continue  # testbundel met een niet-officiële ID: geen app (zie pbx_testbundel_bereiken)
+        for value in values:
             if value != s["bundle_id"]:
                 bron = "officiële bundle-id" if value in s["officieel"] else "andere waarde"
                 out.append(f"{rel}: PRODUCT_BUNDLE_IDENTIFIER = {value} ({bron}); verwacht {s['bundle_id']}")
