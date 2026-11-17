@@ -44,6 +44,24 @@ Workflow `Clients / Upstream-sync` doet dit wekelijks en handmatig, pusht alleen
 pushstap) en draait daarop forkregels + client-CI met alleen leesrechten en zonder schrijfbare cache.
 **Overnemen in de hoofdbranch en elke release zijn handmatige R2-stappen.**
 
+**Handmatige weg bij een mergeconflict** (de tool lost alleen gitlink-conflicten op; KLEIN-100):
+
+1. Vanaf de hoofdbranch `git switch -c sync/<client>-<tag>`; de tag en de vorige upstream-commit ophalen
+   (`git fetch --no-tags <upstream-url> +refs/tags/<tag>:refs/jlc/<client> <vorige upstream_commit>`), dan
+   `git subtree merge --prefix <map> --squash <tag-commit>`.
+2. Conflict oplossen: de upstream-wijziging overnemen en alleen de regels van de patches uit `PATCHES.md` behouden;
+   daarna moet de patch dezelfde omvang hebben (`test_app_identiteit.py`, `PATCH_OMVANG`). Mergecommit maken.
+3. `baseline.json`: `upstream_tag`, `upstream_commit`, `upstream_tree` (`git rev-parse <tag-commit>^{tree}`) en
+   forkversie `<versie>-jl.0`; apart committen.
+4. `check_clients.py`, `app_identiteit.py bron` en de tests moeten in orde zijn; alleen die syncbranch pushen (nooit
+   force); de push-CI (*Forkregels* en de client-workflow) draait erop.
+5. Zolang `origin/sync/<client>-<tag>` bestaat, doet `upstream_sync.py sync` voor die tag niets (`wacht_op_review`,
+   exitcode 0): de wekelijkse run blijft groen tot een mens de branch beoordeelt en overneemt (R2).
+
+Voorbeeld: Swiftfin 1.6.1 → 1.7.1 in `sync/swiftfin-1.7.1` (2026-11-17): conflict in `project.pbxproj` op de
+JLC-0004-regel van *Swiftfin iOS*/Release (upstream zette daar `PRODUCT_NAME = Swiftfin`); opgelost met de eigen
+bundle-id en de upstream-`PRODUCT_NAME`.
+
 Stand 2026-11-09: alle vier clients staan op de nieuwste stabiele upstream-tag (`status` → `actueel`). Syncproef op
 echte code: desktop v2.0.0 → upstream master (214 commits) schoon in een verse clone.
 

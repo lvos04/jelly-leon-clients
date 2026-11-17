@@ -88,6 +88,34 @@ def test_sync_incompatibele_upstream_faalt_schoon_ex48(simple_setup):
     assert baseline(fork)["clients"]["app"]["upstream_tag"] == "v1.0.0"
 
 
+def test_sync_met_bestaande_syncbranch_op_origin_wacht_op_review(simple_setup, capsys):
+    """Een met de hand opgelost conflict staat al in origin/sync/<client>-<tag>: niet opnieuw proberen (KLEIN-100).
+
+    Zonder deze regel faalt de wekelijkse run elke week opnieuw op hetzelfde conflict (exitcode 2), ook al wacht de
+    opgeloste syncbranch alleen nog op review (R2).
+    """
+    up, fork = simple_setup
+    write_files(fork.path, {"app/src/main.txt": "regel 1\nregel 2 (Jelly Leon)\nregel 3\n"})
+    fork.write_register(patch_block("JLC-0001", "app", ["app/src/main.txt"]))
+    head_before = fork.commit_all("patch")
+    up.commit({"src/main.txt": "regel 1\nregel 2 (upstream herschreven)\nregel 3\n"}, "v1.1", tag="v1.1.0")
+    git(fork.path, "update-ref", "refs/remotes/origin/sync/app-v1.1.0", head_before)
+
+    summary = upstream_sync.sync(fork.path, "app")
+
+    assert summary["resultaat"] == "wacht_op_review"
+    assert summary["branch"] is None and summary["bestaande_branch"] == "sync/app-v1.1.0"
+    assert_unchanged(fork, head_before)
+    assert upstream_sync.main(["--repo-root", str(fork.path), "sync", "app"]) == 0
+    assert "wacht op review" in capsys.readouterr().out
+    assert_unchanged(fork, head_before)
+    # Een andere tag heeft geen bestaande branch: die sync loopt gewoon (en faalt hier op het conflict).
+    up.commit({"README.md": "app 1.2\n"}, "v1.2", tag="v1.2.0")
+    with pytest.raises(upstream_sync.SyncFailure, match="mergeconflict"):
+        upstream_sync.sync(fork.path, "app")
+    assert_unchanged(fork, head_before)
+
+
 def test_sync_faalt_als_upstream_onze_patch_overnam_register_verouderd(simple_setup):
     """Upstream nam exact onze wijziging over: merge is schoon, maar het register is dan verouderd → falen."""
     up, fork = simple_setup

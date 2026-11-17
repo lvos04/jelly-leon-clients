@@ -263,6 +263,42 @@ def test_bron_zonder_hoofdmanifest_is_geen_bewijs(tmp_path):
     assert any("geen android/app/src/main/AndroidManifest.xml" in v for v in ai.check_bron(repo))
 
 
+def voeg_doel_toe(pbxproj: Path, product_type: str, bundle_id: str) -> None:
+    """Een extra doel met eigen configuratielijst en Debug/Release-configuratie, zoals Swiftfin 1.7.1 ze heeft."""
+    objecten = (
+        "\t\tAAAAAAAAAAAAAAAAAAAAAAA1 /* Extra */ = {\n\t\t\tisa = PBXNativeTarget;\n"
+        "\t\t\tbuildConfigurationList = AAAAAAAAAAAAAAAAAAAAAAA2 /* Build configuration list */;\n"
+        f"\t\t\tname = Extra;\n\t\t\tproductType = \"{product_type}\";\n\t\t}};\n"
+        "\t\tAAAAAAAAAAAAAAAAAAAAAAA2 /* Build configuration list */ = {\n\t\t\tisa = XCConfigurationList;\n"
+        "\t\t\tbuildConfigurations = (\n\t\t\t\tAAAAAAAAAAAAAAAAAAAAAAA3 /* Debug */,\n"
+        "\t\t\t\tAAAAAAAAAAAAAAAAAAAAAAA4 /* Release */,\n\t\t\t);\n\t\t};\n"
+    )
+    for cfg_id, naam in (("AAAAAAAAAAAAAAAAAAAAAAA3", "Debug"), ("AAAAAAAAAAAAAAAAAAAAAAA4", "Release")):
+        objecten += (f"\t\t{cfg_id} /* {naam} */ = {{\n\t\t\tisa = XCBuildConfiguration;\n"
+                     f"\t\t\tbuildSettings = {{\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = {bundle_id};\n\t\t\t}};\n"
+                     f"\t\t\tname = {naam};\n\t\t}};\n")
+    vervang(pbxproj, "\tobjects = {\n", "\tobjects = {\n" + objecten)
+
+
+def test_bron_swiftfin_testbundel_met_eigen_id_is_geen_app(tmp_path):
+    """Swiftfin 1.7.1 (KLEIN-100): UI-testdoelen *Screenshots* met `org.jellyfin.swiftfin.screenshots` zijn geen app."""
+    repo = bron_kopie(tmp_path)
+    voeg_doel_toe(repo / "swiftfin/Swiftfin.xcodeproj/project.pbxproj", "com.apple.product-type.bundle.ui-testing",
+                  "org.jellyfin.swiftfin.screenshots")
+    assert ai.check_bron(repo) == []
+
+
+@pytest.mark.parametrize(("product_type", "bundle_id", "soort"), [
+    ("com.apple.product-type.application", "org.jellyfin.swiftfin.screenshots", "andere waarde"),
+    ("com.apple.product-type.bundle.ui-testing", "org.jellyfin.swiftfin", "officiële bundle-id"),
+])
+def test_bron_swiftfin_app_doel_of_officiele_id_blijft_een_overtreding(tmp_path, product_type, bundle_id, soort):
+    repo = bron_kopie(tmp_path)
+    voeg_doel_toe(repo / "swiftfin/Swiftfin.xcodeproj/project.pbxproj", product_type, bundle_id)
+    violations = ai.check_bron(repo)
+    assert len(violations) == 2 and all(bundle_id in v and soort in v for v in violations), violations
+
+
 # Minimale patch: per bestand precies zoveel regels als nu (toegevoegd, verwijderd) t.o.v. de upstream-basis (de jongste
 # subtree-squashcommit), en elke gewijzigde regel gaat over de app-identiteit. Groeit een patch, dan is dat een bewuste
 # keuze die ook hier, in PATCHES.md en in de review zichtbaar wordt; kleine patches blijven bij een upstream-sync los

@@ -11,7 +11,9 @@ Subcommando's
           (check_clients.py) controleren.
 
 Veiligheid
-  * Weigert te starten met een vuile werkboom of als de syncbranch al bestaat (exitcode 3).
+  * Weigert te starten met een vuile werkboom of als de syncbranch lokaal al bestaat (exitcode 3).
+  * Bestaat `origin/sync/<client>-<tag>` al (eerdere run, of een conflict dat een mens in die branch oploste),
+    dan gebeurt er niets: resultaat `wacht_op_review`, exitcode 0, geen nieuwe branch.
   * Elk conflict, een nieuwe/verdwenen submodule, een overtreding van de forkregels of elke andere fout tijdens
     de sync → alles terugdraaien (oorspronkelijke branch terug, syncbranch weg, werkboom schoon) en exitcode 2
     (EX48: incompatibele upstream-update faalt, geen deploy).
@@ -216,6 +218,13 @@ def sync(repo: Path, client_key: str, tag: str | None = None, url_override: str 
         raise ToolError(f"tag '{tag}' is ouder dan de basislijn '{client.upstream_tag}'; terugzetten is geen sync")
 
     branch = f"{branch_prefix}/{client.key}-{tag}"
+    if run_git(repo, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}",
+               check=False).returncode == 0:
+        # Al voorgesteld (door een eerdere run of met de hand opgelost, FORK_STRATEGIE §2): niet opnieuw proberen,
+        # want een conflict dat een mens in die branch oploste, zou de wekelijkse run anders elke week rood maken.
+        summary["resultaat"] = "wacht_op_review"
+        summary["bestaande_branch"] = branch
+        return summary
     if run_git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", check=False).returncode == 0:
         raise ToolError(f"branch '{branch}' bestaat al")
 
@@ -374,6 +383,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
     elif summary["resultaat"] == "actueel":
         print(f"{summary['client']}: al op {summary['naar_tag']} — niets te doen.")
+    elif summary["resultaat"] == "wacht_op_review":
+        print(f"{summary['client']}: {summary['bestaande_branch']} bestaat al op origin — wacht op review (R2), "
+              "niets gedaan.")
     else:
         print(f"{summary['client']}: {summary['van_tag']} → {summary['naar_tag']} in branch {summary['branch']}")
         for upd in summary["geneste_updates"]:

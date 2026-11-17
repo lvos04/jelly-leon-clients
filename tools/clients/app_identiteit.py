@@ -115,6 +115,36 @@ GRADLE_APPID_RE = re.compile(r"^\s*applicationId\s*=\s*(.+?)\s*$", re.MULTILINE)
 GRADLE_RESVALUE_RE = re.compile(r'resValue\(\s*"string"\s*,\s*"(\w+)"\s*,\s*(.+)\)\s*$', re.MULTILINE)
 XCCONFIG_BUNDLE_RE = re.compile(r"^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=\s*(\S+)\s*$", re.MULTILINE)
 PBX_BUNDLE_RE = re.compile(r"\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*\"?([^\";]+)\"?\s*;")
+# pbxproj-objecten op het hoogste niveau (`\t\t<id> /* … */ = {` … `\t\t};`) en de testbundel-doelen daarin
+PBX_OBJECT_RE = re.compile(r"^\t\t([0-9A-F]{24})\b[^\n]*= \{\n(.*?)^\t\t\};$", re.MULTILINE | re.DOTALL)
+PBX_TESTBUNDEL_TYPES = {"com.apple.product-type.bundle.ui-testing", "com.apple.product-type.bundle.unit-test"}
+
+
+def pbx_testbundel_bereiken(text: str) -> list[tuple[int, int]]:
+    """Tekstbereiken van build-configuraties die alleen bij testbundel-doelen (`.xctest`) horen.
+
+    Een UI-/unit-testbundel is geen app op het apparaat; zijn bundle-id hoeft niet de eigen app-ID te zijn
+    (Swiftfin 1.7.1: doelen *Swiftfin iOS/tvOS Screenshots* met `org.jellyfin.swiftfin.screenshots`). Een configuratie
+    die ook bij een ander doel of de projectlijst hoort, telt niet als testbundel (fail-closed).
+    """
+    objs = {m.group(1): m for m in PBX_OBJECT_RE.finditer(text)}
+    test_lijsten: set[str] = set()
+    for m in objs.values():
+        body = m.group(2)
+        if re.search(r"^\t\t\tisa = PBXNativeTarget;$", body, re.MULTILINE):
+            lijst = re.search(r"^\t\t\tbuildConfigurationList = ([0-9A-F]{24})\b", body, re.MULTILINE)
+            soort = re.search(r'^\t\t\tproductType = "?([^";]+)"?;$', body, re.MULTILINE)
+            if lijst and soort and soort.group(1) in PBX_TESTBUNDEL_TYPES:
+                test_lijsten.add(lijst.group(1))
+    test_cfg: set[str] = set()
+    andere_cfg: set[str] = set()
+    for obj_id, m in objs.items():
+        if not re.search(r"^\t\t\tisa = XCConfigurationList;$", m.group(2), re.MULTILINE):
+            continue
+        blok = re.search(r"buildConfigurations = \((.*?)\);", m.group(2), re.DOTALL)
+        ids = set(re.findall(r"\b([0-9A-F]{24})\b", blok.group(1))) if blok else set()
+        (test_cfg if obj_id in test_lijsten else andere_cfg).update(ids)
+    return [objs[i].span() for i in sorted(test_cfg - andere_cfg) if i in objs]
 
 
 def _read(repo: Path, rel: str, out: list[str]) -> str | None:
@@ -300,10 +330,13 @@ def check_bron(repo: Path, cfg: dict | None = None) -> list[str]:
         text = _read(repo, rel, out)
         if text is None:
             continue
-        values = regex.findall(text)
+        values = [(m.start(), m.group(1)) for m in regex.finditer(text)]
         if not values:
             out.append(f"{rel}: geen PRODUCT_BUNDLE_IDENTIFIER gevonden")
-        for value in values:
+        testbundels = pbx_testbundel_bereiken(text) if regex is PBX_BUNDLE_RE else []
+        for pos, value in values:
+            if value not in s["officieel"] and any(a <= pos < b for a, b in testbundels):
+                continue  # testbundel met een niet-officiële ID: geen app (zie pbx_testbundel_bereiken)
             if value != s["bundle_id"]:
                 bron = "officiële bundle-id" if value in s["officieel"] else "andere waarde"
                 out.append(f"{rel}: PRODUCT_BUNDLE_IDENTIFIER = {value} ({bron}); verwacht {s['bundle_id']}")
