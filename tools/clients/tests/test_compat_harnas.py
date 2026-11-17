@@ -13,6 +13,7 @@ server willekeurig zijn en in geen enkel bewijs mogen staan.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import socket
@@ -226,6 +227,62 @@ def test_netwerk_met_een_achtergebleven_container_wordt_toch_verwijderd(monkeypa
     assert aanroepen[-1] == ("network", "rm", "n1")
 
 
+class _FaalOpRun(DockerOpname):
+    """``docker run`` faalt (zoals bij een ontbrekende image); de rest slaagt."""
+
+    def __call__(self, *args: str, check: bool = True, timeout: float = 600) -> subprocess.CompletedProcess[str]:
+        uit = super().__call__(*args, check=check, timeout=timeout)
+        if args and args[0] == "run":
+            raise subprocess.CalledProcessError(125, ["docker", *args], stderr="Unable to find image")
+        return uit
+
+
+@pytest.mark.parametrize("fout", ["docker_run", "corpus", "wacht_klaar"])
+def test_mislukte_start_van_de_testserver_ruimt_container_netwerk_en_map_op(monkeypatch, tmp_path, fout):
+    """Review R-TECH-1: faalt TestServer.start (docker run, ontbrekend corpusbestand, time-out), dan ruimt start zelf
+    container, testnetwerk en datamap op en geeft de fout door."""
+    corpus = tmp_path / "corpus"
+    if fout != "corpus":
+        for bron in {**server.FILMS, **server.SERIES}.values():
+            (corpus / bron).parent.mkdir(parents=True, exist_ok=True)
+            (corpus / bron).write_bytes(b"x")
+    opname = _FaalOpRun() if fout == "docker_run" else DockerOpname()
+    monkeypatch.setattr(server, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+
+    def time_out(url, **k):
+        raise TimeoutError("server antwoordt niet")
+
+    monkeypatch.setattr(server, "wacht_klaar", time_out if fout == "wacht_klaar" else (lambda url, **k: {}))
+    s = server.TestServer("img", werk=tmp_path / "werk", corpus=corpus)
+    with pytest.raises((subprocess.CalledProcessError, FileNotFoundError, TimeoutError)):
+        s.start()
+    maak = next(i for i, a in enumerate(opname.aanroepen) if a[:2] == ("network", "create"))
+    na = opname.aanroepen[maak + 1:]
+    assert ("network", "rm", s.netwerk.naam) in na and ("rm", "-f", s.naam) in na
+    assert not s.map.exists()
+
+
+def test_mislukte_serverstart_in_desktop_main_laat_geen_netwerk_achter(monkeypatch, tmp_path):
+    """Review R-TECH-1: desktop.main zet de serverstart vóór try/finally; ook dan gaat het netwerk weg."""
+    opname = _FaalOpRun()
+    monkeypatch.setattr(server, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+    monkeypatch.setattr(desktop.bewijs, "slot", _geen_slot)
+    monkeypatch.setattr(cli, "image_herkomst", lambda img: {"image": img})
+    corpus = tmp_path / "corpus"
+    for bron in {**server.FILMS, **server.SERIES}.values():
+        (corpus / bron).parent.mkdir(parents=True, exist_ok=True)
+        (corpus / bron).write_bytes(b"x")
+    monkeypatch.setattr(desktop, "TestServer", lambda image: server.TestServer(image, werk=tmp_path / "werk",
+                                                                                corpus=corpus))
+    with pytest.raises(subprocess.CalledProcessError):
+        desktop.main(_desktop_args(tmp_path))
+    gemaakt = [a[-1] for a in opname.aanroepen if a[:2] == ("network", "create")]
+    assert len(gemaakt) == 1 and ("network", "rm", gemaakt[0]) in opname.aanroepen[-4:]
+    assert not (tmp_path / "uit.json").exists()
+
+
 def test_testserver_weigert_een_ontbrekend_corpusbestand(tmp_path):
     with pytest.raises(FileNotFoundError):
         server.TestServer("img", werk=tmp_path / "w", corpus=tmp_path / "leeg").koppelingen()
@@ -246,11 +303,54 @@ def test_desktop_container_met_grote_shm_en_zonder_rechten(monkeypatch, tmp_path
         assert waarde_na(args, "-v") == [f"{tmp_path}:/out:ro"] and "--privileged" not in args
         # S-P40-72: alleen het testnetwerk; CDP alleen in de container en niet gepubliceerd, wel een doorgifte.
         assert waarde_na(args, "--network") == ["jlc-net-d"] and "host" not in args and not waarde_na(args, "-p")
-        assert f"--remote-debugging-port {desktop.CDP_POORT} " in args[-1]
+        app = next(a for a in opname.aanroepen if a[:2] == ("exec", "-d"))
+        assert f"--remote-debugging-port {desktop.CDP_POORT} " in app[-1]
         assert proeven == [(desktop.NAAM, "jlc-net-d")]
         assert d.doorgifte is not None and d.poort == d.doorgifte.poort != desktop.CDP_POORT
     finally:
         d.stop()
+
+
+def test_desktop_app_start_pas_na_de_afschermingsproef(monkeypatch, tmp_path):
+    """Review R-VEILIG-3: de container start met 'sleep infinity'; eerst de afschermingsproef, dan pas Xvfb en de app
+    met 'docker exec -d' (ADR-0011 besluit 15: vóór elke desktopstart)."""
+    opname = DockerOpname()
+    monkeypatch.setattr(desktop, "docker", opname)
+
+    def proef(container, net):
+        opname.aanroepen.append(("afschermingsproef", container, net.naam))
+        return {"uitkomst": sc.GESLAAGD, "pogingen": []}
+
+    monkeypatch.setattr(desktop.nw, "eis_afscherming", proef)
+    d = desktop.Desktop(tmp_path, netwerk=netwerk.Testnetwerk("jlc-net-d"))
+    monkeypatch.setattr(d, "cdp", lambda actie, **k: {"doelen": [{"type": "page"}]})
+    d.start()
+    try:
+        run = opname.run()
+        assert run[-2:] == ("sleep", "infinity") and "jellyfin-desktop" not in " ".join(run)
+        app = next(a for a in opname.aanroepen if a[:2] == ("exec", "-d"))
+        assert app[2:5] == (desktop.NAAM, "sh", "-c") and "/out/build/src/jellyfin-desktop" in app[-1]
+        assert "Xvfb :99" in app[-1] and f"--remote-debugging-port {desktop.CDP_POORT}" in app[-1]
+        volgorde = [a[0] for a in opname.aanroepen]
+        assert volgorde.index("run") < volgorde.index("afschermingsproef") < opname.aanroepen.index(app)
+    finally:
+        d.stop()
+
+
+def test_desktop_app_start_niet_als_de_afschermingsproef_faalt(monkeypatch, tmp_path):
+    opname = DockerOpname()
+    monkeypatch.setattr(desktop, "docker", opname)
+
+    def lek(container, net):
+        raise RuntimeError("testnetwerk niet afgeschermd: hostadres 1 (netwerkinterface): bereikt")
+
+    monkeypatch.setattr(desktop.nw, "eis_afscherming", lek)
+    monkeypatch.setattr(desktop, "CdpDoorgifte", lambda *a, **k: pytest.fail("geen CDP-doorgifte zonder proef"))
+    d = desktop.Desktop(tmp_path, netwerk=netwerk.Testnetwerk("n"))
+    with pytest.raises(RuntimeError, match="niet afgeschermd"):
+        d.start()
+    assert not [a for a in opname.aanroepen if a and a[0] == "exec"]  # geen Xvfb en geen app
+    assert not any("jellyfin-desktop" in " ".join(a) for a in opname.aanroepen)
 
 
 def test_desktop_zonder_testnetwerk_start_niet(monkeypatch, tmp_path):
@@ -409,6 +509,149 @@ def test_android_bewijs_met_een_wachtwoord_van_de_run_wordt_niet_geschreven(monk
     with pytest.raises(ValueError, match="wachtwoord"):
         cli.android_cmd(a)
     assert not (tmp_path / "b.json").exists()
+
+
+@contextlib.contextmanager
+def _geen_slot(naam, log=None):
+    yield 0.0
+
+
+class _StilleServer(server.TestServer):
+    """Echte TestServer (met echte, per server willekeurige wachtwoorden) zonder Docker."""
+
+    def start(self):
+        self.info = {"Version": "12.4.0"}
+        return self
+
+    def inrichten(self, voorkeuren=False):
+        return {}
+
+    def image_id(self):
+        return "sha256:x"
+
+    def verwijder(self):
+        pass
+
+
+def _desktop_args(tmp_path):
+    build = tmp_path / "build"
+    (build / "build/src").mkdir(parents=True, exist_ok=True)
+    (build / "build/src/jellyfin-desktop").write_bytes(b"")
+    return SimpleNamespace(uit=tmp_path / "uit.json", build=build, image="jl", stock_image="stock", met_stock=True)
+
+
+WACHTWOORD = ["kijker_ww", "beheer_ww"]
+
+
+@pytest.mark.parametrize("veld", WACHTWOORD)
+def test_desktop_bewijs_met_een_wachtwoord_van_de_run_wordt_niet_geschreven(monkeypatch, tmp_path, veld):
+    """Review R-VEILIG-4/R-TECH-2: desktop.main geeft de wachtwoorden van déze run aan de bewijscontrole mee."""
+    monkeypatch.setattr(desktop, "TestServer", _StilleServer)
+    monkeypatch.setattr(desktop.bewijs, "slot", _geen_slot)
+    monkeypatch.setattr(cli, "image_herkomst", lambda img: {"image": img})
+
+    def lekkende_run(srv, build, uitmap, label):
+        return {"stappen": {"inloggen": {"uitkomst": "geslaagd"}}, "app_log_staart": f"login {getattr(srv, veld)}",
+                "oordeel": {"validatie": "Sim-geslaagd", "mislukte_stappen": []}}
+
+    monkeypatch.setattr(desktop, "run", lekkende_run)
+    with pytest.raises(ValueError, match="wachtwoord"):
+        desktop.main(_desktop_args(tmp_path))
+    assert not (tmp_path / "uit.json").exists()
+
+
+@pytest.mark.parametrize("veld", WACHTWOORD)
+def test_hervatproef_bewijs_met_een_wachtwoord_van_de_run_wordt_niet_geschreven(monkeypatch, tmp_path, veld):
+    from compat import hervatproef
+
+    monkeypatch.setattr(cli, "TestServer", _StilleServer)
+    monkeypatch.setattr(cli.bewijs, "slot", _geen_slot)
+    monkeypatch.setattr(cli.apk, "bereid_voor", lambda *a, **k: {})
+    monkeypatch.setattr(cli, "image_herkomst", lambda img: {"image": img})
+    monkeypatch.setattr(hervatproef, "herhaal", lambda srv, soort, apks, bediend, n: {
+        "geslaagd": n, "n": n, "pogingen": [{"uitkomst": "geslaagd", "reden": f"getypt: {getattr(srv, veld)}"}]})
+    a = SimpleNamespace(image="jl", stock_image="stock", soort="tv", bediend="fork", n=1, uit=tmp_path / "h.json")
+    with pytest.raises(ValueError, match="wachtwoord"):
+        cli.hervatproef_cmd(a)
+    assert not (tmp_path / "h.json").exists()
+
+
+@pytest.mark.parametrize("veld", WACHTWOORD)
+def test_swiftfin_bewijs_met_een_wachtwoord_van_de_run_wordt_niet_geschreven(monkeypatch, tmp_path, veld):
+    from compat import swiftfin
+
+    monkeypatch.setattr(cli, "TestServer", _StilleServer)
+    monkeypatch.setattr(cli, "image_herkomst", lambda img: {"image": img})
+    monkeypatch.setattr(swiftfin, "run", lambda srv: {
+        "stappen": {"inloggen": {"uitkomst": "geslaagd", "verzoek": f"Pw={getattr(srv, veld)}"}},
+        "oordeel": {"validatie": "Sim-geslaagd"}})
+    a = SimpleNamespace(image="jl", stock_image="stock", uit=tmp_path / "s.json")
+    with pytest.raises(ValueError, match="wachtwoord"):
+        cli.swiftfin_cmd(a)
+    assert not (tmp_path / "s.json").exists()
+
+
+class _NepDesktop:
+    """Neemt elke CDP-aanroep op; inloggen lukt, daarna geen bestuurbare sessie (de run stopt na 'inloggen')."""
+
+    def __init__(self) -> None:
+        self.aanroepen: list[tuple[str, dict]] = []
+
+    def start(self) -> None:
+        pass
+
+    def cdp(self, actie, timeout=150, **velden):
+        self.aanroepen.append((actie, velden))
+        return {"ok": True, "thuis": True}
+
+    def schermafdruk(self, pad) -> bool:
+        return False
+
+
+def test_desktop_app_krijgt_het_interne_adres_en_het_wachtwoord_van_de_run(monkeypatch, tmp_path):
+    """Review R-TECH-2 (mutatie M9): de app in de container krijgt http://testserver:8096, nooit het hostadres van het
+    harnas (server.url op 127.0.0.1)."""
+    s = server.TestServer("img", werk=tmp_path)
+    s.poort, s.jf = 41234, SimpleNamespace()
+    monkeypatch.setattr(desktop, "Volger", lambda jf, client: SimpleNamespace(bestuurbaar=lambda t: None))
+    d = _NepDesktop()
+    res = {"stappen": {}}
+    desktop._stappen(d, res, s, tmp_path, "jelly-leon")
+    acties = dict(d.aanroepen)
+    assert acties["verbind"]["server"] == s.intern_url == "http://testserver:8096"
+    assert acties["inloggen"]["server"] == s.intern_url and acties["inloggen"]["wachtwoord"] == s.kijker_ww
+    assert not any("127.0.0.1" in json.dumps(v) for _a, v in d.aanroepen)
+
+
+def test_android_app_krijgt_het_interne_adres_en_het_wachtwoord_van_de_run(monkeypatch, tmp_path):
+    """Review R-TECH-2 (mutatie M9) voor de telefoon-app: inloggen met http://testserver:8096 en het kijkerwachtwoord
+    van de run."""
+    s = server.TestServer("img", werk=tmp_path)
+    s.poort, s.jf, s.items = 41234, SimpleNamespace(), SimpleNamespace()
+    logins = []
+
+    class NepEmu(_NepEmulator):
+        soort = "telefoon"
+
+        def pakketten(self, voorvoegsel):
+            return [apk.FORK["android"]["pakket"], apk.OFFICIEEL["android"]["pakket"]]
+
+        def pakketversie(self, pakket):
+            return "2.7.3"
+
+        def schermafdruk(self, pad):
+            pass
+
+    monkeypatch.setattr(android, "Emulator", lambda *a, **k: NepEmu(*a, **k))
+    monkeypatch.setattr(android, "Volger", lambda jf, client: SimpleNamespace(bestuurbaar=lambda *a: None))
+    monkeypatch.setattr(android, "inloggen_telefoon", lambda emu, pakket, url, ww: (logins.append((url, ww)),
+                                                                                    {"uitkomst": sc.MISLUKT})[1])
+    fork = {"bestand": "f.apk", "sha256": "1" * 64, "pakket": apk.FORK["android"]["pakket"],
+            "versionName": "2.7.3-jl.1", "certificaat": "CN=test", "pad": str(tmp_path / "f.apk")}
+    off = {"bestand": "o.apk", "sha256": "2" * 64, "pakket": apk.OFFICIEEL["android"]["pakket"],
+           "versionName": "2.7.3", "pad": str(tmp_path / "o.apk")}
+    android.run(s, "telefoon", {"android": {"fork": fork, "officieel": off}}, tmp_path, "jelly-leon")
+    assert logins == [("http://testserver:8096", s.kijker_ww)]
 
 
 def test_cli_zonder_kvm_is_omgevingsfout(monkeypatch, capsys):

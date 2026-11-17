@@ -139,12 +139,19 @@ class TestServer:
         return uit
 
     def start(self) -> TestServer:
-        shutil.rmtree(self.map, ignore_errors=True)
-        for sub in ("config", "cache"):
-            (self.map / sub).mkdir(parents=True, exist_ok=True)
-        self.poort = vrije_poort()
-        self.netwerk.maak()
-        self._draai()
+        """Map, testnetwerk en container. Faalt iets (ook ``docker run``, een ontbrekend corpusbestand of de
+        time-out van ``wacht_klaar``), dan ruimt ``start`` zelf container, netwerk en map op en geeft de fout door: de
+        aanroepers zetten ``start()`` vóór hun ``try/finally`` (review R-TECH-1)."""
+        try:
+            shutil.rmtree(self.map, ignore_errors=True)
+            for sub in ("config", "cache"):
+                (self.map / sub).mkdir(parents=True, exist_ok=True)
+            self.poort = vrije_poort()
+            self.netwerk.maak()
+            self._draai()
+        except BaseException:
+            self.verwijder()
+            raise
         return self
 
     def _draai(self, timeout: float = 300) -> None:

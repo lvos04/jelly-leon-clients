@@ -7,18 +7,54 @@
 // "server" is het adres van de testserver op het eigen testnetwerk, zoals de app in de container het gebruikt.
 //   acties: doelen | verbind | inloggen | teksten | hash | klik | opslag | wacht_op | fouten
 const cfg = JSON.parse(process.argv[2]);
-const basis = `http://127.0.0.1:${cfg.poort}`;
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const uit = { actie: cfg.actie };
 
+// Geen adres uit de container vertrouwen (S-P40-72, R-VEILIG-1): /json/list en webSocketDebuggerUrl komen uit de
+// desktopcontainer. Een doorverwijzing of een eigen WebSocket-adres zou het harnas op de host laten verbinden met een
+// willekeurig adres (ook een dienst die alleen op 127.0.0.1 van de host luistert), en "inloggen" stuurt daarna het
+// kijkerwachtwoord mee. Daarom: /json/list zonder doorverwijzing, van webSocketDebuggerUrl alleen het pad (vast
+// patroon) en altijd verbinden met de doorgifte: ws://127.0.0.1:<poort><pad>. Al het andere wordt geweigerd.
+const PAGINAPAD = /^\/devtools\/page\/[A-Za-z0-9-]+$/;
+
+function poort() {
+  const p = Number(cfg.poort);
+  if (!Number.isInteger(p) || p < 1 || p > 65535) throw new Error('ongeldige doorgiftepoort');
+  return p;
+}
+
+async function lijstUitContainer() {
+  const r = await fetch(`http://127.0.0.1:${poort()}/json/list`, { redirect: 'error' });
+  if (!r.ok) throw new Error(`/json/list gaf HTTP ${r.status}`);
+  const lijst = await r.json();
+  if (!Array.isArray(lijst)) throw new Error('/json/list is geen lijst');
+  return lijst;
+}
+
 async function pagina() {
-  const lijst = await (await fetch(`${basis}/json/list`)).json();
-  return lijst.find((d) => d.type === 'page' && (!cfg.server || d.url.startsWith(cfg.server))) ||
+  const lijst = await lijstUitContainer();
+  return lijst.find((d) => d.type === 'page' && (!cfg.server || String(d.url).startsWith(cfg.server))) ||
     lijst.find((d) => d.type === 'page');
 }
 
+function wsAdres(doel) {
+  let u;
+  try {
+    u = new URL(String(doel.webSocketDebuggerUrl));
+  } catch {
+    throw new Error('webSocketDebuggerUrl geweigerd: geen geldig adres');
+  }
+  // Het ruwe pad (vóór normalisatie door URL) moet al exact het paginapad zijn: geen '..', geen query of fragment.
+  const ruw = String(doel.webSocketDebuggerUrl).replace(/^ws:\/\/[^/]*/, '');
+  if (u.protocol !== 'ws:' || u.search || u.hash || u.username || u.password || !PAGINAPAD.test(u.pathname) ||
+      ruw !== u.pathname) {
+    throw new Error('webSocketDebuggerUrl geweigerd: alleen ws://…/devtools/page/<id> (zonder extra\'s)');
+  }
+  return `ws://127.0.0.1:${poort()}${u.pathname}`;
+}
+
 async function verbind(doel) {
-  const ws = new WebSocket(doel.webSocketDebuggerUrl);
+  const ws = new WebSocket(wsAdres(doel));
   await new Promise((ok, nok) => { ws.onopen = ok; ws.onerror = nok; });
   let id = 0;
   const wachtend = new Map();
@@ -71,12 +107,12 @@ async function muisklik(c, selector) {
 
 async function main() {
   if (cfg.actie === 'doelen') {
-    uit.doelen = (await (await fetch(`${basis}/json/list`)).json()).map((d) => ({ type: d.type, url: d.url.slice(0, 120) }));
+    uit.doelen = (await lijstUitContainer()).map((d) => ({ type: d.type, url: String(d.url).slice(0, 120) }));
     return;
   }
   const doel = await pagina();
   if (!doel) throw new Error('geen paginadoel');
-  uit.url = doel.url.slice(0, 160);
+  uit.url = String(doel.url).slice(0, 160);
   const c = await verbind(doel);
   try {
     if (cfg.actie === 'verbind') {
@@ -88,7 +124,7 @@ async function main() {
       for (let i = 0; i < 60; i += 1) {
         await wacht(1000);
         const p = await pagina();
-        if (p && p.url.startsWith(cfg.server)) { uit.url = p.url.slice(0, 160); uit.ok = true; return; }
+        if (p && String(p.url).startsWith(cfg.server)) { uit.url = String(p.url).slice(0, 160); uit.ok = true; return; }
       }
       uit.ok = false;
       uit.fouten = c.fouten.slice(0, 10);

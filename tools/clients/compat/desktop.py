@@ -7,10 +7,15 @@ niet-root, zonder capabilities, met de build alleen-lezen, alleen op het eigen t
 ruwe CDP (``desktop_cdp.mjs``); afspelen gaat via libmpv, dus beoordeeld wordt wat de server ziet en het beeld komt van
 het X-scherm (``xwd``).
 
+Volgorde (review R-VEILIG-3): de container start met ``sleep infinity``; eerst de afschermingsproef
+(``netwerk.eis_afscherming``), pas daarna Xvfb en de app met ``docker exec -d``. Faalt de proef, dan heeft de app nooit
+gedraaid.
+
 CDP luistert alleen op 127.0.0.1 ín de container (QtWebEngine, poort ``CDP_POORT``) en wordt niet gepubliceerd: het
 afgeschermde netwerk heeft geen adres op de host. ``CdpDoorgifte`` geeft een poort op 127.0.0.1 van de host door via
-``docker exec`` (bash ``/dev/tcp`` in de container); de WebSocket-adressen in ``/json/list`` volgen de Host-kop en
-wijzen dus naar die doorgiftepoort.
+``docker exec`` (bash ``/dev/tcp`` in de container). ``desktop_cdp.mjs`` vertrouwt geen adres uit de container: geen
+doorverwijzing, van ``webSocketDebuggerUrl`` alleen het pad ``/devtools/page/<id>``, en altijd verbinden met
+``ws://127.0.0.1:<doorgiftepoort><pad>`` (review R-VEILIG-1).
 
 Gemeten oorzaak van de eerdere blokkade (jelly-leon B03-016, desktop-spike): met de standaard ``/dev/shm`` van Docker
 (64 MiB) laadt QtWebEngine de web-client van de server niet (``net::ERR_INSUFFICIENT_RESOURCES`` op elke bundle) en
@@ -140,6 +145,12 @@ class Desktop:
         self.afscherming: dict[str, Any] = {}
         self.doorgifte: CdpDoorgifte | None = None
 
+    APP = (
+        "Xvfb :99 -screen 0 1600x900x24 >/tmp/xvfb.log 2>&1 & sleep 2; DISPLAY=:99 "
+        "QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox /out/build/src/jellyfin-desktop "
+        f"--remote-debugging-port {CDP_POORT} > /tmp/app.log 2>&1"
+    )
+
     def start(self) -> None:
         if self.netwerk is None:  # fail-closed: nooit zonder eigen testnetwerk (ook niet op het hostnetwerk)
             raise RuntimeError("geen testnetwerk: de desktop start alleen op het afgeschermde netwerk van de server")
@@ -168,13 +179,12 @@ class Desktop:
             "-v",
             f"{self.build}:/out:ro",
             IMAGE,
-            "sh",
-            "-c",
-            "Xvfb :99 -screen 0 1600x900x24 >/tmp/xvfb.log 2>&1 & sleep 2; DISPLAY=:99 "
-            "QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox /out/build/src/jellyfin-desktop "
-            f"--remote-debugging-port {CDP_POORT} > /tmp/app.log 2>&1",
+            "sleep",
+            "infinity",
         ).stdout.strip()
+        # Eerst de afschermingsproef (fail-closed), pas daarna Xvfb en de app (review R-VEILIG-3; ADR-0011 besluit 15).
         self.afscherming = nw.eis_afscherming(NAAM, self.netwerk)
+        docker("exec", "-d", NAAM, "sh", "-c", self.APP)
         self.doorgifte = CdpDoorgifte(NAAM)
         self.poort = self.doorgifte.poort
         for _ in range(60):

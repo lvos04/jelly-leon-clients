@@ -38,6 +38,13 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+      # Node 22 (globale fetch en WebSocket) voor de test van compat/desktop_cdp.mjs tegen een nep-CDP
+      # (tools/clients/tests/test_compat_cdp.py); zelfde versie als op de ontwikkelmachine (V-028). Geen cache.
+      - name: Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.22.1"
+          package-manager-cache: false
       - name: git subtree aanwezig
         run: test -x "$(git --exec-path)/git-subtree"
       - name: Ontwikkelhulpmiddelen (gepind)
