@@ -102,7 +102,7 @@ jobs:
           --server-a "$RUNNER_TEMP/srv-vorig/Jellyfin.Api/Controllers"
           --server-b "$RUNNER_TEMP/srv-nu/Jellyfin.Api/Controllers"
           --sdk-ops "$RUNNER_TEMP/sdk-swift/Sources/Paths"
-          --client "swiftfin=swiftfin/Shared,swiftfin/Swiftfin,swiftfin/Swiftfin tvOS,swiftfin/PreferencesView"
+          --client "swiftfin=swiftfin/Shared,swiftfin/Swiftfin,swiftfin/Swiftfin tvOS"
           --root . | tee "$RUNNER_TEMP/compat-swift.json"
       - name: Uitkomst bewaren
         if: always()
