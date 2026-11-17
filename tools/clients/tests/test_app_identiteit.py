@@ -294,6 +294,8 @@ def test_bron_swiftfin_testbundel_met_eigen_id_is_geen_app(tmp_path):
 
 @pytest.mark.parametrize(("product_type", "bundle_id", "soort"), [
     ("com.apple.product-type.application", "org.jellyfin.swiftfin.screenshots", "andere waarde"),
+    # een app-extensie wordt met de app uitgeleverd: geen testbundel, dus gecontroleerd (KLEIN-100 V1, M2d)
+    ("com.apple.product-type.app-extension", "org.jellyfin.swiftfin.screenshots", "andere waarde"),
     ("com.apple.product-type.bundle.ui-testing", "org.jellyfin.swiftfin", "officiële bundle-id"),
 ])
 def test_bron_swiftfin_app_doel_of_officiele_id_blijft_een_overtreding(tmp_path, product_type, bundle_id, soort):
@@ -301,6 +303,20 @@ def test_bron_swiftfin_app_doel_of_officiele_id_blijft_een_overtreding(tmp_path,
     voeg_doel_toe(repo / "swiftfin/Swiftfin.xcodeproj/project.pbxproj", product_type, bundle_id)
     violations = ai.check_bron(repo)
     assert len(violations) == 2 and all(bundle_id in v and soort in v for v in violations), violations
+
+
+def test_bron_swiftfin_configuratie_gedeeld_met_een_ander_doel_telt_niet_als_testbundel(tmp_path):
+    """Fail-closed (KLEIN-100 V1, M2c): hoort een configuratie ook bij een andere lijst (app-doel of project), dan is
+    het geen testbundel-configuratie en geldt de bundle-id-eis gewoon."""
+    repo = bron_kopie(tmp_path)
+    pbx = repo / "swiftfin/Swiftfin.xcodeproj/project.pbxproj"
+    voeg_doel_toe(pbx, "com.apple.product-type.bundle.ui-testing", "org.jellyfin.swiftfin.screenshots")
+    vervang(pbx, "\tobjects = {\n", "\tobjects = {\n"
+            "\t\tAAAAAAAAAAAAAAAAAAAAAAA5 /* Build configuration list (app) */ = {\n\t\t\tisa = XCConfigurationList;\n"
+            "\t\t\tbuildConfigurations = (\n\t\t\t\tAAAAAAAAAAAAAAAAAAAAAAA3 /* Debug */,\n\t\t\t);\n\t\t};\n")
+    violations = ai.check_bron(repo)
+    assert len(violations) == 1, violations  # alleen de gedeelde Debug, niet de Release van de testbundel
+    assert "org.jellyfin.swiftfin.screenshots" in violations[0] and "andere waarde" in violations[0], violations
 
 
 # Minimale patch: per bestand precies zoveel regels als nu (toegevoegd, verwijderd) t.o.v. de upstream-basis (de jongste
