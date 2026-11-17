@@ -32,6 +32,7 @@ extension EditAccessScheduleView {
 
         // MARK: - Body
 
+        @ContentBuilder
         var body: some View {
             Button(action: action) {
                 rowContent
@@ -45,7 +46,7 @@ extension EditAccessScheduleView {
 
         // MARK: - Row Content
 
-        @ViewBuilder
+        @ContentBuilder
         private var rowContent: some View {
             HStack {
                 VStack(alignment: .leading) {
@@ -76,8 +77,7 @@ extension EditAccessScheduleView {
                     isEditing ? (isSelected ? .primary : .secondary) : .primary,
                     .secondary
                 )
-
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 ListRowCheckbox()
             }

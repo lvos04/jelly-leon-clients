@@ -13,7 +13,8 @@ struct AboutItemGroup: ContentGroup {
 
     let displayTitle: String
     let id: String
-    let item: BaseItemDto
+    @SharedBaseItem
+    var item: BaseItemDto
 
     func body(with viewModel: Empty) -> Body {
         Body(item: item)
@@ -21,10 +22,14 @@ struct AboutItemGroup: ContentGroup {
 
     struct Body: View {
 
+        @AdaptiveLayout
+        private var viewLayout
+
         @Router
         private var router
 
-        let item: BaseItemDto
+        @SharedBaseItem
+        var item: BaseItemDto
 
         private struct AboutCard<Content: View>: View {
 
@@ -37,7 +42,7 @@ struct AboutItemGroup: ContentGroup {
                 title: String,
                 subtitle: String? = nil,
                 action: @escaping () -> Void,
-                @ViewBuilder content: () -> Content
+                @ContentBuilder content: () -> Content
             ) {
                 self.title = title
                 self.subtitle = subtitle
@@ -45,6 +50,7 @@ struct AboutItemGroup: ContentGroup {
                 self.content = content()
             }
 
+            @ContentBuilder
             var body: some View {
                 Button(action: action) {
                     VStack(alignment: .leading) {
@@ -84,15 +90,18 @@ struct AboutItemGroup: ContentGroup {
             }
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var descriptionCard: some View {
             let subtitle = item.taglines?.first ?? item.parentTitle
+            let hasOverviewContent = item.taglines?.first?.isNotEmpty == true || item.overview?.isNotEmpty == true
 
             AboutCard(
                 title: item.displayTitle,
                 subtitle: subtitle
             ) {
-                router.route(to: .itemOverview(item: item))
+                if hasOverviewContent {
+                    router.route(to: .itemOverview(item: item))
+                }
             } content: {
                 if let overview = item.overview, overview.isNotEmpty {
                     SeeMoreText(overview)
@@ -104,7 +113,7 @@ struct AboutItemGroup: ContentGroup {
             .aspectRatio(cardAspectRatio, contentMode: .fit)
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private func mediaSourceCard(for mediaSource: MediaSourceInfo, hasMultipleSources: Bool) -> some View {
             let subtitle = hasMultipleSources ? mediaSource.displayTitle : nil
 
@@ -127,7 +136,7 @@ struct AboutItemGroup: ContentGroup {
             .aspectRatio(cardAspectRatio, contentMode: .fit)
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private func ratingsCard(criticRating: Float, communityRating: Float) -> some View {
             AboutCard(
                 title: L10n.ratings,
@@ -143,7 +152,7 @@ struct AboutItemGroup: ContentGroup {
                             } else {
                                 Image(.tomatoRotten)
                                     .symbolRenderingMode(.monochrome)
-                                    .foregroundColor(.green)
+                                    .foregroundStyle(.green)
                             }
                         }
                         .font(.largeTitle)
@@ -171,19 +180,16 @@ struct AboutItemGroup: ContentGroup {
         }
 
         private var cardHeight: CGFloat {
-            #if os(tvOS)
-            400
-            #else
-            200
-            #endif
+            viewLayout.value(standard: 200, large: 400)
         }
 
         private let cardAspectRatio: CGFloat = 1.77
 
+        @ContentBuilder
         var body: some View {
             ContentGroupSection {
                 ScrollView(.horizontal) {
-                    HStack(spacing: PosterHStackMetrics.itemSpacing) {
+                    HStack(spacing: viewLayout.itemSpacing) {
                         descriptionCard
 
                         if let mediaSources = item.mediaSources {
@@ -203,11 +209,9 @@ struct AboutItemGroup: ContentGroup {
                 }
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()
-                #if os(tvOS)
-                    .withViewContext(.isOverComplexContent)
-                #endif
-                    .frame(height: cardHeight)
-                    .frame(maxWidth: .infinity)
+                .if(viewLayout.isLarge) { $0.withViewContext(.isOverComplexContent) }
+                .frame(height: cardHeight)
+                .frame(maxWidth: .infinity)
             } header: {
                 Text(L10n.about)
                     .font(.title2)

@@ -11,7 +11,16 @@ import Foundation
 import Logging
 import SwiftUI
 
-struct GestureView: PlatformViewRepresentable {
+struct GestureView: View {
+
+    @ContentBuilder
+    var body: some View {
+        GestureViewRepresentable()
+            .accessibilityHidden(true)
+    }
+}
+
+private struct GestureViewRepresentable: PlatformViewRepresentable {
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
@@ -21,13 +30,13 @@ struct GestureView: PlatformViewRepresentable {
         view.addGestureRecognizer(context.coordinator.pinchGesture)
         view.addGestureRecognizer(context.coordinator.tapGesture)
         view.addGestureRecognizer(context.coordinator.doubleTouchGesture)
+        context.coordinator.doubleTouchGesture.require(toFail: context.coordinator.pinchGesture)
 
         view.backgroundColor = .clear
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-
         context.coordinator.longPressAction = context.environment.longPressAction
         context.coordinator.panAction = context.environment.panAction
         context.coordinator.pinchAction = context.environment.pinchAction
@@ -61,11 +70,13 @@ struct GestureView: PlatformViewRepresentable {
         }()
 
         lazy var panGesture: DirectionalPanGestureRecognizer! = {
-            .init(
+            let recognizer = DirectionalPanGestureRecognizer(
                 direction: .allButDown,
                 target: self,
                 action: #selector(handlePan)
             )
+            recognizer.maximumNumberOfTouches = 1
+            return recognizer
         }()
 
         lazy var pinchGesture: UIPinchGestureRecognizer! = {
@@ -143,9 +154,13 @@ struct GestureView: PlatformViewRepresentable {
 
         @objc
         func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+            if gesture.state == .began || gesture.state == .changed {
+                guard gesture.numberOfTouches == 2 else { return }
+            }
+
             pinchAction?(
                 scale: gesture.scale,
-                velocity: gesture.velocity,
+                location: gesture.location(in: gesture.view),
                 state: gesture.state
             )
         }
@@ -163,7 +178,7 @@ struct GestureView: PlatformViewRepresentable {
             tapAction?(
                 location: location,
                 unitPoint: unitPoint,
-                count: gesture.numberOfTouches
+                count: gesture.numberOfTouchesRequired
             )
         }
     }

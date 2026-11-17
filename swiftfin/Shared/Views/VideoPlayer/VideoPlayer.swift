@@ -6,121 +6,103 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import FactoryKit
+import Defaults
 import SwiftUI
-import Transmission
 
 struct VideoPlayer: View {
-
-    @Environment(\.presentationCoordinator)
-    private var presentationCoordinator
-
-    @InjectedObject(\.mediaPlayerManager)
-    private var manager: MediaPlayerManager
-
-    @LazyState
-    private var proxy: any VideoMediaPlayerProxy
 
     @Router
     private var router
 
-    // TODO: move audio/subtitle offset to container state?
     @State
-    private var audioOffset: Duration = .zero
-    @State
-    private var isBeingDismissedByTransition = false
+    private var viewState: ViewState = .init()
 
-    // TODO: move behavior to `PlaybackProgress`?
-    @State
-    private var scrubbingStartTime: CFTimeInterval? = nil
-    @State
-    private var subtitleOffset: Duration = .zero
+    let mediaSession: MediaSession
 
-    @StateObject
-    private var containerState: VideoPlayerContainerState = .init()
+    #if os(iOS)
+    @ContentBuilder
+    private var remotePlaybackBody: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "tv")
+                .font(.system(size: 56))
 
-    init() {
-        self._proxy = .init(wrappedValue: VLCMediaPlayerProxy())
+            // swiftlint:disable:next nested_l10n
+            Text(L10n.castingTo(mediaSession.player?.displayTitle ?? L10n.unknown))
+                .font(.title2)
+
+            if mediaSession.state == .playback, !mediaSession.playbackState.isReady {
+                Text(L10n.castConnectionSuspended)
+                    .font(.callout)
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.black)
     }
+    #endif
 
+    @ContentBuilder
     var body: some View {
-        VideoPlayerContainerView(
-            containerState: containerState,
-            manager: manager
-        ) {
-            proxy.videoPlayerBody
-                .eraseToAnyView()
+        Container(
+            viewState: viewState,
+            mediaSession: mediaSession,
+            videoSize: { (mediaSession.player as? any VideoMediaPlayer)?.videoState.videoSize ?? .zero }
+        ) { videoLayout in
+            if let player = mediaSession.player as? any VideoMediaPlayer {
+                return player.videoPlayerBody(layout: videoLayout)
+                    .eraseToAnyView()
+                    .accessibilityHidden(true)
+                    .eraseToAnyView()
+            }
+
+            #if os(iOS)
+            if mediaSession.isRemotePlayback {
+                return remotePlaybackBody.eraseToAnyView()
+            }
+            #endif
+
+            return Color.black.eraseToAnyView()
         } playbackControls: {
             PlaybackControls()
         }
         .onAppear {
-            manager.proxy = proxy
-            manager.start()
-        }
-        .prefersStatusBarHidden(!containerState.isPresentingOverlay)
-        .onChange(of: audioOffset) {
-            if let proxy = proxy as? MediaPlayerOffsetConfigurable {
-                proxy.setAudioOffset(audioOffset)
+            if mediaSession.player == nil, mediaSession.state != .stopped {
+                mediaSession.attach(player: Defaults[.VideoPlayer.mediaPlayerType].makePlayer())
             }
         }
-        .onChange(of: containerState.isAspectFilled) {
-            UIView.animate(withDuration: 0.2) {
-                proxy.setAspectFill(containerState.isAspectFilled)
-            }
-        }
-        .onChange(of: containerState.isScrubbing) {
-            if containerState.isScrubbing {
-                scrubbingStartTime = CACurrentMediaTime()
-            }
+        .prefersStatusBarHidden(UIDevice.isPad || !viewState.isPresentingControls)
+        .onChange(of: mediaSession.commandError, initial: true) { _, message in
+            guard let message else { return }
 
-            guard let scrubbingStartTime else { return }
-            let scrubbingDelta = CACurrentMediaTime() - scrubbingStartTime
-            let secondsDelta = abs(manager.seconds - containerState.scrubbedSeconds.value)
-
-            guard secondsDelta >= .seconds(1), scrubbingDelta >= 0.1 else { return }
-
-            let scrubbedSeconds = containerState.scrubbedSeconds.value
-            manager.seconds = scrubbedSeconds
-            proxy.setSeconds(scrubbedSeconds)
-        }
-        .onChange(of: subtitleOffset) {
-            if let proxy = proxy as? MediaPlayerOffsetConfigurable {
-                proxy.setSubtitleOffset(subtitleOffset)
-            }
+            viewState.toastProxy.present(message, systemName: "exclamationmark.triangle")
         }
         .preference(
             key: PresentationControllerShouldDismissPreferenceKey.self,
-            value: containerState.presentationControllerShouldDismiss
+            value: viewState.presentationControllerShouldDismiss
         )
-        .onChange(of: presentationCoordinator.isPresented) {
-            guard !presentationCoordinator.isPresented else { return }
-            isBeingDismissedByTransition = true
-            manager.stop()
-        }
-        .onReceive(manager.$playbackItem) { newItem in
-            containerState.isAspectFilled = false
-            audioOffset = .zero
-            subtitleOffset = .zero
-
-            // TODO: move to container view
-            containerState.scrubbedSeconds.value = newItem?.baseItem.startSeconds ?? .zero
-        }
-        .onReceive(manager.$state) { newState in
-            if newState == .stopped, !isBeingDismissedByTransition {
+        .onChange(of: mediaSession.state, initial: true) { _, newState in
+            if newState == .stopped, !viewState.isBeingDismissed {
                 router.dismiss()
             }
         }
-
         .alert(
             L10n.error,
-            isPresented: .constant(manager.error != nil)
+            isPresented: .constant(mediaSession.state == .error)
         ) {
+            Button(L10n.retry) { mediaSession.retry() }
+
             Button(L10n.close, role: .cancel) {
-                Container.shared.mediaPlayerManager.reset()
+                mediaSession.stop()
                 router.dismiss()
             }
         } message: {
             Text(L10n.unableToLoadThisItem)
         }
+        .colorScheme(.dark)
+        .trackingFrame(for: .layoutContainer)
+        .supportedOrientations(.all)
+        .ignoresSafeArea()
+        .persistentSystemOverlays(.hidden)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }

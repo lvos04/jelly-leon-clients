@@ -29,6 +29,7 @@ struct CinematicSelectionContentGroup: ContentGroup {
         )
     }
 
+    @ContentBuilder
     func body(with viewModel: CinematicSelectionContentGroupViewModel) -> some View {
         SelectionView(viewModel: viewModel)
     }
@@ -48,28 +49,24 @@ struct CinematicSelectionContentGroup: ContentGroup {
             frameForParentView[.scrollView, default: .zero].frame
         }
 
-        private func itemSelectorImageSource(for item: BaseItemDto) -> ImageSource {
+        private func itemSelectorImageSource(for item: BaseItemDto) -> ImageSource? {
             if item.type == .episode {
                 item.imageSource(
-                    itemID: item.seriesID,
                     .logo,
+                    itemID: item.parentLogoItemID,
                     tag: item.parentLogoImageTag,
-                    environment: ImageSourceOptions(
-                        maxWidth: CinematicSelectionLayout.logoMaxWidth,
-                        maxHeight: CinematicSelectionLayout.logoMaxHeight
-                    )
+                    environment: ImageSourceOptions(maxHeight: CinematicSelectionLayout.logoMaxHeight)
                 )
             } else {
                 item.imageSource(
                     .logo,
-                    environment: ImageSourceOptions(
-                        maxWidth: CinematicSelectionLayout.logoMaxWidth,
-                        maxHeight: CinematicSelectionLayout.logoMaxHeight
-                    )
+                    itemID: item.id,
+                    environment: ImageSourceOptions(maxHeight: CinematicSelectionLayout.logoMaxHeight)
                 )
             }
         }
 
+        @ContentBuilder
         var body: some View {
             let items = viewModel.hasResumeItems ? viewModel.resumeViewModel.elements.elements : viewModel.recentlyAddedViewModel.elements
                 .elements
@@ -77,21 +74,28 @@ struct CinematicSelectionContentGroup: ContentGroup {
             CinematicItemSelector(
                 items: items
             ) { item in
-                router.route(to: .item(item: item))
+                router.route(to: .item(item: item.snapshot))
             } topContent: { item in
-                ImageView(itemSelectorImageSource(for: item))
+                ImageView(itemSelectorImageSource(for: item.snapshot))
+                    .image { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: CinematicSelectionLayout.logoMaxHeight)
+                    }
                     .placeholder { _ in
                         EmptyView()
                     }
                     .failure {
                         Text(item.displayTitle)
+                            .fixedSize(horizontal: false, vertical: true)
                             .font(.largeTitle)
                             .fontWeight(.semibold)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .foregroundStyle(.primary)
                     }
-                    .edgePadding(.leading)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: CinematicSelectionLayout.logoMaxHeight, alignment: .bottomLeading)
-                    .frame(maxWidth: CinematicSelectionLayout.logoMaxWidth)
+                    .edgePadding(.horizontal)
             }
             .preference(
                 key: ContentGroupCustomizationKey.self,
@@ -110,6 +114,7 @@ struct CinematicRecentlyAddedContentGroup: ContentGroup {
         viewModel.hasResumeItems && viewModel.recentlyAddedViewModel.elements.isNotEmpty
     }
 
+    @ContentBuilder
     func body(with viewModel: CinematicSelectionContentGroupViewModel) -> some View {
         PosterHStackLibrarySection(
             viewModel: viewModel.recentlyAddedViewModel,
@@ -120,7 +125,20 @@ struct CinematicRecentlyAddedContentGroup: ContentGroup {
 
 final class CinematicSelectionContentGroupViewModel: ViewModel, WithRefresh {
 
-    typealias Background = CinematicSelectionContentGroupViewModel
+    struct Background: WithRefresh {
+
+        let viewModel: CinematicSelectionContentGroupViewModel
+
+        func refresh() {
+            Task { await refresh() }
+        }
+
+        func refresh() async {
+            async let resume: Void = viewModel.resumeViewModel.background.refresh()
+            async let recentlyAdded: Void = viewModel.recentlyAddedViewModel.background.refresh()
+            _ = await (resume, recentlyAdded)
+        }
+    }
 
     let recentlyAddedGroup: PosterGroup<RecentlyAddedLibrary>
     let resumeViewModel: PagingLibraryViewModel<ResumeItemsLibrary>
@@ -129,8 +147,8 @@ final class CinematicSelectionContentGroupViewModel: ViewModel, WithRefresh {
         recentlyAddedGroup.viewModel
     }
 
-    var background: CinematicSelectionContentGroupViewModel {
-        get { self }
+    var background: Background {
+        get { Background(viewModel: self) }
         set {}
     }
 
@@ -176,5 +194,4 @@ final class CinematicSelectionContentGroupViewModel: ViewModel, WithRefresh {
 private enum CinematicSelectionLayout {
 
     static let logoMaxHeight: CGFloat = 100
-    static let logoMaxWidth: CGFloat = 450
 }

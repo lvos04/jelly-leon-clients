@@ -19,18 +19,18 @@ struct RecordingsLibrary: BaseItemKindLibrary {
     func retrievePage(
         environment: Empty,
         pageState: LibraryPageState
-    ) async throws -> [BaseItemDto] {
+    ) async throws -> [ItemPatch] {
         var parameters = Paths.GetRecordingsParameters()
+        parameters.fields = PosterSubtitleField.itemFields
         parameters.userID = pageState.userSession.user.id
         parameters.startIndex = pageState.pageOffset
         parameters.limit = pageState.pageSize
-        parameters.fields = .MinimumFields.appending(.channelInfo)
         parameters.enableUserData = true
         parameters.isInProgress = false
 
         let request = Paths.getRecordings(parameters: parameters)
         let response = try await pageState.userSession.client.send(request)
 
-        return response.value.items ?? []
+        return try pageState.items(from: response)
     }
 }

@@ -13,86 +13,85 @@ extension VideoPlayer {
 
     struct PlaybackControls: View {
 
-        // since this view ignores safe area, it must
-        // get safe area insets from parent views
-        @Environment(\.safeAreaInsets)
-        private var safeAreaInsets
+        typealias ViewState = VideoPlayer.ViewState
 
-        @EnvironmentObject
-        private var containerState: VideoPlayerContainerState
-        @EnvironmentObject
-        private var manager: MediaPlayerManager
+        @AdaptiveLayout
+        private var viewLayout
 
-        // TODO: do something with this value
-        @State
-        private var activeIsBuffering: Bool = false
-        @State
-        private var bottomContentFrame: CGRect = .zero
-
-        private var isPresentingOverlay: Bool {
-            containerState.isPresentingOverlay
-        }
-
-        private var isPresentingSupplement: Bool {
-            containerState.isPresentingSupplement
-        }
+        @Environment(ViewState.self)
+        private var viewState
+        @Environment(MediaSession.self)
+        private var mediaSession
 
         private var isScrubbing: Bool {
-            containerState.isScrubbing
+            viewState.isScrubbing
+        }
+
+        @ContentBuilder
+        private var supplementContent: some View {
+            VideoPlayer.UIContainerViewController.SupplementContainerView()
+                .frame(height: viewState.supplementHeight)
+                .frame(
+                    height: max(0, viewState.supplementVisibleHeight - viewState.systemInsets.bottom),
+                    alignment: .top
+                )
+                .allowsHitTesting(viewState.visibleElements.contains(.supplements))
         }
 
         // MARK: body
 
+        @ContentBuilder
         var body: some View {
-            ZStack {
-
-                // MARK: - Buttons and Supplements
-
-                VStack {
-                    Toolbar()
-                        .frame(height: 50)
-                        .isVisible(!isScrubbing && isPresentingOverlay)
-                        .padding(.top, safeAreaInsets.top)
-                        .padding(.leading, safeAreaInsets.leading)
-                        .padding(.trailing, safeAreaInsets.trailing)
-                        .offset(y: isPresentingOverlay ? 0 : -20)
-
-                    Spacer()
-                        .allowsHitTesting(false)
-
-                    PlaybackProgress()
-                        .isVisible(isPresentingOverlay && !isPresentingSupplement)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, safeAreaInsets.leading)
-                        .padding(.trailing, safeAreaInsets.trailing)
-                        .trackingFrame($bottomContentFrame)
-                        .background {
-                            if isPresentingOverlay && !isPresentingSupplement {
-                                EmptyHitTestView()
-                            }
-                        }
-                        .background(alignment: .top) {
-                            Color.black
-                                .mask(gradient: .linear) {
-                                    (location: 0, opacity: 0)
-                                    (location: 1, opacity: 0.5)
-                                }
-                                .isVisible(isScrubbing)
-                                .frame(height: bottomContentFrame.height + 50 + EdgeInsets.edgePadding * 2)
-                        }
-                }
-
+            VideoPlayerControlsLayout(
+                systemInsets: viewState.systemInsets,
+                edgePadding: viewLayout.edgePadding,
+                showsProgress: viewState.isPresentingProgress,
+                showsSupplements: viewState.visibleElements.contains(.supplements),
+                buttonsInsets: viewState.playbackButtonsInsets
+            ) {
+                Toolbar()
+                    .frame(height: 50)
+                    .isVisible(viewState.visibleElements.contains(.toolbar))
+                    .enabled(viewState.visibleElements.contains(.toolbar))
+                    .offset(y: viewState.isPresentingControls ? 0 : -20)
+            } buttons: {
                 PlaybackButtons()
-                    .isVisible(!isScrubbing && containerState.isPresentingPlaybackControls)
+                    .isVisible(viewState.visibleElements.contains(.playbackButtons))
+                    .enabled(viewState.visibleElements.contains(.playbackButtons))
+            } progress: {
+                PlaybackProgress()
+                    .isVisible(viewState.isPresentingProgress)
+                    .enabled(viewState.isPresentingProgress)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        if viewState.isPresentingProgress {
+                            EmptyHitTestView()
+                        }
+                    }
+            } progressBackground: {
+                Color.black
+                    .mask(gradient: .linear) {
+                        (location: 0, opacity: 0)
+                        (location: 1, opacity: 0.5)
+                    }
+                    .isVisible(isScrubbing)
+            } actions: {
+                OverlayActions()
+            } supplements: {
+                supplementContent
+            } toast: {
+                if viewState.toastProxy.isPresenting {
+                    OverlayToastContent()
+                        .environmentObject(viewState.toastProxy)
+                        .transition(.offset(y: -20).combined(with: .opacity))
+                }
             }
             .modifier(VideoPlayer.KeyCommandsModifier())
+            .environmentObject(viewState.toastProxy)
             .animation(.linear(duration: 0.1), value: isScrubbing)
-            .animation(.bouncy(duration: 0.4), value: containerState.isPresentingSupplement)
-            .animation(.bouncy(duration: 0.25), value: containerState.isPresentingOverlay)
-            .onChange(of: manager.proxy?.isBuffering.value) {
-                activeIsBuffering = manager.proxy?.isBuffering.value ?? false
-            }
-            .disabled(manager.error != nil)
+            .animation(.bouncy(duration: 0.25), value: viewState.presentation)
+            .animation(.easeInOut(duration: 0.2), value: viewState.toastProxy.isPresenting)
+            .disabled(mediaSession.state == .error)
         }
     }
 }

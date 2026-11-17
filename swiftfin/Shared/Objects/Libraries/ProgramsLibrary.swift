@@ -25,9 +25,9 @@ struct ProgramsLibrary: BaseItemKindLibrary {
     func retrievePage(
         environment: Empty,
         pageState: LibraryPageState
-    ) async throws -> [BaseItemDto] {
+    ) async throws -> [ItemPatch] {
         var parameters = Paths.GetLiveTvProgramsParameters()
-        parameters.fields = .MinimumFields.appending(.channelInfo)
+        parameters.fields = [.channelInfo]
         parameters.hasAired = false
         parameters.limit = pageState.pageSize
         parameters.startIndex = pageState.pageOffset
@@ -42,6 +42,6 @@ struct ProgramsLibrary: BaseItemKindLibrary {
         let request = Paths.getLiveTvPrograms(parameters: parameters)
         let response = try await pageState.userSession.client.send(request)
 
-        return response.value.items ?? []
+        return try pageState.items(from: response)
     }
 }

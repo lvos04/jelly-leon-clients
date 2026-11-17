@@ -28,17 +28,23 @@ extension NavigationRoute {
         }
     }
 
-    #endif
-
-    #if os(iOS)
-    static func appIconSelector(viewModel: SettingsViewModel) -> NavigationRoute {
+    static func jellyfinWebPage(_ path: String, queryItems: [URLQueryItem] = []) -> NavigationRoute {
         NavigationRoute(
-            id: "app-icon-selector"
+            id: "jellyfin-web-page",
+            style: .sheet
         ) {
-            AppIconSelectorView(viewModel: viewModel)
+            JellyfinWebView(path: path, queryItems: queryItems)
         }
     }
     #endif
+
+    static var appIconSelector: NavigationRoute {
+        NavigationRoute(
+            id: "app-icon-selector"
+        ) {
+            AppIconSelectorView()
+        }
+    }
 
     static var appSettings: NavigationRoute {
         NavigationRoute(

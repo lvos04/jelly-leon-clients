@@ -18,13 +18,14 @@ struct FocusedPosterCinematicBackgroundView: View {
     @FocusedValue(\.focusedPoster)
     private var focusedPoster
 
+    @ContentBuilder
     var body: some View {
         if isCinematicBackgroundEnabled {
             FadeContentTransitionView(
                 item: focusedPoster,
                 debounce: 0.5
             ) { item in
-                ImageView(item?.landscapeImageSources(environment: .default) ?? [])
+                ImageView(item?.imageSources(for: .landscape, environment: .init(viewContext: .isBackdrop)) ?? [])
                     .failure {
                         EmptyView()
                     }

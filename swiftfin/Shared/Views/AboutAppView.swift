@@ -11,35 +11,45 @@ import SwiftUI
 
 struct AboutAppView: View {
 
+    @AdaptiveLayout
+    private var viewLayout
+
     @Router
     private var router
 
+    @ContentBuilder
     var body: some View {
         Form(image: .jellyfinBlobBlue) {
+            if !viewLayout.isLarge {
+                Section {
+                    VStack(alignment: .center, spacing: 10) {
+                        Image(.jellyfinBlobBlue)
+                            .resizable()
+                            .aspectRatio(1, contentMode: .fit)
+                            .frame(height: 150)
 
-            #if os(iOS)
-            Section {
-                VStack(alignment: .center, spacing: 10) {
-
-                    Image(.jellyfinBlobBlue)
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fit)
-                        .frame(height: 150)
-
-                    Text(verbatim: "Swiftfin")
-                        .fontWeight(.semibold)
-                        .font(.title2)
+                        Text(verbatim: "Swiftfin")
+                            .fontWeight(.semibold)
+                            .font(.title2)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
                 }
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
             }
-            #endif
 
             Section {
+                #if DEBUG
+                // swiftlint:disable:next hard_coded_display_string
+                LabeledContent(
+                    "Branch",
+                    value: UIApplication.gitBranch ?? .emptyDash
+                )
+                #else
                 LabeledContent(
                     L10n.version,
                     value: "\(UIApplication.appVersion ?? .emptyDash) (\(UIApplication.bundleVersion ?? .emptyDash))"
                 )
+                #endif
 
                 #if os(iOS)
                 ChevronButton(
@@ -55,13 +65,11 @@ struct AboutAppView: View {
                     systemName: "gearshape.fill",
                     external: true
                 ) {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
+                    Task { try? await SystemSettings.application.open() }
                 }
             }
 
             Section {
-
                 // tvOS cannot open generic web links
                 #if !os(tvOS)
                 ChevronButton(
@@ -92,6 +100,6 @@ struct AboutAppView: View {
                 #endif
             }
         }
-        .navigationTitle(L10n.about)
+        .navigationTitle(L10n.aboutApp)
     }
 }

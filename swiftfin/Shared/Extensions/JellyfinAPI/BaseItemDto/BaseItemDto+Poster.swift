@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Algorithms
 import FactoryKit
 import Foundation
 import Get
@@ -31,7 +32,7 @@ extension BaseItemDto: Poster {
         let viewContext = environment.viewContext
 
         return .init(
-            useParent: viewContext.contains(.isThumb) && environment.useSeriesLandscapeBackdrop,
+            useParent: viewContext.contains(.isThumb) && environment.posterConfiguration.useSeriesLandscapeBackdrop,
             viewContext: viewContext
         )
     }
@@ -45,7 +46,7 @@ extension BaseItemDto: Poster {
         case .episode:
             seasonEpisodeLabel
         case .person:
-            people?.first?.firstRole
+            people?.first?.displayRole
         case .video:
             extraType?.displayTitle
         default:
@@ -74,169 +75,118 @@ extension BaseItemDto: Poster {
         }
     }
 
-    @ViewBuilder
+    @ContentBuilder
     var posterLabel: some View {
         BaseItemDtoPosterLabel(item: self)
     }
 
-    @ViewBuilder
+    @ContentBuilder
     var posterContextMenu: some View {
         BaseItemDtoPosterContextMenu(item: self)
     }
 
-    @ViewBuilder
+    @ContentBuilder
     func posterOverlay(for displayType: PosterDisplayType) -> some View {
         ZStack {
-            PosterSelectionOverlay()
-
             PosterIndicatorsOverlay(
                 item: self,
                 posterDisplayType: displayType
             )
+
+            PosterSelectionOverlay()
         }
     }
 
-    @ImageSourceBuilder
-    func portraitImageSources(
+    func imageSources(
+        for displayType: PosterDisplayType,
         environment: Environment
     ) -> [ImageSource] {
-        switch type {
-        case .episode:
-            imageSource(
-                itemID: seriesID,
-                .primary,
-                tag: seriesPrimaryImageTag,
-                environment: environment
-            )
-        case .boxSet, .channel, .liveTvChannel, .liveTvProgram, .movie, .musicArtist, .person, .program, .series, .tvChannel:
-            imageSource(
-                .primary,
-                environment: environment
-            )
-        case .season:
-            imageSource(
-                .primary,
-                environment: environment
-            )
+        @ImageSourceBuilder
+        var sources: [ImageSource] {
+            let isLandscape = displayType == .landscape
+            let preferThumb = isLandscape && environment.viewContext.contains(.isThumb)
+            let inheritLandscape = !isLandscape || type != .episode || environment.useParent
+            let isProgram = type == .program || type == .liveTvProgram || type == .tvProgram
 
-            imageSource(
-                itemID: seriesID,
-                .primary,
-                tag: seriesPrimaryImageTag,
-                environment: environment
-            )
-        default:
-            []
-        }
-    }
-
-    @ImageSourceBuilder
-    func landscapeImageSources(
-        environment: Environment
-    ) -> [ImageSource] {
-        switch type {
-        case .episode:
-            if environment.useParent {
-                if environment.viewContext.contains(.isThumb) {
-                    imageSource(
-                        itemID: seriesID,
-                        .thumb,
-                        tag: seriesThumbImageTag,
-                        environment: environment
-                    )
+            if isLandscape, environment.viewContext.contains(.isBackdrop) {
+                if type == .episode {
+                    imageSource(.backdrop, itemID: parentBackdropItemID, tag: parentBackdropImageTags?.first, environment: environment)
                 }
 
-                imageSource(
-                    .primary,
-                    environment: environment
-                )
-            } else {
-                imageSource(
-                    .primary,
-                    environment: environment
-                )
-            }
-        case .collectionFolder, .folder, .musicVideo, .userView, .video:
-            if environment.viewContext.contains(.isThumb) {
-                imageSource(
-                    .thumb,
-                    environment: environment
-                )
+                imageSource(.backdrop, itemID: id, environment: environment)
             }
 
-            imageSource(
-                .primary,
-                environment: environment
-            )
-        case .season:
-            if environment.viewContext.contains(.isThumb) {
-                imageSource(
-                    itemID: seriesID,
-                    .thumb,
-                    tag: seriesThumbImageTag,
-                    environment: environment
-                )
+            // Program squares represent the channel in the guide.
+            if displayType == .square, isProgram {
+                imageSource(.primary, itemID: channelID, tag: channelPrimaryImageTag, environment: environment)
             }
 
-            imageSource(
-                itemID: seriesID,
-                .backdrop,
-                tag: parentBackdropImageTags?.first,
-                environment: environment
-            )
-        default:
-            if environment.viewContext.contains(.isThumb) {
-                imageSource(
-                    .thumb,
-                    environment: environment
-                )
+            if preferThumb {
+                imageSource(.thumb, itemID: id, environment: environment)
+
+                if inheritLandscape {
+                    imageSource(.thumb, itemID: seriesID, tag: seriesThumbImageTag, environment: environment)
+                    imageSource(.thumb, itemID: parentThumbItemID, tag: parentThumbImageTag, environment: environment)
+                }
             }
 
-            imageSource(
-                .backdrop,
-                tag: backdropImageTags?.first,
-                environment: environment
-            )
+            if isLandscape {
+                let preferPrimary: Bool = if let primaryImageAspectRatio, primaryImageAspectRatio > 0 {
+                    primaryImageAspectRatio >= 1.33
+                } else {
+                    switch type {
+                    case .collectionFolder, .episode, .folder, .musicVideo, .userView, .video:
+                        true
+                    default:
+                        false
+                    }
+                }
+
+                if preferThumb || !preferPrimary {
+                    imageSource(.backdrop, itemID: id, environment: environment)
+                }
+
+                if type == .season || (type == .episode && environment.useParent) {
+                    imageSource(.backdrop, itemID: parentBackdropItemID, tag: parentBackdropImageTags?.first, environment: environment)
+                }
+            } else if type == .episode {
+                // A portrait episode card uses its season/series poster when available.
+                imageSource(.primary, itemID: parentPrimaryImageItemID, tag: parentPrimaryImageTag, environment: environment)
+                imageSource(.primary, itemID: seriesID, tag: seriesPrimaryImageTag, environment: environment)
+            }
+
+            imageSource(.primary, itemID: id, environment: environment)
+
+            // Never substitute a parent portrait for an episode's landscape still.
+            if type != .episode || !isLandscape {
+                imageSource(.primary, itemID: seriesID, tag: seriesPrimaryImageTag, environment: environment)
+                imageSource(.primary, itemID: parentPrimaryImageItemID, tag: parentPrimaryImageTag, environment: environment)
+            }
+
+            imageSource(.primary, itemID: albumID, tag: albumPrimaryImageTag, environment: environment)
+
+            if type == .season {
+                imageSource(.thumb, itemID: id, environment: environment)
+            }
+
+            imageSource(.backdrop, itemID: id, environment: environment)
+            imageSource(.thumb, itemID: id, environment: environment)
+
+            if inheritLandscape {
+                imageSource(.thumb, itemID: seriesID, tag: seriesThumbImageTag, environment: environment)
+                imageSource(.thumb, itemID: parentThumbItemID, tag: parentThumbImageTag, environment: environment)
+                imageSource(.backdrop, itemID: parentBackdropItemID, tag: parentBackdropImageTags?.first, environment: environment)
+            }
+
+            if isProgram {
+                imageSource(.primary, itemID: channelID, tag: channelPrimaryImageTag, environment: environment)
+            }
         }
+
+        return Array(sources.uniqued())
     }
 
-    @ImageSourceBuilder
-    func squareImageSources(
-        environment: Environment
-    ) -> [ImageSource] {
-        switch type {
-        case .audio:
-            imageSource(
-                .primary,
-                environment: environment
-            )
-
-            imageSource(
-                itemID: albumID,
-                .primary,
-                tag: albumPrimaryImageTag,
-                environment: environment
-            )
-        case .channel, .musicAlbum, .tvChannel:
-            imageSource(
-                .primary,
-                environment: environment
-            )
-        case .program:
-            if let channelID {
-                imageSource(
-                    itemID: channelID,
-                    .primary,
-                    tag: channelPrimaryImageTag,
-                    environment: environment
-                )
-            }
-        default:
-            []
-        }
-    }
-
-    @ViewBuilder
+    @ContentBuilder
     func transform(image: Image, displayType: PosterDisplayType) -> some View {
         switch type {
         case .channel, .tvChannel:
@@ -244,6 +194,7 @@ extension BaseItemDto: Poster {
                 image
                     .aspectRatio(contentMode: .fit)
             }
+
         case .program:
             if displayType == .square {
                 ContainerRelativeView(ratio: 0.95) {
@@ -254,6 +205,7 @@ extension BaseItemDto: Poster {
                 image
                     .aspectRatio(contentMode: .fill)
             }
+
         default:
             image
                 .aspectRatio(contentMode: .fill)
@@ -266,7 +218,7 @@ private struct BaseItemDtoPosterContextMenu: View {
     @Router
     private var router
 
-    @State
+    @SharedBaseItem
     private var item: BaseItemDto
 
     init(item: BaseItemDto) {
@@ -281,6 +233,7 @@ private struct BaseItemDtoPosterContextMenu: View {
         item.userData?.isPlayed == true
     }
 
+    @ContentBuilder
     var body: some View {
         if let itemID = item.id {
             Button(L10n.goToItem, systemImage: "info.circle") {
@@ -293,6 +246,8 @@ private struct BaseItemDtoPosterContextMenu: View {
                 router.route(to: .item(id: seriesID))
             }
         }
+
+        ShuffleButton(item: item)
 
         if item.canBePlayed {
             Button(isPlayed ? L10n.markAsUnplayed : L10n.markAsPlayed, systemImage: isPlayed ? "circle" : "checkmark.circle") {
@@ -313,210 +268,23 @@ private struct BaseItemDtoPosterContextMenu: View {
 
     @MainActor
     private func toggleIsPlayed() async {
-        let beforeIsPlayed = item.userData?.isPlayed ?? false
+        guard let session = Container.shared.currentUserSession() else { return }
 
-        item.userData?.isPlayed = !beforeIsPlayed
         do {
-            try await setIsPlayed(!beforeIsPlayed)
+            try await session.setPlayed($item, to: !isPlayed)
         } catch {
-            item.userData?.isPlayed = beforeIsPlayed
+            session.itemActionErrors.send(error)
         }
     }
 
     @MainActor
     private func toggleIsFavorite() async {
-        let beforeIsFavorite = item.userData?.isFavorite ?? false
+        guard let session = Container.shared.currentUserSession() else { return }
 
-        item.userData?.isFavorite = !beforeIsFavorite
         do {
-            try await setIsFavorite(!beforeIsFavorite)
+            try await session.setFavorite($item, to: !isFavorite)
         } catch {
-            item.userData?.isFavorite = beforeIsFavorite
-        }
-    }
-
-    private func setIsPlayed(_ isPlayed: Bool) async throws {
-        guard let itemID = item.id,
-              let userSession = Container.shared.currentUserSession()
-        else { return }
-
-        let request: Request<UserItemDataDto> = if isPlayed {
-            Paths.markPlayedItem(
-                itemID: itemID,
-                userID: userSession.user.id
-            )
-        } else {
-            Paths.markUnplayedItem(
-                itemID: itemID,
-                userID: userSession.user.id
-            )
-        }
-
-        let response = try await userSession.client.send(request)
-        item.userData = response.value
-        Notifications[.itemUserDataDidChange].post(response.value)
-        Notifications[.itemShouldRefreshMetadata].post(itemID)
-    }
-
-    private func setIsFavorite(_ isFavorite: Bool) async throws {
-        guard let itemID = item.id,
-              let userSession = Container.shared.currentUserSession()
-        else { return }
-
-        let request: Request<UserItemDataDto> = if isFavorite {
-            Paths.markFavoriteItem(
-                itemID: itemID,
-                userID: userSession.user.id
-            )
-        } else {
-            Paths.unmarkFavoriteItem(
-                itemID: itemID,
-                userID: userSession.user.id
-            )
-        }
-
-        let response = try await userSession.client.send(request)
-        item.userData = response.value
-        Notifications[.itemUserDataDidChange].post(response.value)
-        Notifications[.itemShouldRefreshMetadata].post(itemID)
-    }
-}
-
-private struct BaseItemDtoPosterLabel: View {
-
-    let item: BaseItemDto
-
-    var body: some View {
-        switch item.type {
-        case .program:
-            programLabel
-        case .episode:
-            episodeLabel
-        case .season:
-            label(title: item.parentTitle ?? item.displayTitle, subtitle: item.displayTitle)
-        case .video where item.extraType != nil:
-            extrasLabel
-        default:
-            label(title: item.displayTitle, subtitle: item.subtitle)
-        }
-    }
-
-    // TODO: allow title to expand to 2 lines if subtitle is nil?
-    //       - verify layout
-
-    @ViewBuilder
-    private func label(title: String, subtitle: String?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(.footnote)
-                .foregroundStyle(.primary)
-                .accessibilityLabel(item.displayTitle)
-                .lineLimit(1, reservesSpace: true)
-
-            Text(subtitle ?? " ")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
-                .lineLimit(1, reservesSpace: true)
-        }
-    }
-
-    @ViewBuilder
-    private var episodeLabel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let seriesName = item.seriesName {
-                Text(seriesName)
-                    .font(.footnote)
-                    .fontWeight(.regular)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1, reservesSpace: true)
-            }
-
-            DotHStack {
-                if let indexLabel = item.seasonEpisodeLabel {
-                    Text(indexLabel)
-                }
-
-                Text(item.displayTitle)
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-    }
-
-    @ViewBuilder
-    private var programLabel: some View {
-        VStack(alignment: .leading) {
-            Text(item.channelName ?? .emptyDash)
-                .font(.footnote)
-                .fontWeight(.semibold)
-                .foregroundStyle(.primary)
-                .lineLimit(1, reservesSpace: true)
-
-            Text(item.displayTitle)
-                .font(.footnote)
-                .fontWeight(.regular)
-                .foregroundStyle(.primary)
-                .lineLimit(1, reservesSpace: true)
-
-            Group {
-                if let startDate = item.startDate {
-                    ViewThatFits {
-                        SeparatorHStack {
-                            Text(String.hyphen)
-                        } content: {
-                            if !Calendar.current.isDateInToday(startDate) {
-                                Text(startDate, format: .dateTime.weekday(.abbreviated).hour().minute())
-                            } else {
-                                Text(startDate, style: .time)
-                            }
-
-                            if let endDate = item.endDate {
-                                Text(endDate, style: .time)
-                            }
-                        }
-
-                        if !Calendar.current.isDateInToday(startDate) {
-                            Text(startDate, format: .dateTime.weekday(.abbreviated).hour().minute())
-                        } else {
-                            Text(startDate, style: .time)
-                        }
-                    }
-                } else {
-                    Text(String.emptyRuntime)
-                }
-            }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .lineLimit(1, reservesSpace: true)
-        }
-    }
-
-    @ViewBuilder
-    private var extrasLabel: some View {
-        VStack(alignment: .leading) {
-            Text(item.displayTitle)
-                .font(.footnote)
-                .foregroundStyle(.primary)
-                .accessibilityLabel(item.displayTitle)
-                .lineLimit(1, reservesSpace: true)
-
-            if let extraType = item.extraType, extraType != .unknown {
-                Text(extraType.displayTitle)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1, reservesSpace: true)
-            }
-
-            if let runtime = item.runtime {
-                Text(runtime, format: .runtime)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1, reservesSpace: true)
-            }
+            session.itemActionErrors.send(error)
         }
     }
 }

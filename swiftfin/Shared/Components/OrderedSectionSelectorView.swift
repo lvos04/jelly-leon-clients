@@ -46,26 +46,27 @@ struct OrderedSectionSelectorView<Element: Displayable & Hashable>: View {
 
     private func select(element: Element) {
         guard isRemovable(element) else { return }
+
         selection.value.toggle(element)
         UIDevice.impact(.light)
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private var editButton: some View {
         Button(isReordering ? L10n.done : L10n.edit) {
             editMode?.wrappedValue = isReordering ? .inactive : .active
         }
         #if os(iOS)
         .backport
-        .buttonStyle(.glass)
-        .controlSize(.small)
+            .buttonStyle(.glass)
+            .controlSize(.small)
         #endif
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private func button(
         for element: Element,
-        @ViewBuilder content: () -> some View
+        @ContentBuilder content: () -> some View
     ) -> some View {
         Button {
             select(element: element)
@@ -83,6 +84,7 @@ struct OrderedSectionSelectorView<Element: Displayable & Hashable>: View {
         .foregroundStyle(.primary, .secondary)
     }
 
+    @ContentBuilder
     var body: some View {
         Form(systemImage: systemImage) {
             Section(L10n.enabled) {

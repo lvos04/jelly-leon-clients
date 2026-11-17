@@ -7,16 +7,13 @@
 //
 
 import Combine
-import Defaults
 import JellyfinAPI
 import SwiftUI
 
 struct ResetUserPasswordView: View {
 
-    @Default(.accentColor)
-    private var accentColor
-
     private enum Field: Hashable {
+
         case currentPassword
         case newPassword
         case confirmNewPassword
@@ -43,9 +40,6 @@ struct ResetUserPasswordView: View {
     @State
     private var isPresentingSuccess: Bool = false
 
-    @State
-    private var error: Error? = nil
-
     init(userID: String, requiresCurrentPassword: Bool) {
         self._viewModel = StateObject(wrappedValue: ResetUserPasswordViewModel(userID: userID))
         self.requiresCurrentPassword = requiresCurrentPassword
@@ -55,6 +49,7 @@ struct ResetUserPasswordView: View {
         newPassword == confirmNewPassword
     }
 
+    @ContentBuilder
     var body: some View {
         List {
             if requiresCurrentPassword {
@@ -96,7 +91,7 @@ struct ResetUserPasswordView: View {
                     maskToggle: .enabled
                 )
                 .onSubmit {
-                    viewModel.send(.reset(current: currentPassword, new: confirmNewPassword))
+                    viewModel.reset(current: currentPassword, new: confirmNewPassword)
                 }
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.none)
@@ -129,12 +124,12 @@ struct ResetUserPasswordView: View {
         }
         .onReceive(viewModel.events) { event in
             switch event {
-            case let .error(eventError):
-                UIDevice.feedback(.error)
-                error = eventError
             case .success:
                 UIDevice.feedback(.success)
                 isPresentingSuccess = true
+
+            case .error:
+                UIDevice.feedback(.error)
             }
         }
         .topBarTrailing {
@@ -142,7 +137,7 @@ struct ResetUserPasswordView: View {
                 ProgressView()
 
                 Button(L10n.cancel, role: .cancel) {
-                    viewModel.send(.cancel)
+                    viewModel.cancel()
 
                     if requiresCurrentPassword {
                         focusedField = .currentPassword
@@ -157,7 +152,7 @@ struct ResetUserPasswordView: View {
             } else {
                 let saveAction: () -> Void = {
                     focusedField = nil
-                    viewModel.send(.reset(current: currentPassword, new: confirmNewPassword))
+                    viewModel.reset(current: currentPassword, new: confirmNewPassword)
                 }
 
                 if #available(iOS 26, *) {
@@ -186,7 +181,7 @@ struct ResetUserPasswordView: View {
         } message: {
             Text(L10n.passwordChangedMessage)
         }
-        .errorMessage($error) {
+        .errorMessage($viewModel.error) {
             focusedField = .newPassword
         }
     }

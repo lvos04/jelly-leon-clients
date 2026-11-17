@@ -12,6 +12,9 @@ import SwiftUI
 
 struct ServerUsersView: View {
 
+    @AdaptiveLayout
+    private var viewLayout
+
     @Router
     private var router
 
@@ -36,13 +39,14 @@ struct ServerUsersView: View {
 
     // MARK: - Body
 
+    @ContentBuilder
     var body: some View {
         ZStack {
             switch viewModel.state {
             case .content:
                 userListView
-            case let .error(error):
-                ErrorView(error: error)
+            case .error:
+                ErrorView(error: viewModel.error ?? ErrorMessage(L10n.unknownError))
             case .initial:
                 ProgressView()
             }
@@ -52,7 +56,7 @@ struct ServerUsersView: View {
         .toolbarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isEditing)
         .refreshable {
-            viewModel.send(.getUsers(isHidden: isHiddenFilterActive, isDisabled: isDisabledFilterActive))
+            await viewModel.getUsers(isHidden: isHiddenFilterActive, isDisabled: isDisabledFilterActive)
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -60,6 +64,7 @@ struct ServerUsersView: View {
                     navigationBarSelectView
                 }
             }
+
             ToolbarItem(placement: .topBarTrailing) {
                 if isEditing {
                     Button(L10n.cancel, role: .cancel) {
@@ -84,6 +89,7 @@ struct ServerUsersView: View {
                     .controlSize(.small)
                 }
             }
+
             ToolbarItem(placement: .bottomBar) {
                 if isEditing {
                     Button(L10n.delete, role: .destructive) {
@@ -96,7 +102,7 @@ struct ServerUsersView: View {
             }
         }
         .navigationBarMenuButton(
-            isLoading: viewModel.backgroundStates.contains(.gettingUsers),
+            isLoading: viewModel.background.is(.gettingUsers),
             isHidden: isEditing
         ) {
             Button(L10n.addUser, systemImage: "plus") {
@@ -118,19 +124,19 @@ struct ServerUsersView: View {
         }
 
         .onChange(of: isDisabledFilterActive) {
-            viewModel.send(.getUsers(
+            viewModel.getUsers(
                 isHidden: isHiddenFilterActive,
                 isDisabled: isDisabledFilterActive
-            ))
+            )
         }
         .onChange(of: isHiddenFilterActive) {
-            viewModel.send(.getUsers(
+            viewModel.getUsers(
                 isHidden: isHiddenFilterActive,
                 isDisabled: isDisabledFilterActive
-            ))
+            )
         }
         .onFirstAppear {
-            viewModel.send(.getUsers())
+            viewModel.getUsers(isHidden: isHiddenFilterActive, isDisabled: isDisabledFilterActive)
         }
         .confirmationDialog(
             L10n.delete,
@@ -153,17 +159,17 @@ struct ServerUsersView: View {
         .alert(L10n.deleteUserFailed, isPresented: $isPresentingSelfDeleteError) {
             Button(L10n.ok, role: .cancel) {}
         } message: {
-            Text(L10n.deleteUserSelfDeletion(viewModel.userSession?.user.username ?? ""))
+            Text(L10n.deleteUserSelfDeletion(viewModel.userSession?.userData.name ?? ""))
         }
         .onNotification(.didAddServerUser) { newUser in
-            viewModel.send(.appendUser(newUser))
+            viewModel.appendUser(newUser)
             router.route(to: .userDetails(user: newUser))
         }
     }
 
     // MARK: - User List View
 
-    @ViewBuilder
+    @ContentBuilder
     private var userListView: some View {
         List {
             InsetGroupedListHeader(
@@ -182,7 +188,7 @@ struct ServerUsersView: View {
                     .listRowSeparator(.hidden)
                     .listRowInsets(.zero)
             } else {
-                ForEach(viewModel.users, id: \.self) { user in
+                ForEach(viewModel.users, id: \.id) { user in
                     if let userID = user.id {
                         ServerUsersRow(user: user) {
                             if isEditing {
@@ -197,7 +203,7 @@ struct ServerUsersView: View {
                         }
                         .isEditing(isEditing)
                         .isSelected(selectedUsers.contains(userID))
-                        .listRowInsets(.edgeInsets)
+                        .listRowInsets(viewLayout.edgeInsets)
                     }
                 }
             }
@@ -207,9 +213,8 @@ struct ServerUsersView: View {
 
     // MARK: - Navigation Bar Select/Remove All Content
 
-    @ViewBuilder
+    @ContentBuilder
     private var navigationBarSelectView: some View {
-
         let isAllSelected: Bool = selectedUsers.count == viewModel.users.count
 
         Button(isAllSelected ? L10n.removeAll : L10n.selectAll) {
@@ -230,17 +235,17 @@ struct ServerUsersView: View {
             }
         }
         .controlSize(.small)
-        .disabled(!isEditing)
+        .enabled(isEditing)
     }
 
     // MARK: - Delete Selected Users Confirmation Actions
 
-    @ViewBuilder
+    @ContentBuilder
     private var deleteSelectedUsersConfirmationActions: some View {
         Button(L10n.cancel, role: .cancel) {}
 
         Button(L10n.confirm, role: .destructive) {
-            viewModel.send(.deleteUsers(Array(selectedUsers)))
+            viewModel.deleteUsers(Array(selectedUsers))
             isEditing = false
             selectedUsers.removeAll()
         }
@@ -248,7 +253,7 @@ struct ServerUsersView: View {
 
     // MARK: - Delete User Confirmation Actions
 
-    @ViewBuilder
+    @ContentBuilder
     private var deleteUserConfirmationActions: some View {
         Button(L10n.cancel, role: .cancel) {}
 
@@ -257,7 +262,7 @@ struct ServerUsersView: View {
                 if userToDelete == viewModel.userSession?.user.id {
                     isPresentingSelfDeleteError = true
                 } else {
-                    viewModel.send(.deleteUsers([userToDelete]))
+                    viewModel.deleteUsers([userToDelete])
                     selectedUsers.removeAll()
                 }
             }

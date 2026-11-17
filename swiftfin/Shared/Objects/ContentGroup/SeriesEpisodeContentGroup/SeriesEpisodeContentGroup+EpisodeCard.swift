@@ -13,32 +13,17 @@ extension SeriesEpisodeContentGroup {
 
     struct EpisodeCard: View {
 
-        @Environment(\.enabledPosterIndicators)
-        private var indicators
-
         @Namespace
         private var namespace
 
         @Router
         private var router
 
-        let episode: BaseItemDto
+        @PlayMedia
+        private var playMedia
 
-        @ViewBuilder
-        private var overlayView: some View {
-            if indicators.contains(.progress), let progressLabel = episode.progressLabel {
-                ProgressIndicator(
-                    title: progressLabel,
-                    progress: (episode.userData?.playedPercentage ?? 0) / 100,
-                    posterDisplayType: .landscape
-                )
-            } else if indicators.contains(.played), episode.userData?.isPlayed ?? false {
-                PlayedIndicator()
-                    .frame(width: UIDevice.isTV ? 45 : 25, height: UIDevice.isTV ? 45 : 25)
-                    .padding(3)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            }
-        }
+        @SharedBaseItem
+        var episode: BaseItemDto
 
         private var episodeContent: String {
             if episode.isUnaired {
@@ -48,40 +33,37 @@ extension SeriesEpisodeContentGroup {
             }
         }
 
+        @ContentBuilder
         var body: some View {
             EpisodeCardLayout(
                 header: episode.displayTitle,
                 subHeader: episode.episodeLocator ?? .emptyDash,
                 content: episodeContent,
                 artworkAction: {
-                    guard let provider = episode.getPlaybackItemProvider(userSession: nil) else {
+                    guard let intent = episode.getPlaybackIntent(userSession: nil) else {
                         return
                     }
 
-                    router.route(
-                        to: .videoPlayer(
-                            provider: provider,
-                            queue: EpisodeMediaPlayerQueue(episode: episode)
-                        )
-                    )
+                    playMedia(intent: intent)
                 },
                 contentAction: {
                     router.route(to: .item(item: episode), in: namespace)
                 },
                 contextMenuItem: episode
             ) {
-                ImageView(episode.landscapeImageSources(
-                    environment: .init(maxWidth: 250)
-                ))
-                .failure {
-                    SystemImageContentView(systemName: episode.systemImage)
-                }
+                PosterImage(
+                    item: episode,
+                    type: .landscape,
+                    size: .medium
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .bottom) {
-                    overlayView
+                    PosterIndicatorsOverlay(
+                        item: episode,
+                        posterDisplayType: .landscape
+                    )
                 }
                 .contentShape(.contextMenuPreview, Rectangle())
-                .posterStyle(.landscape)
                 .subtleShadow()
                 .matchedTransitionSource(id: "item", in: namespace)
             }
@@ -90,12 +72,16 @@ extension SeriesEpisodeContentGroup {
 
     struct EpisodeStateCard: View {
 
+        @AdaptiveLayout
+        private var viewLayout
+
         let title: String
         let subHeader: String
         let content: String
         let systemImage: String?
         let action: () -> Void
 
+        @ContentBuilder
         var body: some View {
             EpisodeCardLayout(
                 header: title,
@@ -114,6 +100,7 @@ extension SeriesEpisodeContentGroup {
                         }
                     }
                     .posterStyle(.landscape)
+                    .if(viewLayout.isLarge) { $0.posterCornerRadius(.landscape) }
                     .subtleShadow()
             }
         }
@@ -121,21 +108,41 @@ extension SeriesEpisodeContentGroup {
 
     private struct EpisodeCardLayout<Artwork: View>: View {
 
+        @AdaptiveLayout
+        private var viewLayout
+
         private enum FocusedElement: Hashable {
+
             case artwork
             case content
         }
 
+        @Environment(\.posterConfiguration)
+        private var posterConfiguration
+
+        @Environment(\.viewContext)
+        private var viewContext
+
         @FocusState
         private var focusedElement: FocusedElement?
+
+        @State
+        private var artworkSize: CGSize = .zero
 
         let header: String
         let subHeader: String
         let content: String
         let artworkAction: () -> Void
         let contentAction: () -> Void
-        let contextMenuItem: BaseItemDto?
+        @OptionalSharedBaseItem
+        var contextMenuItem: BaseItemDto?
         let artwork: Artwork
+
+        private var contentAccessibilityLabel: String {
+            let title = contextMenuItem?.posterAccessibility(configuration: posterConfiguration).label
+
+            return PosterAccessibility.joined([title ?? header, contextMenuItem == nil ? subHeader : nil, content])
+        }
 
         init(
             header: String,
@@ -144,7 +151,7 @@ extension SeriesEpisodeContentGroup {
             artworkAction: @escaping () -> Void,
             contentAction: @escaping () -> Void,
             contextMenuItem: BaseItemDto? = nil,
-            @ViewBuilder artwork: () -> Artwork
+            @ContentBuilder artwork: () -> Artwork
         ) {
             self.header = header
             self.subHeader = subHeader
@@ -155,27 +162,63 @@ extension SeriesEpisodeContentGroup {
             self.artwork = artwork()
         }
 
-        @ViewBuilder
+        @ContentBuilder
+        private func contextMenuPreview(for item: BaseItemDto) -> some View {
+            VStack(alignment: .leading) {
+                PosterImage(
+                    item: item,
+                    type: .landscape,
+                    size: .medium,
+                    contentMode: .fit
+                )
+                .subtleShadow()
+
+                item.posterLabel
+                    .allowsHitTesting(false)
+            }
+            .environment(\.posterDisplayType, .landscape)
+            .foregroundStyle(.primary, .secondary)
+            .posterAccessibility(for: item)
+            .frame(width: artworkSize.width)
+            .padding(20)
+            .backport
+            .glassEffect(in: .rect(cornerRadius: 10))
+        }
+
+        @ContentBuilder
         private var artworkButton: some View {
             let button = Button(action: artworkAction) {
-                artwork
+                if let contextMenuItem {
+                    artwork
+                        .posterAccessibility(for: contextMenuItem)
+                        .accessibilityHint(L10n.posterAccessibilityPlayHint)
+                } else {
+                    artwork
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(PosterAccessibility.joined([header, subHeader]))
+                }
             }
             .foregroundStyle(.primary, .secondary)
             .buttonStyle(.card)
             .focused($focusedElement, equals: .artwork)
 
             if let contextMenuItem {
-                button.posterContextMenu(for: contextMenuItem) {
-                    artwork
-                }
+                button
+                    .trackingSize($artworkSize)
+                    .posterContextMenu(for: contextMenuItem) {
+                        contextMenuPreview(for: contextMenuItem)
+                            .withViewContext(viewContext)
+                    }
             } else {
                 button
             }
         }
 
+        @ContentBuilder
         var body: some View {
             VStack(alignment: .leading) {
                 artworkButton
+                    .posterAspectRatio(.landscape, contentMode: .fit)
 
                 Button(action: contentAction) {
                     EpisodeMetadataView(
@@ -183,17 +226,20 @@ extension SeriesEpisodeContentGroup {
                         subHeader: subHeader,
                         content: content
                     )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(contentAccessibilityLabel)
+                    .accessibilityHint(contextMenuItem == nil ? "" : L10n.posterAccessibilityDetailsHint)
                 }
                 .foregroundStyle(.primary, .secondary)
-                #if os(tvOS)
-                    .buttonStyle(
+                .if(viewLayout.isLarge) { button in
+                    button.buttonStyle(
                         EpisodeContentButtonStyle(
                             showsMaterial: focusedElement != nil,
                             isFocused: focusedElement == .content
                         )
                     )
-                #endif
-                    .focused($focusedElement, equals: .content)
+                }
+                .focused($focusedElement, equals: .content)
             }
             .focusSection()
             .defaultFocus(
@@ -201,6 +247,7 @@ extension SeriesEpisodeContentGroup {
                 .artwork,
                 priority: .userInitiated
             )
+            .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -210,6 +257,7 @@ extension SeriesEpisodeContentGroup {
         let subHeader: String
         let content: String
 
+        @ContentBuilder
         var body: some View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(subHeader)
@@ -232,7 +280,6 @@ extension SeriesEpisodeContentGroup {
         }
     }
 
-    #if os(tvOS)
     private struct EpisodeContentButtonStyle: ButtonStyle {
 
         let showsMaterial: Bool
@@ -240,6 +287,7 @@ extension SeriesEpisodeContentGroup {
 
         private let cornerRadius: CGFloat = 20
 
+        @ContentBuilder
         func makeBody(configuration: Configuration) -> some View {
             configuration.label
                 .padding(28)
@@ -248,15 +296,15 @@ extension SeriesEpisodeContentGroup {
                     maxHeight: .infinity,
                     alignment: .topLeading
                 )
-                .frame(height: 200)
-                .backport
-                .glassEffect(
-                    showsMaterial ? .regular : .identity,
-                    in: .rect(
+                .frame(minHeight: 200)
+                .background {
+                    RoundedRectangle(
                         cornerRadius: cornerRadius,
                         style: .continuous
                     )
-                )
+                    .fill(.regularMaterial)
+                    .opacity(showsMaterial ? 1 : 0)
+                }
                 .scaleEffect(isFocused ? 1.05 : 1)
                 .scaleEffect(configuration.isPressed ? 0.97 : 1)
                 .brightness(isFocused ? 0.04 : 0)
@@ -271,5 +319,4 @@ extension SeriesEpisodeContentGroup {
                 .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
         }
     }
-    #endif
 }

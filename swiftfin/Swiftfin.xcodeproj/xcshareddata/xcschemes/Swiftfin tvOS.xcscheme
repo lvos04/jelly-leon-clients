@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "5358705F2669D21600D05A09"
-               BuildableName = "Swiftfin tvOS.app"
+               BuildableName = "Swiftfin.app"
                BlueprintName = "Swiftfin tvOS"
                ReferencedContainer = "container:Swiftfin.xcodeproj">
             </BuildableReference>
@@ -28,6 +28,16 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0558DEDC63B5442F9F6D7D72"
+               BuildableName = "Swiftfin tvOS Screenshots.xctest"
+               BlueprintName = "Swiftfin tvOS Screenshots"
+               ReferencedContainer = "container:Swiftfin.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
@@ -45,7 +55,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "5358705F2669D21600D05A09"
-            BuildableName = "Swiftfin tvOS.app"
+            BuildableName = "Swiftfin.app"
             BlueprintName = "Swiftfin tvOS"
             ReferencedContainer = "container:Swiftfin.xcodeproj">
          </BuildableReference>
@@ -62,7 +72,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "5358705F2669D21600D05A09"
-            BuildableName = "Swiftfin tvOS.app"
+            BuildableName = "Swiftfin.app"
             BlueprintName = "Swiftfin tvOS"
             ReferencedContainer = "container:Swiftfin.xcodeproj">
          </BuildableReference>

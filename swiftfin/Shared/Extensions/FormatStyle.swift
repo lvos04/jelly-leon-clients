@@ -16,19 +16,35 @@ struct MinuteSecondsFormatStyle: FormatStyle {
         let formatter = DateComponentsFormatter()
         formatter.unitsStyle = .abbreviated
         formatter.allowedUnits = [.minute, .second]
+
         return formatter.string(from: value) ?? .emptyDash
     }
 }
 
+@available(*, deprecated, message: "Use `Duration` instead.")
 extension FormatStyle where Self == MinuteSecondsFormatStyle {
 
-    @available(*, deprecated, message: "Use `Duration` instead.")
     static var minuteSeconds: MinuteSecondsFormatStyle {
         MinuteSecondsFormatStyle()
     }
 }
 
 extension FormatStyle where Self == Duration.UnitsFormatStyle {
+
+    static var spokenRuntime: Duration.UnitsFormatStyle {
+        Duration.UnitsFormatStyle(
+            allowedUnits: [.hours, .minutes, .seconds],
+            width: .wide
+        )
+    }
+
+    static var playbackOffset: Duration.UnitsFormatStyle {
+        Duration.UnitsFormatStyle(
+            allowedUnits: [.seconds],
+            width: .abbreviated,
+            fractionalPart: .show(length: 2)
+        )
+    }
 
     static var minuteSecondsAbbreviated: Duration.UnitsFormatStyle {
         Duration.UnitsFormatStyle(
@@ -55,7 +71,6 @@ extension FormatStyle where Self == Duration.UnitsFormatStyle {
 struct RuntimeFormatStyle: FormatStyle {
 
     func format(_ value: Duration) -> String {
-
         let formatStyle: Duration.TimeFormatStyle = if value.components.seconds.magnitude >= 3600 {
             Duration.TimeFormatStyle(pattern: .hourMinuteSecond)
         } else {
@@ -106,8 +121,8 @@ struct PlaybackRateStyle: FormatStyle {
         self.precision = precision
     }
 
-    func format(_ value: Float) -> String {
-        FloatingPointFormatStyle<Float>()
+    func format(_ value: Double) -> String {
+        FloatingPointFormatStyle<Double>()
             .precision(.fractionLength(0 ... precision))
             .format(value)
             .appending(.multiply)
@@ -165,7 +180,6 @@ extension ParseableFormatStyle where Self == NilIfEmptyStringFormatStyle {
 struct LastSeenFormatStyle: FormatStyle {
 
     func format(_ value: Date?) -> String {
-
         guard let value else {
             return L10n.never
         }
@@ -205,11 +219,13 @@ struct AgeFormatStyle: FormatStyle {
 
     func format(_ value: Date) -> String {
         let age = Calendar.current.dateComponents([.year], from: value, to: death ?? .now).year ?? 0
+
         return L10n.yearsOld(age)
     }
 }
 
 struct IntBitRateFormatStyle: FormatStyle {
+
     func format(_ value: Int) -> String {
         let units = [
             L10n.bitsPerSecond,
@@ -218,6 +234,7 @@ struct IntBitRateFormatStyle: FormatStyle {
             L10n.gigabitsPerSecond,
             L10n.terabitsPerSecond,
         ]
+
         var adjustedValue = Double(value)
         var unitIndex = 0
 
@@ -227,11 +244,13 @@ struct IntBitRateFormatStyle: FormatStyle {
         }
 
         let formattedValue = String(format: "%.1f", adjustedValue)
+
         return "\(formattedValue) \(units[unitIndex])"
     }
 }
 
 extension FormatStyle where Self == IntBitRateFormatStyle {
+
     static var bitRate: IntBitRateFormatStyle {
         IntBitRateFormatStyle()
     }

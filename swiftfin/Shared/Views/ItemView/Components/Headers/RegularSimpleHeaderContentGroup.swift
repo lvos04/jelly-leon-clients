@@ -22,6 +22,9 @@ extension ItemView {
 
         struct Body: View {
 
+            @AdaptiveLayout
+            private var viewLayout
+
             @ObservedObject
             var provider: ItemContentGroupProvider
 
@@ -32,7 +35,7 @@ extension ItemView {
                 provider.item.type == .person ? .portrait : .landscape
             }
 
-            @ViewBuilder
+            @ContentBuilder
             private var title: some View {
                 VStack(alignment: .leading, spacing: 5) {
                     if let parentID = provider.item.parentRootID, let parentTitle = provider.item.parentTitle {
@@ -49,12 +52,13 @@ extension ItemView {
                 }
             }
 
+            @ContentBuilder
             var body: some View {
                 ImageContentColumnsLayout(
                     idealContentWidth: 600,
-                    imageAspectRatio: posterDisplayType == .landscape ? 1.77 : 1,
+                    imageAspectRatio: posterDisplayType == .landscape ? 1.77 : 2.0 / 3.0,
                     imageColumnFraction: posterDisplayType == .landscape ? 0.5 : 0.33,
-                    spacing: EdgeInsets.edgePadding
+                    spacing: viewLayout.edgePadding
                 ) {
                     PosterImage(
                         item: provider.item,
@@ -62,11 +66,12 @@ extension ItemView {
                         size: .medium,
                         contentMode: .fit
                     )
-                    #if os(tvOS)
-                    .posterBorder()
-                    .posterCornerRadius(posterDisplayType)
-                    .subtleShadow()
-                    #endif
+                    .if(viewLayout.isLarge) { poster in
+                        poster
+                            .posterBorder()
+                            .posterCornerRadius(posterDisplayType)
+                            .subtleShadow()
+                    }
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
@@ -78,19 +83,20 @@ extension ItemView {
 
                         ItemView.Description(item: provider.item)
 
-                        VStack(alignment: .leading, spacing: UIDevice.isTV ? 25 : 5) {
-                            if provider.item.presentPlayButton {
-                                PlayButton(provider: provider)
-                            }
-
-                            ItemView.ActionButtonHStack(provider: provider)
+                        ItemView.ActionBar(
+                            provider: provider,
+                            alignment: .leading
+                        )
+                        .frame(maxWidth: viewLayout.value(standard: 300, large: 450), alignment: .leading)
+                        .if(viewLayout.isLarge) { buttons in
+                            buttons
+                                .padding(.vertical)
                         }
-                        .frame(maxWidth: UIDevice.isTV ? 450 : 300, alignment: .leading)
 
                         ItemView.AttributesHStack(
                             attributes: attributes,
                             item: provider.item,
-                            selectedMediaSource: provider.mediaPlayerItemProvider?.mediaSource,
+                            selectedMediaSource: provider.playbackIntent?.mediaSource,
                             alignment: .leading
                         )
                         .foregroundStyle(.secondary)

@@ -6,7 +6,6 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import PreferencesView
 import SwiftUI
 import Transmission
 
@@ -34,82 +33,109 @@ struct NavigationInjectionView: View {
 
     init(
         coordinator: @autoclosure @escaping () -> NavigationCoordinator,
-        @ViewBuilder content: @escaping () -> some View
+        @ContentBuilder content: @escaping () -> some View
     ) {
         _coordinator = StateObject(wrappedValue: coordinator())
         self.content = AnyView(content())
     }
 
+    @ContentBuilder
     var body: some View {
         NavigationStack(path: $coordinator.path) {
             content
+                .trackingFrame(for: .layoutContainer)
                 .navigationDestination(for: NavigationRoute.self) { route in
                     route.destination
+                        .trackingFrame(for: .layoutContainer)
+                        .removingViewContext(.isTabRoot)
+                        .environment(
+                            \.router,
+                            .init(
+                                navigationCoordinator: coordinator,
+                                isRootOfPath: false
+                            )
+                        )
                 }
         }
         .trackingFrame(for: .navigationStack)
         .environment(
             \.router,
             .init(
-                navigationCoordinator: coordinator
+                navigationCoordinator: coordinator,
+                isRootOfPath: true
             )
         )
         .environmentObject(coordinator)
         #if os(tvOS)
-            .fullScreenCover(
-                item: $coordinator.presentedSheet
-            ) {
-                coordinator.presentedSheet = nil
-            } content: { presentedRoute in
-                NavigationInjectionView(coordinator: presentedRoute.coordinator) {
-                    presentedRoute.route.destination
-                }
-                .background(.regularMaterial)
+        .fullScreenCover(
+            item: $coordinator.presentedSheet
+        ) {
+            coordinator.presentedSheet = nil
+        } content: { presentedRoute in
+            NavigationInjectionView(coordinator: presentedRoute.coordinator) {
+                presentedRoute.route
+                    .destination
+                    .removingViewContext(.isTabRoot)
             }
-            .fullScreenCover(
-                item: $coordinator.presentedFullScreen
-            ) { presentedRoute in
-                NavigationInjectionView(coordinator: presentedRoute.coordinator) {
-                    presentedRoute.route.destination
-                }
+            .transformEnvironment(\.frameForParentView) { $0[.tabView] = nil }
+            .background(.regularMaterial)
+        }
+        .fullScreenCover(
+            item: $coordinator.presentedFullScreen
+        ) { presentedRoute in
+            NavigationInjectionView(coordinator: presentedRoute.coordinator) {
+                presentedRoute.route
+                    .destination
+                    .removingViewContext(.isTabRoot)
             }
+            .transformEnvironment(\.frameForParentView) { $0[.tabView] = nil }
+        }
         #else
-            .sheet(
-                item: $coordinator.presentedSheet
-            ) {
-                coordinator.presentedSheet = nil
-            } content: { presentedRoute in
-                NavigationInjectionView(coordinator: presentedRoute.coordinator) {
-                    presentedRoute.route.destination
-                }
+        .sheet(
+            item: $coordinator.presentedSheet
+        ) {
+            coordinator.presentedSheet = nil
+        } content: { presentedRoute in
+            NavigationInjectionView(coordinator: presentedRoute.coordinator) {
+                presentedRoute.route
+                    .destination
+                    .removingViewContext(.isTabRoot)
             }
-            .presentation(
-                $coordinator.presentedFullScreen,
-                transition: .zoomIfAvailable(
-                    .init(
-                        dimmingVisualEffect: .systemThickMaterialDark,
-                        prefersScalePresentingView: false
-                    ),
+        }
+        .presentation(
+            $coordinator.presentedFullScreen,
+            transition: .zoomIfAvailable(
+                .init(
+                    dimmingVisualEffect: .systemThickMaterialDark,
+                    prefersScalePresentingView: false
+                ),
+                options: .init(
+                    isInteractive: isPresentationInteractive,
+                    modalPresentationCapturesStatusBarAppearance: true,
+                    preferredPresentationSafeAreaInsets: .zero,
+                ),
+                otherwise: .slide(
+                    .init(edge: .bottom),
                     options: .init(
                         isInteractive: isPresentationInteractive,
-                        preferredPresentationSafeAreaInsets: .zero,
-                    ),
-                    otherwise: .slide(.init(edge: .bottom), options: .init(isInteractive: isPresentationInteractive))
+                        modalPresentationCapturesStatusBarAppearance: true
+                    )
                 )
-            ) { presentedRouteBinding, _ in
-                let vc = UIPreferencesHostingController {
-                    NavigationInjectionView(coordinator: presentedRouteBinding.wrappedValue.coordinator) {
-                        presentedRouteBinding.wrappedValue.route.destination
-                            .onPreferenceChange(PresentationControllerShouldDismissPreferenceKey.self) { newValue in
-                                isPresentationInteractive = newValue
-                            }
-                    }
+            )
+        ) { presentedRouteBinding in
+            PreferencesView {
+                NavigationInjectionView(coordinator: presentedRouteBinding.wrappedValue.coordinator) {
+                    presentedRouteBinding.wrappedValue
+                        .route
+                        .destination
+                        .removingViewContext(.isTabRoot)
+                        .onPreferenceChange(PresentationControllerShouldDismissPreferenceKey.self) { newValue in
+                            isPresentationInteractive = newValue
+                        }
                 }
-
-                vc.view.backgroundColor = .black
-
-                return vc
             }
+            .background(.black)
+        }
         #endif
     }
 }

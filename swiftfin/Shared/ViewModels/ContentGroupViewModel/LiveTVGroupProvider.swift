@@ -10,17 +10,23 @@ import JellyfinAPI
 
 struct LiveTVGroupProvider: ContentGroupProvider {
 
-    // TODO: Add Guides
     private enum LiveTVPill: Displayable, SystemImageable {
+
         case channels
+        case guide
         case recordings
+        case schedule
 
         var displayTitle: String {
             switch self {
             case .channels:
                 L10n.channels
+            case .guide:
+                L10n.guide
             case .recordings:
                 L10n.recordings
+            case .schedule:
+                L10n.schedule
             }
         }
 
@@ -28,8 +34,12 @@ struct LiveTVGroupProvider: ContentGroupProvider {
             switch self {
             case .channels:
                 "play.square.stack"
+            case .guide:
+                "tablecells"
             case .recordings:
                 "record.circle"
+            case .schedule:
+                "calendar.badge.clock"
             }
         }
     }
@@ -38,11 +48,10 @@ struct LiveTVGroupProvider: ContentGroupProvider {
     let displayTitle: String = L10n.liveTV
 
     func makeGroups(environment: Empty) async throws -> [any ContentGroup] {
-
         PillGroup(
             displayTitle: "",
             id: "live-tv-channels",
-            elements: [LiveTVPill.channels, .recordings]
+            elements: [LiveTVPill.channels, .guide, .recordings, .schedule]
         ) { router, pill in
             switch pill {
             case .channels:
@@ -54,9 +63,18 @@ struct LiveTVGroupProvider: ContentGroupProvider {
                         )
                     )
                 )
+
+            case .guide:
+                router.route(to: .liveGuide)
+
             case .recordings:
                 router.route(
                     to: .library(library: RecordingsLibrary())
+                )
+
+            case .schedule:
+                router.route(
+                    to: .library(library: ScheduledRecordingsLibrary())
                 )
             }
         }

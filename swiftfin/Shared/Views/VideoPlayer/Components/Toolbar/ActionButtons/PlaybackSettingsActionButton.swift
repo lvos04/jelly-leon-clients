@@ -10,49 +10,34 @@ import JellyfinAPI
 import SwiftUI
 
 // TODO: compatibility picker
-// TODO: don't present for offline/live items
-//       - value on media player item
 
 extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
 
     struct PlaybackSettings: View {
 
-        @EnvironmentObject
-        private var manager: MediaPlayerManager
+        @Environment(MediaSession.self)
+        private var mediaSession
 
-        private func makeProvider(for mediaSource: MediaSourceInfo, playbackItem: MediaPlayerItem) -> MediaPlayerItemProvider {
-            var adjustedBaseItem = playbackItem.baseItem
-            adjustedBaseItem.userData?.playbackPositionTicks = manager.seconds.ticks
-            let requestedBitrate = playbackItem.requestedBitrate
+        static func isAvailable(for item: MediaPlayerItem?) -> Bool {
+            guard let item else { return false }
 
-            return MediaPlayerItemProvider(item: adjustedBaseItem, mediaSource: mediaSource) { baseItem, modifyItem in
-                try await MediaPlayerItem.build(
-                    for: baseItem,
-                    mediaSource: mediaSource,
-                    requestedBitrate: requestedBitrate,
-                    modifyItem: modifyItem
-                )
-            }
+            return item.baseItem.mediaType == .video
+                || (item.baseItem.mediaSources?.count ?? 0) > 1
+                || item.mediaSource.supportedBitrates.isNotEmpty
         }
 
+        @ContentBuilder
         var body: some View {
-            if let playbackItem = manager.playbackItem {
+            if let playbackItem = mediaSession.playbackItem {
                 let bitrates = playbackItem.mediaSource.supportedBitrates
                 let versions = playbackItem.baseItem.mediaSources ?? []
                 let hasVersionSection = versions.count > 1
                 let hasBitrateSection = bitrates.isNotEmpty
-                let hasMultipleSections = hasVersionSection && hasBitrateSection
-                let menuTitle: String = {
-                    if hasMultipleSections {
-                        VideoPlayerActionButton.playbackSettings.displayTitle
-                    } else if hasVersionSection {
-                        L10n.version
-                    } else {
-                        L10n.playbackQuality
-                    }
-                }()
 
-                Menu {
+                Menu(
+                    VideoPlayerActionButton.playbackSettings.displayTitle,
+                    systemImage: VideoPlayerActionButton.playbackSettings.systemImage
+                ) {
                     if hasVersionSection {
                         Picker(
                             selection: Binding(
@@ -63,11 +48,13 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                                           let newSource = versions.first(where: { $0.id == newID })
                                     else { return }
 
-                                    manager.playNewItem(provider: makeProvider(for: newSource, playbackItem: playbackItem))
+                                    var intent = playbackItem.resumingIntent(at: mediaSession.seconds)
+                                    intent.configuration.selectMediaSource(id: newSource.id)
+                                    mediaSession.playNewItem(intent: intent)
                                 }
                             )
                         ) {
-                            ForEach(versions, id: \.hashValue) { version in
+                            ForEach(versions) { version in
                                 Text(version.displayTitle)
                                     .tag(version.id)
                             }
@@ -75,18 +62,17 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                             Text(L10n.version)
                             Text(playbackItem.mediaSource.displayTitle)
                         }
-                        .if(hasMultipleSections) { picker in
-                            picker.pickerStyle(.menu)
-                        }
+                        .pickerStyle(.menu)
                     }
 
                     if hasBitrateSection {
                         Picker(
                             selection: Binding(
-                                get: { playbackItem.requestedBitrate },
+                                get: { playbackItem.configuration.requestedBitrate },
                                 set: { newBitrate in
-                                    guard newBitrate != playbackItem.requestedBitrate else { return }
-                                    manager.setBitrate(bitrate: newBitrate)
+                                    guard newBitrate != playbackItem.configuration.requestedBitrate else { return }
+
+                                    mediaSession.setBitrate(bitrate: newBitrate)
                                 }
                             )
                         ) {
@@ -96,20 +82,33 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                             }
                         } label: {
                             Text(L10n.playbackQuality)
-                            Text(playbackItem.requestedBitrate.displayTitle)
+                            Text(playbackItem.configuration.requestedBitrate.displayTitle)
                         }
-                        .if(hasMultipleSections) { picker in
-                            picker.pickerStyle(.menu)
-                        }
+                        .pickerStyle(.menu)
                     }
-                } label: {
-                    Label(
-                        menuTitle,
-                        systemImage: VideoPlayerActionButton.playbackSettings.systemImage
-                    )
+
+                    if playbackItem.baseItem.mediaType == .video {
+                        Picker(
+                            selection: Binding(
+                                get: { playbackItem.configuration.maxResolution },
+                                set: { newResolution in
+                                    guard newResolution != playbackItem.configuration.maxResolution else { return }
+
+                                    mediaSession.setResolution(resolution: newResolution)
+                                }
+                            )
+                        ) {
+                            ForEach(PlaybackResolution.allCases, id: \.rawValue) { resolution in
+                                Text(resolution.displayTitle)
+                                    .tag(resolution)
+                            }
+                        } label: {
+                            Text(L10n.resolution)
+                            Text(playbackItem.configuration.maxResolution.displayTitle)
+                        }
+                        .pickerStyle(.menu)
+                    }
                 }
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(.primary, .secondary)
             }
         }
     }

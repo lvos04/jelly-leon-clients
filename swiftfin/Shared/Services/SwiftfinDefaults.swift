@@ -30,11 +30,16 @@ extension UserDefaults {
     // MARK: User
 
     static var currentUserSuite: UserDefaults {
+        userSuite(id: currentUserSuiteName)
+    }
+
+    fileprivate static var currentUserSuiteName: String {
         switch Defaults[.lastSignedInUserID] {
         case .signedOut:
-            userSuite(id: "default")
+            "default"
+
         case let .signedIn(userID):
-            userSuite(id: userID)
+            userID
         }
     }
 
@@ -45,6 +50,8 @@ extension UserDefaults {
 
 private extension Defaults.Keys {
 
+    static let userKeys = DefaultsKeyCache()
+
     static func AppKey<Value: Defaults.Serializable>(_ name: String) -> Key<Value?> {
         Key(name, suite: .appSuite)
     }
@@ -54,7 +61,7 @@ private extension Defaults.Keys {
     }
 
     static func UserKey<Value: Defaults.Serializable>(_ name: String, default: Value) -> Key<Value> {
-        Key(name, default: `default`, suite: .currentUserSuite)
+        userKeys.key(name, default: `default`, suiteName: UserDefaults.currentUserSuiteName)
     }
 }
 
@@ -62,20 +69,7 @@ private extension Defaults.Keys {
 
 extension Defaults.Keys {
 
-    /// The _real_ accent color key to be used.
-    ///
-    /// This is set externally whenever the app or user accent colors change,
-    /// depending on the current app state.
-    static var accentColor: Key<Color> = AppKey("accentColor", default: .jellyfinPurple)
-
-    /// The _real_ appearance key to be used.
-    ///
-    /// This is set externally whenever the app or user appearances change,
-    /// depending on the current app state.
-    static let appearance: Key<AppAppearance> = AppKey("appearance", default: .system)
-
     /// The appearance default for non-user contexts.
-    /// /// Only use for `set`, use `appearance` for `get`.
     static let appAppearance: Key<AppAppearance> = AppKey("appAppearance", default: .system)
 
     static let backgroundSignOutInterval: Key<TimeInterval> = AppKey("backgroundSignOutInterval", default: 3600)
@@ -97,22 +91,34 @@ extension Defaults.Keys {
 
 extension Defaults.Keys {
 
-    /// The accent color default for user contexts.
-    /// Only use for `set`, use `accentColor` for `get`.
-    static var userAccentColor: Key<Color> {
-        UserKey("userAccentColor", default: .jellyfinPurple)
+    /// The saved accent color for a specific user.
+    static func userAccentColor(userID: String) -> Key<Color> {
+        userKeys.key("userAccentColor", default: .jellyfinPurple, suiteName: userID)
     }
 
-    /// The appearance default for user contexts.
-    /// /// Only use for `set`, use `appearance` for `get`.
-    static var userAppearance: Key<AppAppearance> {
-        UserKey("userAppearance", default: .system)
+    /// The saved appearance for a specific user.
+    static func userAppearance(userID: String) -> Key<AppAppearance> {
+        userKeys.key("userAppearance", default: .system, suiteName: userID)
     }
 
     enum Customization {
 
         static var itemViewType: Key<ItemViewType> {
             UserKey("mediaItemViewType", default: .enhanced)
+        }
+
+        static var itemBarActionButtons: Key<[ItemActionButton]> {
+            UserKey(
+                "itemBarActionButtons",
+                default: ItemActionButton.defaultBarActionButtons
+            )
+        }
+
+        static var itemMenuActionButtons: Key<[ItemActionButton]> {
+            UserKey(
+                "itemMenuActionButtons",
+                default: ItemActionButton.defaultMenuActionButtons
+            )
         }
 
         static var nextUpPosterType: Key<PosterDisplayType> {
@@ -148,21 +154,14 @@ extension Defaults.Keys {
             UserKey("searchPosterType", default: .portrait)
         }
 
-        enum Episodes {
-
-            static var useSeriesLandscapeBackdrop: Key<Bool> {
-                UserKey("useSeriesBackdrop", default: true)
-            }
+        static var tabBarPlacement: Key<TabBarPlacement> {
+            UserKey("tabBarPlacement", default: .sidebar)
         }
 
-        enum Indicators {
+        enum Poster {
 
-            static var enabled: Key<PosterIndicator> {
-                UserKey("enabledPosterIndicators", default: .all)
-            }
-
-            static var unplayedStyle: Key<UnplayedIndicatorType> {
-                UserKey("unplayedIndicatorStyle", default: .indicator)
+            static var configuration: Key<PosterConfiguration> {
+                UserKey("posterConfiguration", default: .default)
             }
         }
 
@@ -206,12 +205,13 @@ extension Defaults.Keys {
                 UserKey("libraryRememberLayout", default: false)
             }
 
-            static var rememberSort: Key<Bool> {
-                UserKey("libraryRememberSort", default: false)
+            static var rememberFilters: Key<Bool> {
+                UserKey("libraryRememberFilters", default: false)
             }
         }
 
         enum Home {
+
             static var showRecentlyAdded: Key<Bool> {
                 UserKey("showRecentlyAdded", default: true)
             }
@@ -245,14 +245,6 @@ extension Defaults.Keys {
 
     enum VideoPlayer {
 
-        static var appMaximumBitrate: Key<PlaybackBitrate> {
-            UserKey("appMaximumBitrate", default: .max)
-        }
-
-        static var appMaximumBitrateTest: Key<PlaybackBitrateTestSize> {
-            UserKey("appMaximumBitrateTest", default: .regular)
-        }
-
         static var autoPlayEnabled: Key<Bool> {
             UserKey("autoPlayEnabled", default: true)
         }
@@ -283,15 +275,15 @@ extension Defaults.Keys {
             UserKey("resumeOffset", default: 0)
         }
 
-        static var supplements: Key<[VideoPlayerSupplement]> {
+        static var supplements: Key<[VideoPlayerSupplementType]> {
             UserKey(
                 "videoPlayerSupplements",
-                default: VideoPlayerSupplement.supportedCases
+                default: VideoPlayerSupplementType.supportedCases
             )
         }
 
-        static var videoPlayerType: Key<VideoPlayerType> {
-            UserKey("videoPlayerType", default: .swiftfin)
+        static var mediaPlayerType: Key<MediaPlayerType> {
+            UserKey("videoPlayerType", default: .mpv)
         }
 
         enum Gesture {
@@ -342,13 +334,14 @@ extension Defaults.Keys {
                 UserKey("chapterSlider", default: true)
             }
 
-            // Timestamp
+            /// Timestamp
             static var trailingTimestampType: Key<TrailingTimestampType> {
                 UserKey("trailingTimestamp", default: .timeLeft)
             }
         }
 
         enum Playback {
+
             static var appMaximumResolution: Key<PlaybackResolution> {
                 UserKey("appMaximumResolution", default: .max)
             }
@@ -369,38 +362,48 @@ extension Defaults.Keys {
                 UserKey("customDeviceProfileAction", default: .add)
             }
 
-            static var rates: Key<[Float]> {
+            static var rates: Key<[Double]> {
                 UserKey("videoPlayerPlaybackRates", default: [0.5, 1.0, 1.25, 1.5, 2.0])
             }
 
-            static var playbackRate: Key<Float> {
-                UserKey("playbackRate", default: Float(1.0))
-            }
-        }
-
-        enum Subtitle {
-
-            static var configuration: Key<SubtitleConfiguration> {
-                UserKey("subtitleConfiguration", default: .default)
+            static var playbackRate: Key<Double> {
+                UserKey("playbackRate", default: 1.0)
             }
         }
 
         enum Transition {
+
+            static var automaticPictureInPicture: Key<Bool> {
+                UserKey("automaticPictureInPicture", default: false)
+            }
+
             static var pauseOnBackground: Key<Bool> {
                 UserKey("playInBackground", default: true)
             }
         }
     }
 
-    // Experimental settings
+    /// Experimental settings
     enum Experimental {
 
+        // TODO: don't use L10n key as key, just used to not
+        // lose translations
         static var downloads: Key<Bool> {
-            UserKey("experimentalDownloads", default: false)
+            UserKey(L10n.download, default: false)
         }
 
         static var serverConnectionAutoSwitch: Key<Bool> {
             UserKey("experimentalServerConnectionAutoSwitch", default: false)
+        }
+
+        #if os(iOS)
+        static var chromecast: Key<Bool> {
+            UserKey("experimentalChromecast", default: false)
+        }
+        #endif
+
+        static var videoPlayerEPG: Key<Bool> {
+            UserKey("experimentalVideoPlayerEPG", default: false)
         }
     }
 

@@ -9,20 +9,12 @@
 import CollectionHStack
 import SwiftUI
 
-enum PosterHStackMetrics {
-
-    static let itemSpacing: CGFloat = {
-        #if os(tvOS)
-        40
-        #else
-        EdgeInsets.edgePadding / 2
-        #endif
-    }()
-}
-
 struct PosterHStack<
     Data: Collection
 >: View where Data.Element: Poster, Data.Index == Int {
+
+    @AdaptiveLayout
+    private var viewLayout
 
     let elements: Data
     let displayType: PosterDisplayType
@@ -37,57 +29,15 @@ struct PosterHStack<
             columnTrailingInset: 0
         )
         #else
-        if UIDevice.isPad {
-            let minWidth: CGFloat = {
-                switch (displayType, size) {
-                case (.landscape, .small):
-                    220
-                case (.landscape, .medium):
-                    300
-                case (_, .small):
-                    140
-//                case (_, .medium):
-                default:
-                    200
-                }
-            }()
-
-            return .minimumWidth(
-                columnWidth: minWidth,
-                rows: 1
-            )
-        } else {
-            let columnCount: CGFloat = {
-                switch (displayType, size) {
-                case (.landscape, .small):
-                    2
-                case (.landscape, .medium):
-                    1.5
-                case (_, .small):
-                    3
-//                case (_, .medium):
-                default:
-                    2
-                }
-            }()
-
-            return .grid(
-                columns: columnCount,
-                rows: 1,
-                columnTrailingInset: 0
-            )
-        }
+        .minimumWidth(
+            columnWidth: viewLayout.posterMinimumWidth(for: displayType, size: size),
+            rows: 1,
+            columnFraction: 0.5
+        )
         #endif
     }
 
-    private var horizontalInset: CGFloat {
-        #if os(tvOS)
-        60
-        #else
-        EdgeInsets.edgePadding
-        #endif
-    }
-
+    @ContentBuilder
     var body: some View {
         CollectionHStack(
             uniqueElements: elements,
@@ -102,9 +52,10 @@ struct PosterHStack<
             }
         }
         .clipsToBounds(false)
-        .insets(horizontal: horizontalInset)
-        .itemSpacing(PosterHStackMetrics.itemSpacing)
+        .insets(horizontal: viewLayout.edgePadding)
+        .itemSpacing(viewLayout.itemSpacing)
         .scrollBehavior(.continuousLeadingEdge)
+        .contentInsetAdjustmentBehavior(.never)
         .withViewContext(.isThumb)
     }
 }

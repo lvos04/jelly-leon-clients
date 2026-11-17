@@ -25,89 +25,83 @@ protocol Poster: Displayable, Hashable, Identifiable, SystemImageable {
     /// Optional subtitle when used as a poster
     var subtitle: String? { get }
 
+    func posterAccessibility(configuration: PosterConfiguration) -> PosterAccessibility
+
     func resolveEnvironment(_ environment: EnvironmentValues) -> Environment
-
-    @ImageSourceBuilder
-    func portraitImageSources(
-        environment: Environment
-    ) -> [ImageSource]
-
-    @ImageSourceBuilder
-    func landscapeImageSources(
-        environment: Environment
-    ) -> [ImageSource]
-
-    @ImageSourceBuilder
-    func squareImageSources(
-        environment: Environment
-    ) -> [ImageSource]
 
     @ImageSourceBuilder
     func imageSources(
         for displayType: PosterDisplayType,
-        size: PosterDisplayType.Size,
         environment: Environment
     ) -> [ImageSource]
 
     @MainActor
-    @ViewBuilder
+    @ContentBuilder
     func transform(image: Image, displayType: PosterDisplayType) -> ImageBody
 
     @MainActor
-    @ViewBuilder
+    @ContentBuilder
     var posterLabel: LabelBody { get }
 
     @MainActor
-    @ViewBuilder
+    @ContentBuilder
     var posterContextMenu: ContextMenuBody { get }
 
     @MainActor
-    @ViewBuilder
+    @ContentBuilder
     func posterOverlay(for displayType: PosterDisplayType) -> OverlayBody
 }
 
+@MainActor
 extension Poster where ImageBody == Image {
 
-    @MainActor
     func transform(image: Image) -> Image {
         image
     }
 
-    @MainActor
-    @ViewBuilder
     func transform(image: Image, displayType: PosterDisplayType) -> ImageBody {
         image
     }
 }
 
+@MainActor
 extension Poster where LabelBody == EmptyView {
 
-    @MainActor
-    @ViewBuilder
     var posterLabel: LabelBody {
         EmptyView()
     }
 }
 
+@MainActor
 extension Poster where ContextMenuBody == EmptyView {
 
-    @MainActor
-    @ViewBuilder
     var posterContextMenu: ContextMenuBody {
         EmptyView()
     }
 }
 
+@MainActor
 extension Poster where OverlayBody == EmptyView {
 
-    @MainActor
-    @ViewBuilder
     func posterOverlay(for displayType: PosterDisplayType) -> OverlayBody {
         EmptyView()
     }
 }
 
 extension Poster {
+
+    func posterAccessibility(configuration: PosterConfiguration) -> PosterAccessibility {
+        PosterAccessibility(label: PosterAccessibility.joined([displayTitle, subtitle]))
+    }
+
+    func posterDisplayType(for style: UserInterfaceSizeClass) -> PosterDisplayType {
+        switch style {
+        case .compact:
+            preferredPosterDisplayType == .square ? .square : .portrait
+        default:
+            preferredPosterDisplayType
+        }
+    }
 
     var subtitle: String? {
         nil
@@ -117,28 +111,10 @@ extension Poster {
         .default
     }
 
-    func portraitImageSources(
-        environment: Environment
-    ) -> [ImageSource] {
-        []
-    }
-
-    func landscapeImageSources(
-        environment: Environment
-    ) -> [ImageSource] {
-        []
-    }
-
-    func squareImageSources(
-        environment: Environment
-    ) -> [ImageSource] {
-        []
-    }
-
     func imageSources(
         for displayType: PosterDisplayType,
         size: PosterDisplayType.Size,
-        environment: Environment
+        environment: Environment = .default
     ) -> [ImageSource] {
         var environment = environment
 
@@ -148,45 +124,29 @@ extension Poster {
             environment = imageSourceEnvironment as! Environment
         }
 
-        return switch displayType {
-        case .landscape:
-            landscapeImageSources(
-                environment: environment
-            )
-        case .portrait:
-            portraitImageSources(
-                environment: environment
-            )
-        case .square:
-            squareImageSources(
-                environment: environment
-            )
-        }
-    }
-
-    func imageSources(
-        for displayType: PosterDisplayType,
-        size: PosterDisplayType.Size
-    ) -> [ImageSource] {
-        imageSources(
-            for: displayType,
-            size: size,
-            environment: .default
-        )
-    }
-
-    func _withLandscapeImages(_ imageSources: @escaping (AnyPoster.Environment) -> [ImageSource]) -> AnyPoster {
-        .init(self, _withLandscapeImages: imageSources)
+        return imageSources(for: displayType, environment: environment)
     }
 }
 
+@MainActor
 extension View {
 
-    @MainActor
-    @ViewBuilder
+    @ContentBuilder
     func posterContextMenu<Item: Poster>(
         for item: Item,
-        @ViewBuilder preview: @escaping () -> some View
+        @ContentBuilder preview: @escaping (CGSize) -> some View
+    ) -> some View {
+        if Item.ContextMenuBody.self == EmptyView.self {
+            self
+        } else {
+            modifier(SizedPosterContextMenuModifier(item: item, preview: preview))
+        }
+    }
+
+    @ContentBuilder
+    func posterContextMenu<Item: Poster>(
+        for item: Item,
+        @ContentBuilder preview: @escaping () -> some View
     ) -> some View {
         if Item.ContextMenuBody.self == EmptyView.self {
             self
@@ -197,5 +157,23 @@ extension View {
                 preview()
             }
         }
+    }
+}
+
+private struct SizedPosterContextMenuModifier<Item: Poster, Preview: View>: ViewModifier {
+
+    @State
+    private var size: CGSize = .zero
+
+    let item: Item
+    let preview: (CGSize) -> Preview
+
+    @ContentBuilder
+    func body(content: Content) -> some View {
+        content
+            .trackingSize($size)
+            .posterContextMenu(for: item) {
+                preview(size)
+            }
     }
 }

@@ -9,7 +9,7 @@
 import JellyfinAPI
 import SwiftUI
 
-struct MediaSourceInfoView: PlatformView {
+struct MediaSourceInfoView: PresentationView {
 
     @FocusState
     private var focusedStream: MediaStream?
@@ -22,7 +22,7 @@ struct MediaSourceInfoView: PlatformView {
 
     let source: MediaSourceInfo
 
-    @ViewBuilder
+    @ContentBuilder
     private func streamRow(_ stream: MediaStream) -> some View {
         ChevronButton(stream.displayTitle ?? .emptyDash) {
             router.route(to: .mediaStreamInfo(mediaStream: stream))
@@ -35,12 +35,11 @@ struct MediaSourceInfoView: PlatformView {
         }
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private var contentView: some View {
         Form {
             if let videoStreams = source.videoStreams,
-               videoStreams.isNotEmpty
-            {
+               videoStreams.isNotEmpty {
                 Section(L10n.video) {
                     ForEach(videoStreams, id: \.self) { stream in
                         streamRow(stream)
@@ -49,8 +48,7 @@ struct MediaSourceInfoView: PlatformView {
             }
 
             if let audioStreams = source.audioStreams,
-               audioStreams.isNotEmpty
-            {
+               audioStreams.isNotEmpty {
                 Section(L10n.audio) {
                     ForEach(audioStreams, id: \.self) { stream in
                         streamRow(stream)
@@ -59,8 +57,7 @@ struct MediaSourceInfoView: PlatformView {
             }
 
             if let subtitleStreams = source.subtitleStreams,
-               subtitleStreams.isNotEmpty
-            {
+               subtitleStreams.isNotEmpty {
                 Section(L10n.subtitle) {
                     ForEach(subtitleStreams, id: \.self) { stream in
                         streamRow(stream)
@@ -70,21 +67,23 @@ struct MediaSourceInfoView: PlatformView {
         }
     }
 
-    var iOSView: some View {
+    @ContentBuilder
+    var standardView: some View {
         contentView
             .navigationTitle(source.displayTitle)
             .toolbarTitleDisplayMode(.inline)
             .navigationBarCloseButton {
                 router.dismiss()
             }
-        #if os(iOS)
+            #if os(iOS)
             .topBarTrailing {
                 source.shareLink
             }
-        #endif
+            #endif
     }
 
-    var tvOSView: some View {
+    @ContentBuilder
+    var largeView: some View {
         HStack {
             contentView
 

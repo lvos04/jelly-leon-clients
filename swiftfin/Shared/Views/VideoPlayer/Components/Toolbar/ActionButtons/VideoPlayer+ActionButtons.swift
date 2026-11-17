@@ -15,15 +15,25 @@ extension VideoPlayer.PlaybackControls.Toolbar {
 
     struct ActionButtons: View {
 
+        typealias ViewState = VideoPlayer.ViewState
+
+        @AdaptiveLayout
+        private var viewLayout
+
         @Default(.VideoPlayer.barActionButtons)
         private var rawBarActionButtons
         @Default(.VideoPlayer.menuActionButtons)
         private var rawMenuActionButtons
 
-        @EnvironmentObject
-        private var containerState: VideoPlayerContainerState
-        @EnvironmentObject
-        private var manager: MediaPlayerManager
+        @Environment(ViewState.self)
+        private var viewState
+        @Environment(MediaSession.self)
+        private var mediaSession
+
+        #if os(iOS)
+        @Default(.Experimental.chromecast)
+        private var isChromecastEnabled
+        #endif
 
         @FocusState
         private var focusedButton: String?
@@ -31,26 +41,54 @@ extension VideoPlayer.PlaybackControls.Toolbar {
         private func resolvedActionButtons(_ rawButtons: [VideoPlayerActionButton]) -> [VideoPlayerActionButton] {
             var filteredButtons = rawButtons
 
-            if manager.playbackItem?.audioStreams.isEmpty == true {
-                filteredButtons.removeAll { $0 == .audio }
+            #if os(iOS)
+            if !isChromecastEnabled {
+                filteredButtons.removeAll(equalTo: .playbackDestination)
+            }
+            #elseif os(tvOS)
+            filteredButtons.removeAll(equalTo: .pictureInPicture)
+            #endif
+            if mediaSession.isRemotePlayback {
+                filteredButtons.removeAll { $0 == .aspectFill || $0 == .pictureInPicture }
             }
 
-            if manager.playbackItem?.subtitleStreams.isEmpty == true {
-                filteredButtons.removeAll { $0 == .subtitles }
+            if mediaSession.playbackItem?.audioStreams.isEmpty == true {
+                filteredButtons.removeAll { $0 == .audio || $0 == .audioOffset }
             }
 
-            if manager.queue == nil {
+            if mediaSession.playbackItem?.subtitleStreams.isEmpty == true {
+                filteredButtons.removeAll { $0 == .subtitles || $0 == .subtitleOffset }
+            }
+
+            if mediaSession.playbackItem == nil || !(mediaSession.player is MediaPlayerOffsetProviding) {
+                filteredButtons.removeAll { $0 == .audioOffset || $0 == .subtitleOffset }
+            }
+
+            if !PlaybackSettings.isAvailable(for: mediaSession.playbackItem) {
+                filteredButtons.removeAll(equalTo: .playbackSettings)
+            }
+
+            if mediaSession.queue == nil {
                 filteredButtons.removeAll { $0 == .autoPlay }
                 filteredButtons.removeAll { $0 == .playNextItem }
                 filteredButtons.removeAll { $0 == .playPreviousItem }
             }
 
-            if manager.item.isLiveStream {
-                filteredButtons.removeAll { $0 == .audio }
+            let chapterCount = viewState.supplements
+                .compactMap { $0 as? MediaChaptersSupplement }
+                .first?
+                .chapters
+                .count ?? 0
+
+            if chapterCount < 2 {
+                filteredButtons.removeAll { $0 == .nextChapter }
+                filteredButtons.removeAll { $0 == .previousChapter }
+            }
+
+            if mediaSession.item.isLiveStream {
                 filteredButtons.removeAll { $0 == .autoPlay }
                 filteredButtons.removeAll { $0 == .playbackSpeed }
                 filteredButtons.removeAll { $0 == .playbackSettings }
-                filteredButtons.removeAll { $0 == .subtitles }
             }
 
             return filteredButtons
@@ -65,43 +103,31 @@ extension VideoPlayer.PlaybackControls.Toolbar {
         }
 
         private var menuSystemImage: String {
-            if UIDevice.isTV || UIDevice.supportsLiquidGlass {
+            if viewLayout.isLarge || UIDevice.supportsLiquidGlass {
                 "ellipsis"
             } else {
                 "ellipsis.circle"
             }
         }
 
-        private var buttonSize: CGFloat {
-            VideoPlayer.PlaybackControls.Toolbar.buttonSize
-        }
-
+        @ContentBuilder
         private var menuLabel: some View {
             Label(L10n.menu, systemImage: menuSystemImage)
         }
 
-        private func isMenuButton(_ button: VideoPlayerActionButton) -> Bool {
-            switch button {
-            case .audio, .playbackSpeed, .playbackSettings, .subtitles:
-                true
-            default:
-                false
-            }
-        }
-
-        @ViewBuilder
+        @ContentBuilder
         private func view(for button: VideoPlayerActionButton) -> some View {
             switch button {
             case .aspectFill:
                 AspectFill()
             case .audio:
                 Audio()
+            case .audioOffset:
+                AudioOffset()
             case .autoPlay:
                 AutoPlay()
-            #if os(iOS)
-            case .gestureLock:
-                GestureLock()
-            #endif
+            case .pictureInPicture:
+                PictureInPicture()
             case .playbackSpeed:
                 PlaybackRateMenu()
             case .playbackSettings:
@@ -110,51 +136,56 @@ extension VideoPlayer.PlaybackControls.Toolbar {
                 PlayNextItem()
             case .playPreviousItem:
                 PlayPreviousItem()
+            case .nextChapter:
+                NextChapter()
+            case .previousChapter:
+                PreviousChapter()
             case .subtitles:
                 Subtitles()
+            #if os(iOS)
+            case .gestureLock:
+                GestureLock()
+            case .playbackDestination:
+                PlaybackDestination()
+            #endif
+            case .subtitleOffset:
+                SubtitleOffset()
             }
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var compactView: some View {
+            let barButtons = barActionButtons
+            let menuButtons = menuActionButtons.subtracting(barActionButtons)
+
             Menu {
                 ForEach(
-                    barActionButtons,
+                    barButtons,
                     content: view(for:)
                 )
 
-                Divider()
+                if barButtons.isNotEmpty, menuButtons.isNotEmpty {
+                    Divider()
+                }
 
                 ForEach(
-                    menuActionButtons,
+                    menuButtons,
                     content: view(for:)
                 )
             } label: {
                 menuLabel
             }
-            .frame(width: buttonSize, height: buttonSize)
-            .if(UIDevice.supportsLiquidGlass) { menu in
-                menu
-                    .backport
-                    .glassEffect(in: .circle)
-            }
-            .symbolRenderingMode(.monochrome)
-            .foregroundStyle(.primary, .secondary)
+            .frame(width: viewLayout.toolbarButtonSize, height: viewLayout.toolbarButtonSize)
             .withViewContext(.isInMenu)
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var regularView: some View {
-            HStack(spacing: VideoPlayer.PlaybackControls.Toolbar.buttonSpacing) {
+            HStack(spacing: viewLayout.toolbarButtonSpacing) {
                 ForEach(barActionButtons) { button in
                     view(for: button)
-                        .frame(width: buttonSize, height: buttonSize)
-                        .if(UIDevice.supportsLiquidGlass && isMenuButton(button)) { menu in
-                            menu
-                                .backport
-                                .glassEffect(in: .circle)
-                        }
-                        .focused($focusedButton, equals: button.rawValue)
+                        .frame(width: viewLayout.toolbarButtonSize, height: viewLayout.toolbarButtonSize)
+                        .coordinatedFocus(ViewState.Focus.action(button.rawValue), selection: $focusedButton)
                 }
 
                 if menuActionButtons.isNotEmpty {
@@ -167,31 +198,28 @@ extension VideoPlayer.PlaybackControls.Toolbar {
                     } label: {
                         menuLabel
                     }
-                    .frame(width: buttonSize, height: buttonSize)
-                    .if(UIDevice.supportsLiquidGlass) { menu in
-                        menu
-                            .backport
-                            .glassEffect(in: .circle)
-                    }
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(.primary, .secondary)
-                    .focused($focusedButton, equals: "menu")
+                    .frame(width: viewLayout.toolbarButtonSize, height: viewLayout.toolbarButtonSize)
+                    .coordinatedFocus(ViewState.Focus.action("menu"), selection: $focusedButton)
                 }
             }
             .defaultFocus(
                 $focusedButton,
-                barActionButtons.first?.rawValue ?? "menu",
+                ViewState.Focus.action(barActionButtons.first?.rawValue ?? "menu"),
                 priority: .userInitiated
             )
             .focusSection()
         }
 
+        @ContentBuilder
         var body: some View {
-            if containerState.isCompact {
-                compactView
-            } else {
-                regularView
+            Group {
+                if viewState.isCompact {
+                    compactView
+                } else {
+                    regularView
+                }
             }
+            .modifier(VideoPlayer.PlaybackControls.OverlayBarButtonStyleModifier())
         }
     }
 }

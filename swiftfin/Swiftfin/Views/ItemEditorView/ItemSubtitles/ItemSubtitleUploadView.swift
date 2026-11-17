@@ -6,15 +6,14 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import JellyfinAPI
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct ItemSubtitleUploadView: View {
 
-    @Default(.accentColor)
-    private var accentColor
+    @AppTheme
+    private var theme
 
     @ObservedObject
     var viewModel: ItemSubtitlesViewModel
@@ -29,6 +28,7 @@ struct ItemSubtitleUploadView: View {
     @State
     private var selectedFile: URL?
 
+    @ContentBuilder
     var body: some View {
         Form {
             Section(L10n.options) {
@@ -57,16 +57,16 @@ struct ItemSubtitleUploadView: View {
                     .fontWeight(.semibold)
                     .backport
                     .buttonStyle(.glassProminent.shadow(false))
-                    .tint(accentColor)
+                    .tint(theme.accentColor)
                     #if os(iOS)
-                        .controlSize(.large)
+                    .controlSize(.large)
                     #endif
-                        .fileImporter(
-                            isPresented: isPresentingFileUpload,
-                            allowedContentTypes: SubtitleFormat.allCases.filter(\.isText).compactMap(\.utType)
-                        ) { result in
-                            selectedFile = try? result.get()
-                        }
+                    .fileImporter(
+                        isPresented: isPresentingFileUpload,
+                        allowedContentTypes: SubtitleFormat.allCases.filter(\.isText).compactMap(\.utType)
+                    ) { result in
+                        selectedFile = try? result.get()
+                    }
                 }
             }
         }
@@ -90,6 +90,7 @@ struct ItemSubtitleUploadView: View {
             } else {
                 let saveAction: () -> Void = {
                     guard let selectedFile else { return }
+
                     viewModel.upload(
                         file: selectedFile,
                         isForced: isForced,

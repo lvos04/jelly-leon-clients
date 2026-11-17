@@ -35,11 +35,10 @@ struct GestureSettingsView: View {
     @Default(.VideoPlayer.Gesture.verticalPanRightAction)
     private var verticalPanRightAction
 
+    @ContentBuilder
     var body: some View {
         Form {
-
             Section {
-
                 // TODO: make toggle sections
 
                 Picker(L10n.horizontalPan, selection: $horizontalPanAction)
@@ -51,7 +50,21 @@ struct GestureSettingsView: View {
                 Picker(L10n.longPress, selection: $longPressGesture)
 
                 if longPressGesture == .playbackSpeed {
-                    PlaybackSpeedPicker(title: L10n.playbackSpeed, selection: $longPressSpeedMultiplier)
+                    CustomAlertPicker(
+                        title: L10n.playbackSpeed,
+                        selection: $longPressSpeedMultiplier,
+                        customTitle: L10n.playbackSpeed,
+                        customDescription: L10n.customPlaybackSpeedDescription
+                    ) { value in
+                        TextField(
+                            L10n.playbackSpeed,
+                            value: value
+                                .map(getter: { $0.rawValue }, setter: { PlaybackSpeed(rawValue: $0) })
+                                .clamp(min: 0.1, max: 10),
+                            format: .number
+                        )
+                        .keyboardType(.decimalPad)
+                    }
                 }
 
                 Picker(L10n.multiTap, selection: $multiTapGesture)

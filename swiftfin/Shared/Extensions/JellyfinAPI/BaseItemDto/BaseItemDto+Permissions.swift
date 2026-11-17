@@ -10,33 +10,33 @@ import FactoryKit
 import JellyfinAPI
 import SwiftUI
 
+@MainActor
 extension BaseItemDto {
 
     /// Indicates whether the item can be downloaded by the current user
     var canBeDownloaded: Bool {
-        guard let userPolicy = Container.shared.currentUserSession()?.user.data.policy else { return false }
+        guard let userPolicy = Container.shared.currentUserSession()?.userData.policy else { return false }
+
         return userPolicy.enableContentDownloading == true && canDownload == true
     }
 
     /// Indicates whether the item's metadata can be edited by the current user
     var canEditMetadata: Bool {
-        guard let userPolicy = Container.shared.currentUserSession()?.user.data.policy else { return false }
+        guard let userPolicy = Container.shared.currentUserSession()?.userData.policy else { return false }
 
         switch type {
         case .playlist:
             return canDelete == true
         case .boxSet:
-            return (userPolicy.enableCollectionManagement == true || userPolicy.isAdministrator == true)
-                && StoredValues[.User.enableCollectionManagement]
+            return userPolicy.enableCollectionManagement == true || userPolicy.isAdministrator == true
         default:
             return userPolicy.isAdministrator == true
-                && StoredValues[.User.enableItemEditing]
         }
     }
 
     /// Indicates whether the item's lyrics can be edited by the current user
     var canEditLyrics: Bool {
-        guard let userPolicy = Container.shared.currentUserSession()?.user.data.policy else { return false }
+        guard let userPolicy = Container.shared.currentUserSession()?.userData.policy else { return false }
 
         switch type {
         case .audio:
@@ -48,7 +48,7 @@ extension BaseItemDto {
 
     /// Indicates whether the item's subtitles can be edited by the current user
     var canEditSubtitles: Bool {
-        guard let userPolicy = Container.shared.currentUserSession()?.user.data.policy else { return false }
+        guard let userPolicy = Container.shared.currentUserSession()?.userData.policy else { return false }
 
         switch type {
         case .episode, .movie, .musicVideo, .trailer, .video:
@@ -56,24 +56,5 @@ extension BaseItemDto {
         default:
             return false
         }
-    }
-
-    /// Indicates whether the item can be deleted by the current user
-    var canDeleteItem: Bool {
-        switch type {
-        case .boxSet:
-            StoredValues[.User.enableCollectionManagement] && canDelete == true
-        default:
-            StoredValues[.User.enableItemDeletion] && canDelete == true
-        }
-    }
-
-    /// Indicates whether the Editor Menu should be shown for the item
-    var canEdit: Bool {
-        canEditMetadata
-            || canEditSubtitles
-        // TODO: Enable with Lyrics and/or Downloads
-        // || canEditLyrics
-        // || (!UIDevice.isTV && canBeDownloaded)
     }
 }
