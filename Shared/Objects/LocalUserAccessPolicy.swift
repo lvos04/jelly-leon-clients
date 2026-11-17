@@ -46,9 +46,8 @@ enum LocalUserAccessPolicy: String, CaseIterable, Codable, Displayable {
 
 protocol EvaluatedLocalUserAccessPolicy {}
 
-struct EmptyEvaluatedUserAccessPolicy: EvaluatedLocalUserAccessPolicy {}
-
 struct PinEvaluatedUserAccessPolicy: EvaluatedLocalUserAccessPolicy {
+
     let pin: String
     let pinHint: String?
 }

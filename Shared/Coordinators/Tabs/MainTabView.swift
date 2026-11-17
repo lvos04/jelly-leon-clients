@@ -6,12 +6,19 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import FactoryKit
 import JellyfinAPI
 import SwiftUI
+@_spi(Advanced) import SwiftUIIntrospect
 
 // TODO: fix weird tvOS icon rendering
 struct MainTabView: View {
+
+    #if os(tvOS)
+    @Default(.Customization.tabBarPlacement)
+    private var tabBarPlacement
+    #endif
 
     @InjectedObject(\.userSessionManager)
     private var userSessionManager
@@ -33,16 +40,19 @@ struct MainTabView: View {
         #else
         TabCoordinator {
             TabItem.contentGroup(provider: DefaultContentGroupProvider())
+
             TabItem.library(
                 title: L10n.tvShowsCapitalized,
                 systemName: "tv",
                 filters: .init(itemTypes: [.series])
             )
+
             TabItem.library(
                 title: L10n.movies,
                 systemName: "film",
                 filters: .init(itemTypes: [.movie])
             )
+
             TabItem.search
             TabItem.media
             TabItem.settings
@@ -59,28 +69,40 @@ struct MainTabView: View {
         }
     }
 
-    @ViewBuilder
-    private func tabContent() -> some View {
+    @ContentBuilder
+    private func tabRoot(_ tab: TabCoordinator.TabData) -> some View {
+        NavigationInjectionView(coordinator: tab.coordinator) {
+            tab.item
+                .content
+                .withViewContext(.isTabRoot)
+                #if os(iOS)
+                .if(tabCoordinator.tabs.first?.item.id == tab.item.id) { view in
+                    view.topBarTrailing {
+                        FirstTabSettingsBarButton()
+                    }
+                }
+                #endif
+        }
+        .environmentObject(tabCoordinator)
+        .environment(\.tabItemSelected, tab.publisher)
+    }
+
+    @ContentBuilder
+    private func tabView() -> some View {
         TabView(selection: $tabCoordinator.selectedTabID) {
             ForEach(tabCoordinator.tabs, id: \.item.id) { tab in
                 Tab(
                     value: tab.item.id,
                     role: tab.item.id == TabItem.search.id ? .search : nil
                 ) {
-                    NavigationInjectionView(
-                        coordinator: tab.coordinator
-                    ) {
-                        tab.item.content
-                        #if os(iOS)
-                            .if(tabCoordinator.tabs.first?.item.id == tab.item.id) { view in
-                                view.topBarTrailing {
-                                    FirstTabSettingsBarButton()
-                                }
-                            }
-                        #endif
+                    #if os(tvOS)
+                    GeometryReader { _ in
+                        tabRoot(tab)
                     }
-                    .environmentObject(tabCoordinator)
-                    .environment(\.tabItemSelected, tab.publisher)
+                    .trackingFrame(for: .tabView)
+                    #else
+                    tabRoot(tab)
+                    #endif
                 } label: {
                     Label(
                         tab.item.displayTitle,
@@ -90,11 +112,27 @@ struct MainTabView: View {
                 }
             }
         }
+    }
+
+    @ContentBuilder
+    private func tabContent() -> some View {
         #if os(tvOS)
-        .tabViewStyle(.sidebarAdaptable)
+        switch tabBarPlacement {
+        case .sidebar:
+            tabView()
+                .tabViewStyle(.sidebarAdaptable)
+
+        case .tabBar:
+            tabView()
+                .tabViewStyle(.tabBarOnly)
+        }
+        #else
+        tabView()
+            .tabViewStyle(.sidebarAdaptable)
         #endif
     }
 
+    @ContentBuilder
     var body: some View {
         tabContent()
             .onChange(of: userSessionManager.pendingDeepLink) {
@@ -105,11 +143,11 @@ struct MainTabView: View {
                     await tabCoordinator.route(to: route)
                 }
             }
-        #if os(tvOS)
+            #if os(tvOS)
             .background(alignment: .top) {
                 FocusedPosterCinematicBackgroundView()
             }
-        #endif
+            #endif
     }
 }
 
@@ -122,14 +160,11 @@ private struct FirstTabSettingsBarButton: View {
     @Router
     private var router
 
+    @ContentBuilder
     var body: some View {
         if router.isRootOfPath,
-           let userSession
-        {
-            SettingsBarButton(
-                server: userSession.server,
-                user: userSession.user
-            ) {
+           let userSession {
+            SettingsBarButton(userSession: userSession) {
                 router.route(to: .settings)
             }
         }

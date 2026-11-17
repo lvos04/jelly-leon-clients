@@ -16,10 +16,10 @@ struct RecentlyAddedLibrary: BaseItemKindLibrary {
     func retrievePage(
         environment: Empty,
         pageState: LibraryPageState
-    ) async throws -> [BaseItemDto] {
+    ) async throws -> [ItemPatch] {
         var parameters = Paths.GetItemsParameters()
         parameters.enableUserData = true
-        parameters.fields = .MinimumFields
+        parameters.fields = PosterSubtitleField.itemFields
         parameters.includeItemTypes = [.movie, .series]
         parameters.isRecursive = true
         parameters.limit = pageState.pageSize
@@ -31,6 +31,6 @@ struct RecentlyAddedLibrary: BaseItemKindLibrary {
         let request = Paths.getItems(parameters: parameters)
         let response = try await pageState.userSession.client.send(request)
 
-        return response.value.items ?? []
+        return try pageState.items(from: response)
     }
 }

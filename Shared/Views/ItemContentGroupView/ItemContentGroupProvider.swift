@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Combine
 import Defaults
 import Get
 import JellyfinAPI
@@ -13,19 +14,51 @@ import SwiftUI
 
 final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
 
-    @Published
+    @SharedBaseItem
     private(set) var item: BaseItemDto
-    @Published
+    @SharedBaseItems
     private(set) var localTrailers: [BaseItemDto] = []
-    @Published
-    private(set) var mediaPlayerItemProvider: MediaPlayerItemProvider?
-    @Published
+    @OptionalSharedBaseItem
     private(set) var randomBackdropItem: BaseItemDto?
+
+    @Published
+    var isPresentingDeleteConfirmation = false
+    @Published
+    private(set) var playbackIntent: PlaybackIntent?
 
     let id: String
 
     var displayTitle: String {
         item.displayTitle
+    }
+
+    var refreshRequests: AnyPublisher<ContentGroupRefreshRequest, Never> {
+        guard let store = userSession?.items else {
+            return Combine.Empty().eraseToAnyPublisher()
+        }
+
+        return store.changes
+            .compactMap { [weak self, weak store] change -> ContentGroupRefreshRequest? in
+                guard let self, case let .updated(update) = change else { return nil }
+
+                if update.itemID == self.id, update.metadataChanged {
+                    return ContentGroupRefreshRequest()
+                }
+
+                // Series and season playback selection depends on their children's progress
+                guard self.item.type == .series || self.item.type == .season,
+                      update.userDataChanged else { return nil }
+
+                let changedItem = store?[update.itemID]?.value
+
+                if update.itemID == self.id || changedItem?.seriesID == self.id || changedItem?.seasonID == self.id ||
+                    changedItem?.type == nil {
+                    return ContentGroupRefreshRequest()
+                }
+
+                return nil
+            }
+            .eraseToAnyPublisher()
     }
 
     init(item: BaseItemDto) {
@@ -42,17 +75,22 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
 
     func makeGroups(environment: Empty) async throws -> [any ContentGroup] {
         let userSession = try requireUserSession()
-        let fullItem = try await item.getFullItem(userSession: userSession, sendNotification: true)
-        let newMediaPlayerItemProvider = try await resolveMediaPlayerItemProvider(
+        let entry = try await userSession.getFullItem(item)
+        let fullItem = entry.snapshot
+
+        let newPlaybackIntent = try await resolvePlaybackIntent(
             for: fullItem,
             userSession: userSession
         )
+
         let newLocalTrailers = try? await localTrailers(for: fullItem)
         let newRandomBackdropItem = try? await randomBackdropItem(for: fullItem)
 
-        item = fullItem
+        guard $item.value != nil, let fullItem = entry.value else { throw ItemStore.StoreError.itemUnavailable }
+
+        $item = entry
         localTrailers = newLocalTrailers ?? []
-        mediaPlayerItemProvider = newMediaPlayerItemProvider
+        playbackIntent = newPlaybackIntent
         randomBackdropItem = newRandomBackdropItem
 
         return try await _makeGroups(
@@ -63,7 +101,6 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
 
     @ContentGroupBuilder
     private func _makeGroups(item: BaseItemDto, itemID: String) async throws -> [any ContentGroup] {
-
         if let birthday = item.birthday?.formatted(date: .long, time: .omitted) {
             LabeledContentGroup(
                 L10n.born,
@@ -89,8 +126,9 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         case .season, .series:
             SeriesEpisodeContentGroup(
                 parent: item,
-                playButtonItem: mediaPlayerItemProvider?.item
+                playButtonItem: playbackIntent?.item
             )
+
         default:
             []
         }
@@ -160,6 +198,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                     posterSize: .small
                 )
             }
+
         case .boxSet, .person, .musicArtist:
             try await ItemTypeContentGroupProvider(
                 itemTypes: BaseItemKind.supportedCases
@@ -168,12 +207,14 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                 parent: item
             )
             .makeGroups(environment: .default)
+
         case .series:
             try await ItemTypeContentGroupProvider(
                 itemTypes: [.season],
                 parent: item
             )
             .makeGroups(environment: .default)
+
         case .channel, .liveTvChannel, .tvChannel:
             PosterGroup(
                 id: "channel-programs",
@@ -181,19 +222,30 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                 posterDisplayType: .landscape,
                 posterSize: .small
             )
-        default: []
+
+        default:
+            []
         }
 
         if item.type == .episode {
             PosterGroup(
-                library: StaticLibrary(
+                library: StaticMediaLibrary(
                     title: L10n.season,
                     id: "seasons",
                     elements: [BaseItemDto(
                         id: item.seasonID,
+                        imageTags: item.parentPrimaryImageItemID == item.seasonID
+                            ? item.parentPrimaryImageTag.map { [ImageType.primary.rawValue: $0] }
+                            : nil,
                         name: item.seasonName,
+                        parentBackdropImageTags: item.parentBackdropImageTags,
+                        parentBackdropItemID: item.parentBackdropItemID,
+                        parentThumbImageTag: item.parentThumbImageTag,
+                        parentThumbItemID: item.parentThumbItemID,
                         seriesID: item.seriesID,
                         seriesName: item.seriesName,
+                        seriesPrimaryImageTag: item.seriesPrimaryImageTag,
+                        seriesThumbImageTag: item.seriesThumbImageTag,
                         type: .season
                     )]
                 ),
@@ -202,7 +254,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
             )
         }
 
-        if let castAndCrew = item.people, castAndCrew.isNotEmpty {
+        if let castAndCrew = item.mergedPeople, castAndCrew.isNotEmpty {
             PosterGroup(
                 id: "cast-and-crew",
                 library: StaticLibrary(
@@ -225,7 +277,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         if Defaults[.Customization.shouldShowRecommendations] {
             PosterGroup(
                 id: "similar-items",
-                library: SimilarItemsLibrary(itemID: itemID),
+                library: SimilarItemsLibrary(itemID: itemID, itemType: item.type),
                 posterDisplayType: .landscape,
                 posterSize: .small
             )
@@ -238,41 +290,56 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         )
     }
 
-    func toggleIsFavorite() async {
-        let beforeIsFavorite = item.userData?.isFavorite ?? false
+    @Published
+    var actionError: Error?
 
-        item.userData?.isFavorite = !beforeIsFavorite
+    func toggleIsFavorite() async {
         do {
-            try await setIsFavorite(!beforeIsFavorite)
+            let session = try requireUserSession()
+            try await session.setFavorite($item, to: item.userData?.isFavorite != true)
         } catch {
-            item.userData?.isFavorite = beforeIsFavorite
+            actionError = error
         }
     }
 
     func toggleIsPlayed() async {
-        let beforeIsPlayed = item.userData?.isPlayed ?? false
-
-        item.userData?.isPlayed = !beforeIsPlayed
         do {
-            try await setIsPlayed(!beforeIsPlayed)
+            let session = try requireUserSession()
+            try await session.setPlayed($item, to: item.userData?.isPlayed != true)
         } catch {
-            item.userData?.isPlayed = beforeIsPlayed
+            actionError = error
         }
     }
 
-    func selectMediaSource(_ mediaSource: MediaSourceInfo?) {
-        guard let mediaPlayerItemProvider, let userSession else { return }
+    enum PlaybackSelection {
 
-        self.mediaPlayerItemProvider = mediaPlayerItemProvider.item.getPlaybackItemProvider(
-            userSession: userSession,
-            mediaSource: mediaSource
-        )
+        case mediaSource(MediaSourceInfo?)
+        case audioStreamIndex(Int?)
+        case subtitleStreamIndex(Int?)
+        case bitrate(PlaybackBitrate)
     }
 
-    private func resolveMediaPlayerItemProvider(
+    func select(_ selection: PlaybackSelection) {
+        guard var intent = playbackIntent else { return }
+
+        switch selection {
+        case let .mediaSource(source):
+            intent.configuration.selectMediaSource(id: source?.id)
+        case let .audioStreamIndex(index):
+            intent.configuration.selectTracks(audio: index ?? -1)
+        case let .subtitleStreamIndex(index):
+            intent.configuration.selectTracks(subtitle: index ?? -1)
+        case let .bitrate(bitrate):
+            intent.configuration.requestedBitrate = bitrate
+        }
+
+        playbackIntent = intent
+    }
+
+    private func resolvePlaybackIntent(
         for item: BaseItemDto,
         userSession: UserSession
-    ) async throws -> MediaPlayerItemProvider? {
+    ) async throws -> PlaybackIntent? {
         let playbackItem: BaseItemDto? = switch item.type {
         case .series:
             if let nextUp = try await nextUpItem(for: item) {
@@ -282,22 +349,34 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
             } else {
                 try await firstAvailableItem(for: item)
             }
+
         case .season:
             if let resumeItem = try await resumeItem(for: item) {
                 resumeItem
             } else {
                 try await firstAvailableItem(for: item)
             }
+
         default:
             item.isPlayable ? item : nil
         }
 
-        return playbackItem?.getPlaybackItemProvider(userSession: userSession)
+        guard let playbackItem else { return nil }
+
+        if item.type == .series || item.type == .season {
+            let entry = try await userSession.getFullItem(playbackItem)
+
+            // Keep the record alive until the playback intent takes ownership
+            return withExtendedLifetime(entry) {
+                entry.snapshot.getPlaybackIntent(userSession: userSession)
+            }
+        }
+
+        return playbackItem.getPlaybackIntent(userSession: userSession)
     }
 
     private func nextUpItem(for item: BaseItemDto) async throws -> BaseItemDto? {
         var parameters = Paths.GetNextUpParameters()
-        parameters.fields = .MinimumFields
         parameters.seriesID = item.id
 
         let request = Paths.getNextUp(parameters: parameters)
@@ -312,7 +391,6 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
 
     private func resumeItem(for item: BaseItemDto) async throws -> BaseItemDto? {
         var parameters = Paths.GetResumeItemsParameters()
-        parameters.fields = .MinimumFields
         parameters.limit = 1
         parameters.parentID = item.id
 
@@ -324,7 +402,6 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
 
     private func firstAvailableItem(for item: BaseItemDto) async throws -> BaseItemDto? {
         var parameters = Paths.GetItemsParameters()
-        parameters.fields = .MinimumFields
         parameters.includeItemTypes = [.episode]
         parameters.isMissing = false
         parameters.isRecursive = true
@@ -353,7 +430,6 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         }
 
         var parameters = Paths.GetItemsParameters()
-        parameters.fields = .MinimumFields
         parameters.includeItemTypes = [.movie, .series]
         parameters.isRecursive = true
         parameters.limit = 1
@@ -373,45 +449,5 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         let response = try await send(request)
 
         return response.value.items?.first
-    }
-
-    private func setIsPlayed(_ isPlayed: Bool) async throws {
-        guard let itemID = item.id else { return }
-
-        let request: Request<UserItemDataDto> = if isPlayed {
-            try Paths.markPlayedItem(
-                itemID: itemID,
-                userID: authenticatedUser.id
-            )
-        } else {
-            try Paths.markUnplayedItem(
-                itemID: itemID,
-                userID: authenticatedUser.id
-            )
-        }
-
-        let response = try await send(request)
-        Notifications[.itemUserDataDidChange].post(response.value)
-        Notifications[.itemShouldRefreshMetadata].post(itemID)
-    }
-
-    private func setIsFavorite(_ isFavorite: Bool) async throws {
-        guard let itemID = item.id else { return }
-
-        let request: Request<UserItemDataDto> = if isFavorite {
-            try Paths.markFavoriteItem(
-                itemID: itemID,
-                userID: authenticatedUser.id
-            )
-        } else {
-            try Paths.unmarkFavoriteItem(
-                itemID: itemID,
-                userID: authenticatedUser.id
-            )
-        }
-
-        let response = try await send(request)
-        Notifications[.itemUserDataDidChange].post(response.value)
-        Notifications[.itemShouldRefreshMetadata].post(itemID)
     }
 }

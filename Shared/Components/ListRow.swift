@@ -14,11 +14,11 @@ import SwiftUI
 /// outside of a `List` or `Form`.
 struct ListRow<Leading: View, Content: View>: View {
 
+    @AdaptiveLayout
+    private var viewLayout
+
     @ViewContextContains(.isListRowSeparatorVisible)
     private var isListRowSeparatorVisible
-
-    @FocusState
-    private var isButtonFocused
 
     @State
     private var contentSize: CGSize = .zero
@@ -28,24 +28,23 @@ struct ListRow<Leading: View, Content: View>: View {
     private var insets: EdgeInsets
     private let leading: Leading
 
-    private init(
-        leading: Leading,
-        content: Content,
-        action: @escaping () -> Void,
-        insets: EdgeInsets
+    init(
+        insets: EdgeInsets = .zero,
+        @ContentBuilder leading: @escaping () -> Leading,
+        @ContentBuilder content: @escaping () -> Content,
+        action: @escaping () -> Void = {}
     ) {
-        self.leading = leading
-        self.content = content
         self.action = action
+        self.content = content()
         self.insets = insets
+        self.leading = leading()
     }
 
+    @ContentBuilder
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-
             Button(action: action) {
-                HStack(alignment: .center, spacing: EdgeInsets.edgePadding) {
-
+                HStack(alignment: .center, spacing: viewLayout.edgePadding) {
                     leading
 
                     content
@@ -55,48 +54,14 @@ struct ListRow<Leading: View, Content: View>: View {
                 .padding(insets)
             }
             .foregroundStyle(.primary, .secondary)
-            .focused($isButtonFocused)
-            #if os(tvOS)
-                .buttonStyle(.card)
-            #else
-                .contentShape(.contextMenuPreview, Rectangle())
-            #endif
+            .contentShape(.contextMenuPreview, Rectangle())
+            .if(viewLayout.isLarge) { $0.buttonStyle(.card) }
 
-            if isListRowSeparatorVisible, !isButtonFocused {
+            if !viewLayout.isLarge, isListRowSeparatorVisible {
                 Color.secondarySystemFill
                     .frame(width: contentSize.width, height: 1)
                     .padding(.trailing, insets.trailing)
             }
         }
-    }
-}
-
-extension ListRow {
-
-    init(
-        insets: EdgeInsets = .zero,
-        @ViewBuilder leading: @escaping () -> Leading,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.init(
-            insets: insets,
-            leading: leading,
-            content: content,
-            action: {}
-        )
-    }
-
-    init(
-        insets: EdgeInsets = .zero,
-        @ViewBuilder leading: @escaping () -> Leading,
-        @ViewBuilder content: @escaping () -> Content,
-        action: @escaping () -> Void
-    ) {
-        self.init(
-            leading: leading(),
-            content: content(),
-            action: action,
-            insets: insets
-        )
     }
 }

@@ -53,17 +53,6 @@ extension NavigationRoute {
         }
     }
 
-    // MARK: - Server Tasks
-
-    static func addServerTaskTrigger(observer: ServerTaskObserver) -> NavigationRoute {
-        NavigationRoute(
-            id: "addServerTaskTrigger",
-            style: .sheet
-        ) {
-            AddTaskTriggerView(observer: observer)
-        }
-    }
-
     // MARK: - Users
 
     static func addServerUser() -> NavigationRoute {
@@ -128,11 +117,34 @@ extension NavigationRoute {
         }
     }
 
-    // MARK: - Server Tasks
+    // MARK: - Plugins
 
-    static func editServerTask(observer: ServerTaskObserver) -> NavigationRoute {
-        NavigationRoute(id: "editServerTask") {
-            EditServerTaskView(observer: observer)
+    static func addPluginRepository(viewModel: PluginRepositoriesViewModel) -> NavigationRoute {
+        NavigationRoute(
+            id: "addPluginRepository",
+            style: .sheet
+        ) {
+            AddPluginRepositoryView(viewModel: viewModel)
+        }
+    }
+
+    static func pluginDetails(viewModel: PluginDetailsViewModel) -> NavigationRoute {
+        NavigationRoute(id: "pluginDetails") {
+            PluginDetailsView(viewModel: viewModel)
+        }
+    }
+
+    static func pluginRepositories(viewModel: PluginRepositoriesViewModel) -> NavigationRoute {
+        NavigationRoute(id: "pluginRepositories") {
+            PluginRepositoriesView(viewModel: viewModel)
+        }
+    }
+
+    static var plugins: NavigationRoute {
+        NavigationRoute(
+            id: "plugins"
+        ) {
+            PluginsView()
         }
     }
 
@@ -170,6 +182,21 @@ extension NavigationRoute {
             id: "tasks"
         ) {
             ServerTasksView()
+        }
+    }
+
+    static func taskDetails(viewModel: ServerTaskViewModel) -> NavigationRoute {
+        NavigationRoute(id: "taskDetails") {
+            ServerTaskDetailsView(viewModel: viewModel)
+        }
+    }
+
+    static func taskTrigger(viewModel: ServerTaskViewModel) -> NavigationRoute {
+        NavigationRoute(
+            id: "taskTrigger",
+            style: .sheet
+        ) {
+            ServerTaskTriggerView(viewModel: viewModel)
         }
     }
 

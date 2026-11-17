@@ -1,0 +1,79 @@
+//
+// Swiftfin is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, you can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
+//
+
+import Defaults
+import SwiftUI
+
+struct FilterBarModifier: ViewModifier {
+
+    @AdaptiveLayout
+    private var viewLayout
+
+    @Default(.Customization.Library.letterPickerOrientation)
+    private var letterPickerOrientation
+
+    @FocusState
+    private var focusedFilter: FilterTrack.FocusTarget?
+
+    @ObservedObject
+    var viewModel: FilterViewModel
+
+    let types: [ItemFilterType]
+
+    private var edge: HorizontalEdge {
+        letterPickerOrientation == .trailing ? .leading : .trailing
+    }
+
+    private var filterDiameter: CGFloat {
+        FilterTrack.metrics(for: viewLayout).minimumHeight
+    }
+
+    @ContentBuilder
+    private var filters: some View {
+        let availableTypes = viewModel.availableFilterTypes(from: types)
+
+        VStack(spacing: 20) {
+            ForEach(subviews: FilterTrack(
+                viewModel: viewModel,
+                types: availableTypes,
+                focus: $focusedFilter,
+                style: .compact,
+                iconEdge: edge
+            )) { button in
+                Color.clear
+                    .frame(width: filterDiameter, height: filterDiameter)
+                    .overlay(alignment: edge == .leading ? .leading : .trailing) {
+                        button
+                    }
+            }
+        }
+        .scrollIfLargerThanContainer()
+        .frame(width: filterDiameter)
+        .coordinatedFocusScope(
+            $focusedFilter,
+            values: availableTypes.map(FilterTrack.FocusTarget.filter)
+                .appending(.options, if: viewModel.hasFilterOptions)
+        )
+    }
+
+    @ContentBuilder
+    func body(content: Content) -> some View {
+        if types.isEmpty {
+            content
+        } else {
+            content
+                .focusSection()
+                .safeAreaInset(edge: edge, alignment: .center, spacing: 0) {
+                    filters
+                        .coordinatedFocus(.secondary)
+                        .padding(edge.asEdgeSet, viewLayout.itemSpacing)
+                }
+                .ignoresSafeArea(.all, edges: edge.asEdgeSet)
+        }
+    }
+}

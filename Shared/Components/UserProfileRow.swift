@@ -19,15 +19,17 @@ extension SettingsView {
         @Injected(\.currentUserSession)
         private var userSession: UserSession?
 
-        let user: UserDto
+        @SharedUser
+        var user: UserDto
+
         var action: (() -> Void)?
 
+        @ContentBuilder
         var body: some View {
             Button {
                 action?()
             } label: {
                 HStack {
-
                     // `.aspectRatio(contentMode: .fill)` on `imageView` alone
                     // causes a crash on some iOS versions
                     ZStack {
@@ -46,13 +48,13 @@ extension SettingsView {
                     Text(user.name ?? L10n.unknown)
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)
-
-                    Spacer()
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     if action != nil {
                         Image(systemName: "chevron.right")
-                            .font(.body.weight(.regular))
-                            .foregroundColor(.secondary)
+                            .font(.body)
+                            .fontWeight(.regular)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

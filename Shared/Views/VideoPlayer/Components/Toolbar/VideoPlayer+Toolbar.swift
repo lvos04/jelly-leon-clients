@@ -13,115 +13,102 @@ extension VideoPlayer.PlaybackControls {
 
     struct Toolbar: View {
 
-        static let buttonSize: CGFloat = UIDevice.isTV ? 56 : 44
-        static let supplementButtonSpacing: CGFloat = UIDevice.isTV ? 20 : 10
+        typealias ViewState = VideoPlayer.ViewState
 
-        static var buttonSpacing: CGFloat {
-            if UIDevice.supportsLiquidGlass {
-                supplementButtonSpacing
-            } else {
-                UIDevice.isTV ? 16 : 0
-            }
-        }
+        @AdaptiveLayout
+        private var viewLayout
 
-        @EnvironmentObject
-        private var containerState: VideoPlayerContainerState
-        @EnvironmentObject
-        private var manager: MediaPlayerManager
+        @Environment(ViewState.self)
+        private var viewState
+        @Environment(MediaSession.self)
+        private var mediaSession
 
         @Router
         private var router
 
-        private var fontSize: CGFloat {
-            UIDevice.isTV ? 30 : 24
-        }
-
-        private func onPressed(isPressed: Bool) {
-            if isPressed {
-                containerState.timer.stop()
-            } else {
-                containerState.timer.poke()
-            }
-        }
-
-        @ViewBuilder
+        @ContentBuilder
         private var closeButton: some View {
             Button {
-                if containerState.isPresentingSupplement {
-                    containerState.select(supplement: nil)
+                if viewState.isPresentingSupplement {
+                    viewState.selectedSupplementID = nil
                 } else {
-                    manager.stop()
+                    mediaSession.stop()
                     router.dismiss()
                 }
             } label: {
-                AlternateLayoutView {
-                    Image(systemName: "xmark")
-                } content: {
-                    Label(
-                        L10n.close,
-                        systemImage: containerState.isPresentingSupplement ? "chevron.down" : "xmark"
-                    )
-                }
-                .contentShape(Rectangle())
+                Label(
+                    L10n.close,
+                    systemImage: viewState.isPresentingSupplement ? "chevron.down" : "xmark"
+                )
+                .labelStyle(.iconOnly)
             }
+            .accessibilityIdentifier("closePlayerButton")
+            .frame(width: viewLayout.toolbarButtonSize, height: viewLayout.toolbarButtonSize)
         }
 
-        var body: some View {
-            HStack(alignment: UIDevice.isTV ? .bottom : .center) {
-
-                if !UIDevice.isTV {
+        @ContentBuilder
+        private var content: some View {
+            HStack(alignment: viewLayout.value(standard: .center, large: .bottom)) {
+                if !viewLayout.isLarge {
                     closeButton
-                        .frame(width: Self.buttonSize, height: Self.buttonSize)
+                        .modifier(OverlayBarButtonStyleModifier())
                 }
 
-                TitleView(item: manager.item)
+                TitleView(item: mediaSession.item)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 ActionButtons()
-                    .frame(height: Self.buttonSize)
+                    .frame(height: viewLayout.toolbarButtonSize)
                     .padding(.horizontal)
             }
-            .font(.system(size: fontSize, weight: .semibold))
-            .labelStyle(.iconOnly)
-            .modifier(OverlayButtonStyleModifier(onPressed: onPressed))
-            #if os(iOS)
+        }
+
+        @ContentBuilder
+        var body: some View {
+            content
+                .font(.system(size: viewLayout.isLarge ? 30 : 24, weight: .semibold))
+                .menuStyle(OverlayMenuStyle())
+                #if os(iOS)
                 .background {
                     EmptyHitTestView()
                 }
-            #endif
+                #endif
         }
     }
 }
 
 extension VideoPlayer.PlaybackControls.Toolbar {
 
-    struct TitleView: PlatformView {
+    struct TitleView: PresentationView {
+
+        @AdaptiveLayout
+        private var viewLayout
 
         @State
         private var subtitleContentSize: CGSize = .zero
 
-        let item: BaseItemDto
+        @SharedBaseItem
+        var item: BaseItemDto
 
         private var _titleSubtitle: (title: String, subtitle: String?) {
-            if item.type == .episode {
-                if let parentTitle = item.parentTitle {
-                    return (title: parentTitle, subtitle: item.seasonEpisodeLabel)
-                }
+            if item.type == .episode, let parentTitle = item.parentTitle {
+                return (title: parentTitle, subtitle: item.seasonEpisodeLabel)
             }
 
             return (title: item.displayTitle, subtitle: nil)
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private func _subtitle(_ subtitle: String) -> some View {
             Text(subtitle)
-                .font(UIDevice.isTV ? .caption : .subheadline)
+                .font(viewLayout.value(standard: .subheadline, large: .caption))
                 .fontWeight(.medium)
                 .foregroundStyle(.white)
                 .trackingSize($subtitleContentSize)
         }
 
-        var iOSView: some View {
+        @ContentBuilder
+        var standardView: some View {
             Text(_titleSubtitle.title)
                 .fontWeight(.semibold)
                 .lineLimit(1)
@@ -133,9 +120,11 @@ extension VideoPlayer.PlaybackControls.Toolbar {
                             .offset(y: subtitleContentSize.height)
                     }
                 }
+                .accessibilityElement(children: .combine)
         }
 
-        var tvOSView: some View {
+        @ContentBuilder
+        var largeView: some View {
             VStack(alignment: .leading) {
                 if let subtitle = _titleSubtitle.subtitle {
                     Text(subtitle)

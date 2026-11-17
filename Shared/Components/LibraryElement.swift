@@ -26,7 +26,7 @@ protocol LibraryElement: Displayable, Hashable, Identifiable {
         in namespace: Namespace.ID
     )
 
-    @ViewBuilder
+    @ContentBuilder
     func makeBody(
         libraryStyle: LibraryStyle,
         action: (() -> Void)?
@@ -35,7 +35,8 @@ protocol LibraryElement: Displayable, Hashable, Identifiable {
     static func layout(
         for libraryStyle: LibraryStyle,
         options: LibraryStyleOptions,
-        insets: EdgeInsets
+        insets: EdgeInsets,
+        viewLayout: ViewLayout
     ) -> CollectionVGridLayout
 }
 
@@ -59,75 +60,42 @@ extension LibraryElement {
 
     func libraryDidSelectElement(router: Router.Wrapper, in namespace: Namespace.ID) {}
 
-    @ViewBuilder
     func makeBody(libraryStyle: LibraryStyle) -> Body {
+        // By default, have conformers determine action
+        // internally for navigation with their namespace
         makeBody(libraryStyle: libraryStyle, action: nil)
     }
 
     static func layout(
         for libraryStyle: LibraryStyle,
         options: LibraryStyleOptions,
-        insets: EdgeInsets
+        insets: EdgeInsets,
+        viewLayout: ViewLayout
     ) -> CollectionVGridLayout {
         let libraryStyle = options.normalized(libraryStyle)
 
-        #if os(iOS)
-        let gridLayout: CollectionVGridLayout = {
-            switch libraryStyle.posterDisplayType {
-            case .landscape:
-                .minWidth(220, insets: insets)
-            case .portrait, .square:
-                .minWidth(140, insets: insets)
-            }
-        }()
-
-        let phoneGridLayout: CollectionVGridLayout = {
-            switch libraryStyle.posterDisplayType {
-            case .landscape:
-                .columns(2, insets: insets)
-            case .portrait, .square:
-                .columns(3, insets: insets)
-            }
-        }()
-
         switch libraryStyle.displayType {
         case .grid:
-            return UIDevice.isPhone ? phoneGridLayout : gridLayout
+            return .minWidth(
+                viewLayout.value(
+                    standard: viewLayout.posterMinimumWidth(for: libraryStyle.posterDisplayType),
+                    large: libraryStyle.posterDisplayType == .landscape ? 350 : 220
+                ),
+                insets: insets,
+                itemSpacing: viewLayout.itemSpacing,
+                lineSpacing: viewLayout.itemSpacing
+            )
+
         case .list:
+            // Keep the saved preference as an upper bound so it returns in wider windows.
+            let columns = viewLayout.libraryListColumns(maximumCount: libraryStyle.listColumnCount)
             return .columns(
-                libraryStyle.listColumnCount,
-                insets: .init(top: insets.top, leading: 0, bottom: insets.bottom, trailing: 0),
-                itemSpacing: 0,
-                lineSpacing: 0
+                columns.count(for: viewLayout.size.width - insets.leading - insets.trailing),
+                insets: insets,
+                itemSpacing: columns.spacing,
+                lineSpacing: columns.spacing,
+                itemSizing: .height
             )
         }
-        #else
-        switch libraryStyle.displayType {
-        case .grid:
-            switch libraryStyle.posterDisplayType {
-            case .landscape:
-                return .columns(
-                    4,
-                    insets: .init(vertical: 0, horizontal: EdgeInsets.edgePadding),
-                    itemSpacing: EdgeInsets.edgePadding,
-                    lineSpacing: EdgeInsets.edgePadding
-                )
-            case .portrait, .square:
-                return .columns(
-                    7,
-                    insets: .init(vertical: 0, horizontal: EdgeInsets.edgePadding),
-                    itemSpacing: EdgeInsets.edgePadding,
-                    lineSpacing: EdgeInsets.edgePadding
-                )
-            }
-        case .list:
-            return .columns(
-                libraryStyle.listColumnCount,
-                insets: .init(vertical: 0, horizontal: EdgeInsets.edgePadding),
-                itemSpacing: EdgeInsets.edgePadding,
-                lineSpacing: EdgeInsets.edgePadding
-            )
-        }
-        #endif
     }
 }

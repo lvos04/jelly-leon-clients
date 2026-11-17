@@ -11,15 +11,6 @@ import SwiftUI
 extension EnvironmentValues {
 
     @Entry
-    var enabledPosterIndicators: PosterIndicator = .all
-
-    @Entry
-    var useSeriesLandscapeBackdrop: Bool = true
-
-    @Entry
-    var audioOffset: Binding<Duration> = .constant(.zero)
-
-    @Entry
     var frameForParentView: [CoordinateSpace: FrameAndSafeAreaInsets] = [:]
 
     @Entry
@@ -29,21 +20,18 @@ extension EnvironmentValues {
     var isHighlighted: Bool = true
 
     @Entry
-    var isOverComplexContent: Bool = false
-
-    @Entry
     var isSelected: Bool = false
-
-    @Entry
-    var playbackSpeed: Binding<Double> = .constant(1)
-
-    @Entry
-    var safeAreaInsets: EdgeInsets = UIApplication.shared.keyWindow?.safeAreaInsets.asEdgeInsets ?? .zero
-
-    @Entry
-    var subtitleOffset: Binding<Duration> = .constant(.zero)
 
     // TODO: figure out this directional response stuff
     @Entry
     var panGestureDirection: Direction = .all
+
+    @Entry
+    var posterConfiguration: PosterConfiguration = .default
+
+    @Entry
+    var posterDisplayType: PosterDisplayType = .portrait
+
+    @Entry
+    var theme: AppTheme.Value = .init()
 }

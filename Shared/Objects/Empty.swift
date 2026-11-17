@@ -9,11 +9,15 @@
 struct Empty: Equatable {}
 
 extension Empty: WithDefaultValue {
+
     static let `default`: Empty = .init()
 }
 
 extension Empty: WithRefresh {
+
     func refresh() {}
 
     func refresh() async {}
 }
+
+extension Empty: EvaluatedLocalUserAccessPolicy {}

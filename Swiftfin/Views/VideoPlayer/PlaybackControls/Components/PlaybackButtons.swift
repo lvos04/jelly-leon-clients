@@ -10,7 +10,6 @@ import Defaults
 import SwiftUI
 
 // TODO: adjust button sizes/padding on compact/regular?
-// TODO: jump rotation symbol effects
 
 extension VideoPlayer.PlaybackControls {
 
@@ -21,85 +20,54 @@ extension VideoPlayer.PlaybackControls {
         @Default(.VideoPlayer.jumpForwardInterval)
         private var jumpForwardInterval
 
-        @EnvironmentObject
-        private var centerOffsetBox: PublishedBox<CGFloat>
-        @EnvironmentObject
-        private var containerState: VideoPlayerContainerState
-        @EnvironmentObject
-        private var manager: MediaPlayerManager
-
-        private func onPressed(isPressed: Bool) {
-            if isPressed {
-                containerState.timer.stop()
-            } else {
-                containerState.timer.poke()
-            }
-        }
+        @Environment(ViewState.self)
+        private var viewState
+        @Environment(MediaSession.self)
+        private var mediaSession
 
         private var shouldShowJumpButtons: Bool {
-            !manager.item.isLiveStream
+            !mediaSession.item.isLiveStream
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var playButton: some View {
             Button {
-                switch manager.playbackRequestStatus {
+                switch mediaSession.playbackRequestStatus {
                 case .playing:
-                    manager.setPlaybackRequestStatus(status: .paused)
+                    mediaSession.setPlaybackRequestStatus(status: .paused)
                 case .paused:
-                    manager.setPlaybackRequestStatus(status: .playing)
+                    mediaSession.setPlaybackRequestStatus(status: .playing)
                 }
             } label: {
-                Group {
-                    switch manager.playbackRequestStatus {
-                    case .playing:
-                        Label(L10n.pause, systemImage: "pause.fill")
-                    case .paused:
-                        Label(L10n.play, systemImage: "play.fill")
-                    }
-                }
-                .transition(.opacity.combined(with: .scale).animation(.bouncy(duration: 0.7, extraBounce: 0.2)))
+                Label(
+                    mediaSession.playbackRequestStatus == .playing ? L10n.pause : L10n.play,
+                    systemImage: mediaSession.playbackRequestStatus == .playing ? "pause.fill" : "play.fill"
+                )
                 .font(.system(size: 36, weight: .bold, design: .default))
-                .contentShape(Rectangle())
                 .labelStyle(.iconOnly)
-                .padding(20)
+                .frame(width: 44, height: 44)
+                .padding(16)
             }
+            .disabled(!mediaSession.canControlPlayback)
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var jumpForwardButton: some View {
-            Button {
-                manager.proxy?.jumpForward(jumpForwardInterval.rawValue)
-            } label: {
-                // swiftlint:disable:next hard_coded_display_string
-                Label(
-                    "\(jumpForwardInterval.rawValue, format: Duration.UnitsFormatStyle(allowedUnits: [.seconds], width: .narrow))",
-                    systemImage: jumpForwardInterval.systemImage
-                )
-                .labelStyle(.iconOnly)
-                .font(.system(size: 32, weight: .regular, design: .default))
-                .padding(10)
+            JumpButton(interval: jumpForwardInterval, isForward: true) {
+                mediaSession.seek(by: jumpForwardInterval.rawValue)
             }
-            .foregroundStyle(.primary)
+            .disabled(!mediaSession.canSeek)
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var jumpBackwardButton: some View {
-            Button {
-                manager.proxy?.jumpBackward(jumpBackwardInterval.rawValue)
-            } label: {
-                // swiftlint:disable:next hard_coded_display_string
-                Label(
-                    "\(jumpBackwardInterval.rawValue, format: Duration.UnitsFormatStyle(allowedUnits: [.seconds], width: .narrow))",
-                    systemImage: jumpBackwardInterval.secondarySystemImage
-                )
-                .labelStyle(.iconOnly)
-                .font(.system(size: 32, weight: .regular, design: .default))
-                .padding(10)
+            JumpButton(interval: jumpBackwardInterval, isForward: false) {
+                mediaSession.seek(by: .zero - (jumpBackwardInterval.rawValue))
             }
-            .foregroundStyle(.primary)
+            .disabled(!mediaSession.canSeek)
         }
 
+        @ContentBuilder
         var body: some View {
             HStack(spacing: 0) {
                 if shouldShowJumpButtons {
@@ -113,9 +81,50 @@ extension VideoPlayer.PlaybackControls {
                     jumpForwardButton
                 }
             }
-            .modifier(OverlayButtonStyleModifier(onPressed: onPressed))
+            .buttonStyle(OverlayButtonStyle(symbolEffectSpeed: 2))
             .padding(.horizontal, 50)
-            .offset(y: centerOffsetBox.value / 2)
+        }
+    }
+
+    private struct JumpButton: View {
+
+        @State
+        private var rotationTrigger = false
+        @State
+        private var lastRotationStart: ContinuousClock.Instant?
+
+        let interval: MediaJumpInterval
+        let isForward: Bool
+        let action: () -> Void
+
+        @ContentBuilder
+        var body: some View {
+            Button {
+                action()
+
+                let now = ContinuousClock.now
+
+                // A burst gets one finite effect. Further taps still seek immediately,
+                // but cannot queue rotations that outlive the user's interaction.
+                guard lastRotationStart.map({ $0.duration(to: now) >= .milliseconds(500) }) ?? true
+                else { return }
+
+                lastRotationStart = now
+                rotationTrigger.toggle()
+            } label: {
+                Image(systemName: isForward ? interval.systemImage : interval.secondarySystemImage)
+                    .symbolEffect(
+                        isForward ? .rotate.clockwise.byLayer : .rotate.counterClockwise.byLayer,
+                        options: .nonRepeating.speed(10),
+                        value: rotationTrigger
+                    )
+                    .font(.system(size: 28, weight: .regular))
+                    .frame(width: 32, height: 32)
+                    .padding(8)
+            }
+            .foregroundStyle(.primary)
+            .accessibilityLabel(isForward ? L10n.jumpForward : L10n.jumpBackward)
+            .accessibilityValue(interval.rawValue.formatted(Duration.UnitsFormatStyle(allowedUnits: [.seconds], width: .wide)))
         }
     }
 }

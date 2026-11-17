@@ -11,20 +11,19 @@ import SwiftUI
 
 extension VideoPlayer.PlaybackControls {
 
-    struct SplitTimeStamp: PlatformView {
+    struct SplitTimeStamp: PresentationView {
+
+        @AdaptiveLayout
+        private var viewLayout
 
         @Default(.VideoPlayer.Overlay.trailingTimestampType)
         private var trailingTimestampType
 
-        @EnvironmentObject
-        private var containerState: VideoPlayerContainerState
-        @EnvironmentObject
-        private var scrubbedSecondsBox: PublishedBox<Duration>
-        @EnvironmentObject
-        private var manager: MediaPlayerManager
+        @Environment(ViewState.self)
+        private var viewState
+        @Environment(MediaSession.self)
+        private var mediaSession
 
-        @State
-        private var activeSeconds: Duration = .zero
         @State
         private var contentSize: CGSize = .zero
         @State
@@ -32,13 +31,17 @@ extension VideoPlayer.PlaybackControls {
         @State
         private var trailingTimestampSize: CGSize = .zero
 
+        private let statusIndicatorSize: CGFloat = 22
+
         private var scrubbedProgress: Double {
-            guard let runtime = manager.item.runtime, runtime > .zero else { return 0 }
+            guard let runtime = mediaSession.item.runtime, runtime > .zero else { return 0 }
+
             return scrubbedSeconds / runtime
         }
 
         private var previewXOffset: CGFloat {
             let p = contentSize.width * scrubbedProgress - (leadingTimestampSize.width / 2)
+
             return clamp(p, min: 0, max: contentSize.width - leadingTimestampSize.width)
         }
 
@@ -50,36 +53,56 @@ extension VideoPlayer.PlaybackControls {
         }
 
         private var isScrubbing: Bool {
-            containerState.isScrubbing
+            viewState.isScrubbing
         }
 
         private var scrubbedSeconds: Duration {
-            scrubbedSecondsBox.value
+            viewState.scrubbedSeconds
         }
 
-        @ViewBuilder
+        @ContentBuilder
+        private var playbackStatusIndicator: some View {
+            if mediaSession.activity == .loading || mediaSession.playbackState.isBuffering {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.primary)
+                    .visualEffect { content, geometry in
+                        content.scaleEffect(statusIndicatorSize / max(geometry.size.width, 1))
+                    }
+                    .frame(width: statusIndicatorSize, height: statusIndicatorSize)
+                    .accessibilityLabel(mediaSession.activity == .loading ? L10n.playerLoading : L10n.playerBuffering)
+            } else if mediaSession.playbackRequestStatus == .paused {
+                Image(systemName: "pause.circle")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: statusIndicatorSize, height: statusIndicatorSize)
+                    .accessibilityLabel(L10n.pause)
+            }
+        }
+
+        @ContentBuilder
         private var leadingTimestamp: some View {
             HStack(spacing: 2) {
-
                 Text(scrubbedSeconds, format: .runtime)
+                    .accessibilityIdentifier("playbackElapsedTime")
 
                 Group {
                     // swiftlint:disable:next hard_coded_display_string
                     Text("/")
 
-                    Text(activeSeconds, format: .runtime)
+                    Text(viewState.playbackSeconds, format: .runtime)
                 }
                 .foregroundStyle(.secondary)
                 .isVisible(isScrubbing)
             }
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var trailingTimestamp: some View {
             HStack(spacing: 2) {
                 Group {
-                    if let runtime = manager.item.runtime {
-                        Text(runtime - activeSeconds, format: .runtime)
+                    if let runtime = mediaSession.item.runtime {
+                        Text(runtime - viewState.playbackSeconds, format: .runtime)
                     } else {
                         Text(verbatim: .emptyRuntime)
                     }
@@ -90,10 +113,12 @@ extension VideoPlayer.PlaybackControls {
                 .foregroundStyle(.secondary)
                 .isVisible(isScrubbing)
 
-                if let runtime = manager.item.runtime {
+                if let runtime = mediaSession.item.runtime {
                     switch trailingTimestampType {
                     case .timeLeft:
                         Text(.zero - (runtime - scrubbedSeconds), format: .runtime)
+                            .accessibilityIdentifier("playbackRemainingTime")
+
                     case .totalTime:
                         Text(runtime, format: .runtime)
                     }
@@ -103,7 +128,24 @@ extension VideoPlayer.PlaybackControls {
             }
         }
 
-        var iOSView: some View {
+        private var trailingAccessibilityLabel: String {
+            switch trailingTimestampType {
+            case .timeLeft: L10n.timeLeft
+            case .totalTime: L10n.totalTime
+            }
+        }
+
+        private var trailingAccessibilityValue: String {
+            guard let runtime = mediaSession.item.runtime else { return L10n.unknown }
+
+            return switch trailingTimestampType {
+            case .timeLeft: (runtime - scrubbedSeconds).formatted(.spokenRuntime)
+            case .totalTime: runtime.formatted(.spokenRuntime)
+            }
+        }
+
+        @ContentBuilder
+        var standardView: some View {
             HStack {
                 Button {
                     switch trailingTimestampType {
@@ -116,6 +158,9 @@ extension VideoPlayer.PlaybackControls {
                     leadingTimestamp
                 }
                 .foregroundStyle(.primary, .secondary)
+                .accessibilityLabel(L10n.timeElapsed)
+                .accessibilityValue(scrubbedSeconds.formatted(.spokenRuntime))
+                .accessibilityHint(L10n.trailingTimestampAccessibilityHint)
 
                 Spacer()
 
@@ -130,18 +175,22 @@ extension VideoPlayer.PlaybackControls {
                     trailingTimestamp
                 }
                 .foregroundStyle(.primary, .secondary)
+                .accessibilityLabel(trailingAccessibilityLabel)
+                .accessibilityValue(trailingAccessibilityValue)
+                .accessibilityHint(L10n.trailingTimestampAccessibilityHint)
             }
             .font(.caption2)
             .monospacedDigit()
             .lineLimit(1)
             .foregroundStyle(isScrubbing ? .primary : .secondary, .secondary)
-            .assign(manager.secondsBox.$value, to: $activeSeconds)
         }
 
-        var tvOSView: some View {
+        @ContentBuilder
+        var largeView: some View {
             ZStack {
-                if let runtime = manager.item.runtime {
+                if let runtime = mediaSession.item.runtime {
                     Text(.zero - (runtime - scrubbedSeconds), format: .runtime)
+                        .accessibilityIdentifier("playbackRemainingTime")
                 } else {
                     Text(verbatim: .emptyRuntime)
                 }
@@ -151,16 +200,20 @@ extension VideoPlayer.PlaybackControls {
             .trackingSize($trailingTimestampSize)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .overlay(alignment: .leading) {
-                Text(scrubbedSeconds, format: .runtime)
-                    .trackingSize($leadingTimestampSize)
-                    .offset(x: previewXOffset)
+                HStack(spacing: 8) {
+                    playbackStatusIndicator
+                    Text(scrubbedSeconds, format: .runtime)
+                        .accessibilityIdentifier("playbackElapsedTime")
+                }
+                .trackingSize($leadingTimestampSize)
+                .offset(x: previewXOffset)
             }
             .font(.caption)
-            .fontWeight(UIDevice.isTV ? .medium : nil)
+            .fontWeight(viewLayout.value(standard: nil, large: .medium))
             .monospacedDigit()
             .trackingSize($contentSize)
-            .foregroundStyle(containerState.isProgressBarFocused ? .primary : .secondary)
-            .opacity(containerState.isProgressBarFocused ? 1 : 0.7)
+            .foregroundStyle(viewState.isProgressBarFocused ? .primary : .secondary)
+            .opacity(viewState.isProgressBarFocused ? 1 : 0.7)
         }
     }
 }

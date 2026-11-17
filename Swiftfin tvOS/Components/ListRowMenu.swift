@@ -17,7 +17,7 @@ struct ListRowMenu<Content: View, Subtitle: View>: View {
     private let subtitle: Subtitle?
     private let content: () -> Content
 
-    @ViewBuilder
+    @ContentBuilder
     private var buttonView: some View {
         if UIDevice.supportsLiquidGlass {
             glassBody
@@ -26,14 +26,13 @@ struct ListRowMenu<Content: View, Subtitle: View>: View {
         }
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private var labelView: some View {
         HStack {
             title
                 .foregroundStyle(isFocused ? .black : .white)
                 .padding(.leading, 4)
-
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if let subtitle {
                 subtitle
@@ -51,11 +50,11 @@ struct ListRowMenu<Content: View, Subtitle: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private var glassBody: some View {
         labelView
             .glassEffect(
-                .regular.tint(isFocused ? .white : nil),
+                isFocused ? .regular.tint(.white) : .identity,
                 in: .capsule
             )
             .scaleEffect(x: isFocused ? 1.01 : 1.0, y: isFocused ? 1.05 : 1.0, anchor: .center)
@@ -63,7 +62,7 @@ struct ListRowMenu<Content: View, Subtitle: View>: View {
             .listRowBackground(Color.clear)
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private var legacyBody: some View {
         labelView
             .background {
@@ -83,6 +82,7 @@ struct ListRowMenu<Content: View, Subtitle: View>: View {
             .listRowBackground(Color.clear)
     }
 
+    @ContentBuilder
     var body: some View {
         Menu(content: content) {
             buttonView
@@ -95,108 +95,56 @@ struct ListRowMenu<Content: View, Subtitle: View>: View {
 
 // MARK: - Initializers
 
-// Base initializer
 extension ListRowMenu where Subtitle == Text? {
 
     init(
-        _ title: Text,
-        @ViewBuilder content: @escaping () -> Content
+        _ title: some WithText,
+        @ContentBuilder content: @escaping () -> Content
     ) {
-        self.title = title
+        self.title = title.textBody
         self.subtitle = nil
         self.content = content
     }
 
     init(
-        _ title: Text,
-        subtitle: Text?,
-        @ViewBuilder content: @escaping () -> Content
+        _ title: some WithText,
+        subtitle: some WithText?,
+        @ContentBuilder content: @escaping () -> Content
     ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.content = content
-    }
-
-    init(
-        _ title: Text,
-        subtitle: String?,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.title = title
-        self.subtitle = subtitle.map { Text($0) }
-        self.content = content
-    }
-
-    init(
-        _ title: String,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.title = Text(title)
-        self.subtitle = nil
-        self.content = content
-    }
-
-    init(
-        _ title: String,
-        subtitle: String?,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.title = Text(title)
-        self.subtitle = subtitle.map { Text($0) }
-        self.content = content
-    }
-
-    init(
-        _ title: String,
-        subtitle: Text?,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.title = Text(title)
-        self.subtitle = subtitle
+        self.title = title.textBody
+        self.subtitle = subtitle?.textBody
         self.content = content
     }
 }
 
-// Custom view subtitles
 extension ListRowMenu {
 
     init(
-        _ title: String,
-        @ViewBuilder subtitle: @escaping () -> Subtitle,
-        @ViewBuilder content: @escaping () -> Content
+        _ title: some WithText,
+        @ContentBuilder subtitle: @escaping () -> Subtitle,
+        @ContentBuilder content: @escaping () -> Content
     ) {
-        self.title = Text(title)
-        self.subtitle = subtitle()
-        self.content = content
-    }
-
-    init(
-        _ title: Text,
-        @ViewBuilder subtitle: @escaping () -> Subtitle,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.title = title
+        self.title = title.textBody
         self.subtitle = subtitle()
         self.content = content
     }
 }
 
-// Initialize from a CaseIterable Enum
 extension ListRowMenu where Subtitle == Text, Content == AnyView {
 
-    init<ItemType>(
-        _ title: String,
-        selection: Binding<ItemType>
-    ) where ItemType: CaseIterable & Displayable & Hashable,
-        ItemType.AllCases: RandomAccessCollection
-    {
-        self.title = Text(title)
+    init<SelectionValue>(
+        _ title: some WithText,
+        selection: Binding<SelectionValue>
+    ) where SelectionValue: CaseIterable & Displayable & Hashable,
+        SelectionValue.AllCases: RandomAccessCollection {
+        self.title = title.textBody
         self.subtitle = Text(selection.wrappedValue.displayTitle)
+
         self.content = {
-            Picker(title, selection: selection) {
-                ForEach(Array(ItemType.allCases), id: \.self) { option in
-                    Text(option.displayTitle).tag(option)
-                }
+            Picker(selection: selection) {
+                _CaseIterablePickerContent<SelectionValue>()
+            } label: {
+                title.textBody
             }
             .eraseToAnyView()
         }

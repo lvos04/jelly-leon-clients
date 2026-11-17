@@ -6,39 +6,36 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import JellyfinAPI
 import SwiftUI
 
 struct PosterIndicatorsOverlay: View {
 
-    @Default(.Customization.Indicators.unplayedStyle)
-    private var unplayedStyle
+    @AdaptiveLayout
+    private var viewLayout
 
-    @Environment(\.enabledPosterIndicators)
-    private var environmentIndicators
+    @AppTheme
+    private var theme
 
-    let item: BaseItemDto
+    @Environment(\.isSelected)
+    private var isSelected
+
+    @Environment(\.posterConfiguration)
+    private var posterConfiguration
+
+    @ViewContextContains(.isInResume)
+    private var isInResume
+
+    @SharedBaseItem
+    var item: BaseItemDto
     let posterDisplayType: PosterDisplayType
 
-    private let overrideIndicators: PosterIndicator?
-
     private var indicators: PosterIndicator {
-        overrideIndicators ?? environmentIndicators
-    }
-
-    init(
-        item: BaseItemDto,
-        indicators: PosterIndicator? = nil,
-        posterDisplayType: PosterDisplayType
-    ) {
-        self.item = item
-        self.posterDisplayType = posterDisplayType
-        self.overrideIndicators = indicators
+        posterConfiguration.indicators
     }
 
     private var indicatorSize: CGFloat {
-        UIDevice.isTV ? 45 : 25
+        viewLayout.indicatorSize
     }
 
     private var showsUnplayedIndicator: Bool {
@@ -51,39 +48,65 @@ struct PosterIndicatorsOverlay: View {
 
     private var showsProgressIndicator: Bool {
         indicators.contains(.progress) &&
-            item.progressLabel != nil &&
-            item.userData?.isPlayed != true
+            item.progressLabel != nil
     }
 
+    private var showsFavoriteIndicator: Bool {
+        indicators.contains(.favorited) && item.userData?.isFavorite == true
+    }
+
+    private var showsPlayedIndicator: Bool {
+        indicators.contains(.played) &&
+            item.canBePlayed &&
+            !item.isLiveStream &&
+            item.userData?.isPlayed == true &&
+            !isInResume &&
+            (item.userData?.playbackPositionTicks ?? 0) == 0
+    }
+
+    @ArrayBuilder<QuadrantItem>
+    private var bottomIndicators: [QuadrantItem] {
+        if item.isRecording {
+            QuadrantItem(color: .red) {
+                Text(Image(systemName: "record.circle"))
+                    .accessibilityLabel(L10n.recording)
+            }
+        }
+
+        if showsFavoriteIndicator {
+            QuadrantItem(color: .pink) {
+                Text(Image(systemName: "heart.fill"))
+                    .accessibilityLabel(L10n.favorited)
+            }
+        }
+
+        if showsPlayedIndicator {
+            QuadrantItem(color: theme.accentColor) {
+                Text(Image(systemName: "checkmark"))
+                    .fontWeight(.bold)
+                    .accessibilityLabel(L10n.played)
+            }
+        }
+    }
+
+    @ContentBuilder
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 if showsUnplayedIndicator {
                     UnplayedIndicator(
-                        count: unplayedStyle == .count ? item.userData?.unplayedItemCount : nil
+                        count: posterConfiguration.unplayedStyle == .count ? item.userData?.unplayedItemCount : nil
                     )
                     .frame(height: indicatorSize)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 }
 
-                HStack(spacing: 5) {
-                    if indicators.contains(.favorited), item.userData?.isFavorite == true {
-                        FavoriteIndicator()
-                            .frame(width: indicatorSize, height: indicatorSize)
+                if !showsProgressIndicator {
+                    Quadrant(.bottomTrailing) {
+                        bottomIndicators
                     }
-
-                    if indicators.contains(.played),
-                       item.canBePlayed,
-                       !item.isLiveStream,
-                       item.userData?.isPlayed == true
-                    {
-                        PlayedIndicator()
-                            .frame(width: indicatorSize, height: indicatorSize)
-                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
-                .padding(3)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .zIndex(10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -92,26 +115,34 @@ struct PosterIndicatorsOverlay: View {
                     title: item.progressLabel ?? "",
                     progress: item.progressPercentage ?? 0,
                     posterDisplayType: posterDisplayType
-                )
-                .zIndex(5)
+                ) {
+                    bottomIndicators
+                }
             }
         }
+        .opacity(isSelected ? 0.85 : 1)
+        .posterCornerRadius(posterDisplayType)
     }
 }
 
 struct PosterSelectionOverlay: View {
 
-    @Default(.accentColor)
-    private var accentColor
+    @AdaptiveLayout
+    private var viewLayout
+
+    @AppTheme
+    private var theme
 
     @Environment(\.isSelected)
     private var isSelected
 
+    @ContentBuilder
     var body: some View {
         if isSelected {
             ContainerRelativeShape()
-                .stroke(accentColor, lineWidth: UIDevice.isTV ? 12 : 8)
+                .stroke(theme.accentColor, lineWidth: viewLayout.selectionBorderWidth)
                 .clipped()
+                .accessibilityHidden(true)
         }
     }
 }

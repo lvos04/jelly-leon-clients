@@ -71,6 +71,7 @@ struct EditServerConnectionView: View {
 
     private var isDuplicateConnection: Bool {
         guard let connection = try? draft.connection() else { return false }
+
         return ServerConnection.isDuplicate(connection, in: viewModel.connections)
     }
 
@@ -107,13 +108,11 @@ struct EditServerConnectionView: View {
     }
 
     #if os(iOS)
-    @ViewBuilder
+    @ContentBuilder
     private var locationPermissionWarning: some View {
-
         if draft.interface == .wifi,
            locationPermissionStatus != .authorized,
-           AppPermission.location.privacyDescription.isNotEmpty
-        {
+           AppPermission.location.privacyDescription.isNotEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Label(
                     AppPermission.location.privacyDescription,
@@ -123,8 +122,7 @@ struct EditServerConnectionView: View {
 
                 if locationPermissionStatus == .denied {
                     Button(L10n.permissions) {
-                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                        UIApplication.shared.open(url)
+                        Task { try? await SystemSettings.application.open() }
                     }
                     .foregroundStyle(Color.accentColor)
                     .buttonStyle(.plain)
@@ -136,7 +134,7 @@ struct EditServerConnectionView: View {
 
     private func save() async throws {
         guard !isNameEmpty else {
-            throw ErrorMessage(L10n.invalidX(L10n.name))
+            throw ErrorMessage(L10n.invalidName)
         }
 
         let connection = try draft.connection()
@@ -177,6 +175,7 @@ struct EditServerConnectionView: View {
         }
     }
 
+    @ContentBuilder
     var body: some View {
         Form(systemImage: "network") {
             Section {
@@ -193,11 +192,11 @@ struct EditServerConnectionView: View {
 
             Section {
                 TextField(L10n.url, text: $draft.urlString)
-                #if !os(tvOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-                #endif
+                    #if !os(tvOS)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                    #endif
             } header: {
                 Text(L10n.url)
             } footer: {
@@ -310,10 +309,12 @@ struct EditServerConnectionView: View {
         #if os(iOS)
         .onChange(of: draft.interface) {
             guard draft.interface == .wifi, draft.wifiSSIDs.first?.nilIfBlank == nil else { return }
+
             populateCurrentWifiSSID(keepSpecificOnFailure: false)
         }
         .onChange(of: draft.useWifiName) {
             guard draft.useWifiName, draft.interface == .wifi, draft.wifiSSIDs.first?.nilIfBlank == nil else { return }
+
             populateCurrentWifiSSID(keepSpecificOnFailure: true)
         }
         .onAppear {
@@ -327,6 +328,7 @@ struct EditServerConnectionView: View {
 }
 
 private struct ServerConnectionDraft: Equatable {
+
     let id: String
     var name: String
     var urlString: String
@@ -362,9 +364,8 @@ private struct ServerConnectionDraft: Equatable {
 
         if interface == .wifi,
            useWifiName,
-           normalizedSSIDs.isEmpty
-        {
-            throw ErrorMessage(L10n.invalidX(L10n.wifiName))
+           normalizedSSIDs.isEmpty {
+            throw ErrorMessage(L10n.invalidWifiName)
         }
 
         return ServerConnection(

@@ -33,44 +33,43 @@ struct AppSettingsView: View {
     @Router
     private var router
 
-    @StateObject
-    private var viewModel = SettingsViewModel()
+    @StoredValue(.Server.servers)
+    private var servers
 
     #if os(tvOS)
     private var selectedServer: ServerState? {
-        viewModel.servers.first { server in
+        servers.first { server in
             selectUserAllServersSplashscreen == .server(id: server.id)
         }
     }
     #endif
 
+    @ContentBuilder
     private var serverPicker: some View {
         Picker(L10n.servers, selection: $selectUserAllServersSplashscreen) {
             Label(L10n.random, systemImage: "dice.fill")
                 .tag(SelectUserServerSelection.all)
 
-            ForEach(viewModel.servers) { server in
+            ForEach(servers.sorted(using: \.name)) { server in
                 Text(server.name)
                     .tag(SelectUserServerSelection.server(id: server.id))
             }
         }
     }
 
+    @ContentBuilder
     var body: some View {
         Form(image: .jellyfinBlobBlue) {
-
             Section(L10n.swiftfin) {
-                ChevronButton(L10n.about) {
+                ChevronButton(L10n.aboutApp) {
                     router.route(to: .aboutApp)
                 }
             }
 
             #if os(iOS)
             Section(L10n.customize) {
-
                 ChevronButton(L10n.appIcon) {
-                    // TODO: Create NavigationRoute.appIconSelector
-                    router.route(to: .appIconSelector(viewModel: viewModel))
+                    router.route(to: .appIconSelector)
                 }
 
                 if !selectUserUseSplashscreen {
@@ -80,13 +79,18 @@ struct AppSettingsView: View {
                     )
                 }
             }
+            #else
+            // Section(L10n.customize) {
+            //     ChevronButton(L10n.appIcon) {
+            //         router.route(to: .appIconSelector)
+            //     }
+            // }
             #endif
 
             Section {
                 Toggle(L10n.useSplashscreen, isOn: $selectUserUseSplashscreen)
 
                 if selectUserUseSplashscreen {
-
                     #if os(tvOS)
                     ListRowMenu(L10n.servers) {
                         if selectUserAllServersSplashscreen == .all {

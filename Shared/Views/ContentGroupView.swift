@@ -14,6 +14,17 @@ import SwiftUI
 
 struct ContentGroupView<Provider: ContentGroupProvider>: View {
 
+    private enum Focus: String {
+
+        case content = "contentGroup-content"
+    }
+
+    @Environment(\.frameForParentView)
+    private var frameForParentView
+
+    @AdaptiveLayout
+    private var viewLayout
+
     @Router
     private var router
 
@@ -21,7 +32,7 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
     private var contentGroupOptions: ContentGroupParentOption = .init()
 
     @StateObject
-    private var focusCoordinator: FocusCoordinator = .init()
+    private var focusCoordinator = FocusCoordinator(waitingFor: Focus.content.rawValue, focusPlaceholder: true)
     @StateObject
     private var viewModel: ContentGroupViewModel<Provider>
 
@@ -32,7 +43,7 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
         _viewModel = StateObject(wrappedValue: ContentGroupViewModel(provider: provider))
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private var contentView: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -42,15 +53,24 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                         .id("top")
 
                     ContentGroupVStack(groups: viewModel.groups)
-                        .edgePadding(contentGroupOptions.contains(.ignoreSafeAreaTop) ? .bottom : .vertical)
+                        .edgePadding(viewLayout.isLarge && !contentGroupOptions.contains(.ignoreSafeAreaTop) ? .vertical : .bottom)
+                        .padding(
+                            .top,
+                            contentGroupOptions.contains(.ignoreSafeAreaTop) ? 0 : (frameForParentView[.tabView]?.safeAreaInsets.top ?? 0)
+                        )
                         .onPreferenceChange(ContentGroupCustomizationKey.self) { value in
                             contentGroupOptions = value
                         }
                 }
             }
             .trackingFrame(for: .scrollView)
+            #if os(tvOS)
+            .coordinatedFocus(Focus.content.rawValue)
+            #endif
             .ignoresSafeArea(
-                edges: contentGroupOptions.contains(.ignoreSafeAreaTop) ? [.horizontal, .top] : .horizontal
+                .container,
+                edges: viewLayout
+                    .scrollContentEdges(extendsTop: viewLayout.isLarge || contentGroupOptions.contains(.ignoreSafeAreaTop))
             )
             .scrollIndicators(.hidden)
             .refreshable {
@@ -66,7 +86,8 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
         }
     }
 
-    var body: some View {
+    @ContentBuilder
+    private var groupContent: some View {
         ZStack {
             switch viewModel.state {
             case .content:
@@ -76,44 +97,84 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                         systemImage: "rectangle.on.rectangle.slash"
                     )
                     .focusable()
+                    #if os(tvOS)
+                    .coordinatedFocus(.fallback)
+                    #endif
                 } else {
                     contentView
                 }
+
             case .error:
                 viewModel.error.map(ErrorView.init)
+                    #if os(tvOS)
+                        .coordinatedFocus(.fallback)
+                    #endif
+
             case .initial, .refreshing:
                 ProgressView()
+                    #if os(tvOS)
+                        .coordinatedFocus(.placeholder)
+                    #endif
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: .all)
             }
+        }
+    }
+
+    @ContentBuilder
+    var body: some View {
+        Group {
+            #if os(tvOS)
+            groupContent
+            #else
+            GeometryReader { geometry in
+                let safeArea = frameForParentView[.navigationStack]?.safeAreaInsets ?? geometry.safeAreaInsets
+                let horizontalInsets = EdgeInsets(
+                    top: 0,
+                    leading: safeArea.leading,
+                    bottom: 0,
+                    trailing: safeArea.trailing
+                )
+
+                groupContent
+                    .layoutContainer(size: CGSize(
+                        width: max(0, geometry.size.width - horizontalInsets.leading - horizontalInsets.trailing),
+                        height: geometry.size.height
+                    ))
+                    .padding(horizontalInsets)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .animation(.smooth(duration: 0.35), value: horizontalInsets)
+            }
+            .ignoresSafeArea(.container, edges: .horizontal)
+            #endif
         }
         .animation(.linear(duration: 0.2), value: viewModel.state)
         .animation(.linear(duration: 0.2), value: viewModel.background.states)
         .navigationTitle(viewModel.provider.displayTitle)
         #if os(iOS)
-            .toolbarTitleDisplayMode(router.isRootOfPath ? .inlineLarge : .inline)
+        .toolbarTitleDisplayMode(router.isRootOfPath ? .inlineLarge : .inline)
         #elseif os(tvOS)
-            .toolbar(router.isRootOfPath ? .hidden : .automatic, for: .navigationBar)
+        .toolbar(router.isRootOfPath ? .hidden : .automatic, for: .navigationBar)
         #endif
-            .onFirstAppear {
-                viewModel.refresh()
-            }
-            .refreshable {
-                viewModel.refresh()
-            }
-            .sinceLastDisappear { interval in
-                viewModel.refreshIfNeeded(sinceLastDisappear: interval)
-            }
-            .onSceneWillEnterForeground {
-                viewModel.refreshIfPendingChanges()
-            }
-            .topBarTrailing {
-                if #unavailable(iOS 26.0) {
-                    if viewModel.background.is(.refreshing) {
-                        ProgressView()
-                    }
+        .onFirstAppear {
+            viewModel.refresh()
+        }
+        .refreshable {
+            viewModel.refresh()
+        }
+        .sinceLastDisappear { interval in
+            viewModel.refreshIfNeeded(sinceLastDisappear: interval)
+        }
+        .onSceneWillEnterForeground {
+            viewModel.refreshIfPendingChanges()
+        }
+        .topBarTrailing {
+            if #unavailable(iOS 26.0) {
+                if viewModel.background.is(.refreshing) {
+                    ProgressView()
                 }
             }
-            .environmentObject(focusCoordinator)
+        }
+        .environmentObject(focusCoordinator)
     }
 }

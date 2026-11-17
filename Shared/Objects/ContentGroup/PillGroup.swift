@@ -42,6 +42,9 @@ struct PillGroup<Element: Displayable>: ContentGroup {
 
     struct Body: View {
 
+        @AdaptiveLayout
+        private var viewLayout
+
         @Router
         private var router
 
@@ -49,10 +52,11 @@ struct PillGroup<Element: Displayable>: ContentGroup {
         let displayTitle: String
         let elements: [Element]
 
+        @ContentBuilder
         var body: some View {
             ContentGroupSection {
                 ScrollView(.horizontal) {
-                    HStack(spacing: PosterHStackMetrics.itemSpacing) {
+                    HStack(spacing: viewLayout.itemSpacing) {
                         ForEach(elements) { element in
                             Button {
                                 action(router, element)
@@ -60,17 +64,14 @@ struct PillGroup<Element: Displayable>: ContentGroup {
                                 if let imageable = element as? SystemImageable {
                                     Label(element.displayTitle, systemImage: imageable.systemImage)
                                 } else {
-                                    EmptyLabel(element.displayTitle)
+                                    Text(element.displayTitle)
                                 }
                             }
                             .foregroundStyle(.primary, .secondary)
-                            .font(.callout)
-                            .fontWeight(.semibold)
-                            .labelStyle(CapsuleLabelStyle())
-                            .buttonBorderShape(.capsule)
-                            .buttonStyle(.card)
                         }
                     }
+                    .labelStyle(.leadingIcon)
+                    .buttonStyle(.capsule)
                     .edgePadding(.horizontal)
                 }
                 .scrollIndicators(.hidden)

@@ -19,6 +19,9 @@ struct VideoPlayerSettingsView: View {
     typealias PlatformPicker = Picker
     #endif
 
+    @Default(.VideoPlayer.mediaPlayerType)
+    private var mediaPlayerType
+
     // MARK: - Button Defaults
 
     @Default(.VideoPlayer.jumpBackwardInterval)
@@ -49,10 +52,13 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Subtitle Defaults
 
-    @Default(.VideoPlayer.Subtitle.configuration)
-    private var subtitleConfiguration
     @StoredValue(.User.forceSubtitleBurnIn)
     private var forceSubtitleBurnIn
+
+    #if os(iOS)
+    @Default(.VideoPlayer.Transition.automaticPictureInPicture)
+    private var automaticPictureInPicture
+    #endif
 
     // MARK: - Timestamp Defaults
 
@@ -67,20 +73,23 @@ struct VideoPlayerSettingsView: View {
 
     init() {
         _viewModel =
-            StateObject(wrappedValue: ServerUserAdminViewModel(user: Container.shared.currentUserSession()?.user.data ?? UserDto()))
+            StateObject(wrappedValue: ServerUserAdminViewModel(user: Container.shared.currentUserSession()?.userData ?? UserDto()))
     }
 
     private func updateConfiguration(_ modify: (inout UserConfiguration) -> Void) {
-        guard viewModel.user.id != nil else { return }
-        guard var configuration = viewModel.user.configuration else { return }
+        guard viewModel.user.id != nil, var configuration = viewModel.user.configuration else { return }
+
         modify(&configuration)
         viewModel.updateConfiguration(configuration)
     }
 
     // MARK: - Body
 
+    @ContentBuilder
     var body: some View {
         Form(systemImage: "tv") {
+            playbackSettings
+
             #if os(iOS)
             gestureSettings
             #endif
@@ -111,10 +120,27 @@ struct VideoPlayerSettingsView: View {
         }
     }
 
+    // MARK: - Playback Settings
+
+    @ContentBuilder
+    private var playbackSettings: some View {
+        Section(L10n.playback) {
+            PlatformPicker(L10n.player, selection: $mediaPlayerType)
+
+            ChevronButton(L10n.playbackQuality) {
+                router.route(to: .playbackQualitySettings)
+            }
+
+            #if os(iOS)
+            Toggle(L10n.automaticPictureInPicture, isOn: $automaticPictureInPicture)
+            #endif
+        }
+    }
+
     // MARK: - Gesture Settings
 
     #if os(iOS)
-    @ViewBuilder
+    @ContentBuilder
     private var gestureSettings: some View {
         Section(L10n.gestures) {
             ChevronButton(L10n.gestures) {
@@ -126,15 +152,37 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Button Settings
 
-    @ViewBuilder
+    @ContentBuilder
+    private func jumpIntervalPicker(title: String, selection: Binding<MediaJumpInterval>) -> some View {
+        CustomAlertPicker(
+            title: title,
+            selection: selection,
+            customTitle: L10n.jump,
+            customDescription: L10n.customJumpIntervalDescription
+        ) { value in
+            TextField(
+                L10n.duration,
+                value: value
+                    .map(
+                        getter: { Int($0.rawValue.seconds) },
+                        setter: { MediaJumpInterval(rawValue: .seconds($0)) }
+                    )
+                    .clamp(min: 1, max: 600),
+                format: .number
+            )
+            .keyboardType(.numberPad)
+        }
+    }
+
+    @ContentBuilder
     private var buttonSettings: some View {
         Section(L10n.buttons) {
-            JumpIntervalPicker(
+            jumpIntervalPicker(
                 title: L10n.jumpBackwardLength,
                 selection: $jumpBackwardLength
             )
 
-            JumpIntervalPicker(
+            jumpIntervalPicker(
                 title: L10n.jumpForwardLength,
                 selection: $jumpForwardLength
             )
@@ -163,7 +211,7 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Resume Settings
 
-    @ViewBuilder
+    @ContentBuilder
     private var resumeSettings: some View {
         Section {
             Stepper(L10n.resumeOffset, value: $resumeOffset, in: 0 ... 30, step: 1) {
@@ -188,18 +236,35 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Slider Settings
 
-    @ViewBuilder
+    @ContentBuilder
     private var sliderSettings: some View {
         Section(L10n.slider) {
             Toggle(L10n.chapterSlider, isOn: $chapterSlider)
 
-            PlatformPicker(L10n.previewImage, selection: $previewImageScrubbing)
+            PlatformPicker(L10n.previewImage, selection: $previewImageScrubbing.map(
+                getter: { option -> PreviewImageScrubbingOption in
+                    // The picker selects the preview source, not the chapter fallback behavior.
+                    if case .trickplay = option {
+                        return .trickplay()
+                    }
+
+                    return option
+                },
+                setter: { option in
+                    if case .trickplay = option,
+                       case .trickplay = previewImageScrubbing {
+                        return previewImageScrubbing
+                    }
+
+                    return option
+                }
+            ))
         }
     }
 
     // MARK: - Supplement Settings
 
-    @ViewBuilder
+    @ContentBuilder
     private var supplementSettings: some View {
         Section(L10n.supplements) {
             ChevronButton(L10n.supplements) {
@@ -212,7 +277,7 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Timestamp Settings
 
-    @ViewBuilder
+    @ContentBuilder
     private var timestampSettings: some View {
         Section(L10n.timestamp) {
             PlatformPicker(L10n.trailingValue, selection: $trailingTimestampType)
@@ -221,7 +286,7 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Audio Settings
 
-    @ViewBuilder
+    @ContentBuilder
     private var audioSettings: some View {
         Section(L10n.audio) {
             CulturePicker(L10n.preferredLanguage, threeLetterISOLanguageName: Binding(
@@ -259,7 +324,7 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Subtitle Settings
 
-    @ViewBuilder
+    @ContentBuilder
     private var subtitleSettings: some View {
         Section(L10n.subtitles) {
             CulturePicker(L10n.preferredLanguage, threeLetterISOLanguageName: Binding(
@@ -317,21 +382,11 @@ struct VideoPlayerSettingsView: View {
         }
 
         Section {
-            ChevronButton(L10n.subtitleFont, content: subtitleConfiguration.fontName) {
-                router.route(to: .fontPicker(selection: $subtitleConfiguration.fontName))
-            }
-
-            Stepper(L10n.subtitleSize, value: $subtitleConfiguration.size, in: 1 ... 20, step: 1) {
-                LabeledContent(L10n.subtitleSize) {
-                    Text(subtitleConfiguration.size.description)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            ColorPicker(L10n.subtitleColor, selection: $subtitleConfiguration.color, supportsOpacity: false)
+            SystemSettingsButton(title: L10n.captionStyleSettings, destination: .captionStyles)
+        } header: {
+            Text(L10n.textStyle)
         } footer: {
-            // TODO: better wording
-            Text(L10n.subtitlesDisclaimer)
+            Text(L10n.captionStyleSettingsDescription)
         }
     }
 }

@@ -24,6 +24,20 @@ extension NavigationRoute {
     }
 
     @MainActor
+    static func editFilters(
+        filters: ItemFilterCollection,
+        savedFilter: StoredItemFilter? = nil,
+        onSave: ((StoredItemFilter) -> Void)? = nil
+    ) -> NavigationRoute {
+        NavigationRoute(
+            id: "edit-filters",
+            style: .sheet
+        ) {
+            EditFiltersView(filters: filters, savedFilter: savedFilter, onSave: onSave)
+        }
+    }
+
+    @MainActor
     static func contentGroup(
         provider: some ContentGroupProvider
     ) -> NavigationRoute {
@@ -37,13 +51,14 @@ extension NavigationRoute {
 
     @MainActor
     static func library<Library: PagingLibrary>(
-        library: Library
+        library: Library,
+        displayTitle: String? = nil
     ) -> NavigationRoute where Library.Element: LibraryElement {
         NavigationRoute(
             id: "library-\(library.parent.pagingLibraryID)",
             withNamespace: { .push(.zoom(sourceID: "item", namespace: $0)) }
         ) {
-            PagingLibraryView(library: library)
+            PagingLibraryView(library: library, displayTitle: displayTitle)
         }
     }
 }

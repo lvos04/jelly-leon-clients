@@ -22,12 +22,11 @@ extension SessionInfoDto: @retroactive Comparable {
         guard nowPlayingItem != nil, let playState, let playMethod = playState.playMethod else { return nil }
 
         if let transcodingInfo {
-
             let isVideoDirect = transcodingInfo.isVideoDirect ?? false
-            let hasVideoCodec = transcodingInfo.videoCodec != nil
+            let isAudioOnly = transcodingInfo.videoCodec == nil
             let isAudioDirect = transcodingInfo.isAudioDirect ?? false
 
-            if isVideoDirect || hasVideoCodec, isAudioDirect {
+            if isVideoDirect || isAudioOnly, isAudioDirect {
                 return L10n.remux
             } else if isVideoDirect {
                 return PlayMethod.directStream.displayTitle

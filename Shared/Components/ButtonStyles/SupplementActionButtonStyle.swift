@@ -17,12 +17,14 @@ extension PrimitiveButtonStyle where Self == SupplementActionButtonStyle {
 
 struct SupplementActionButtonStyle: PrimitiveButtonStyle {
 
+    @ContentBuilder
     private func baseLabel(_ configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.black)
+            .foregroundStyle(configuration.role == .destructive ? .white : .black)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    @ContentBuilder
     private func legacyButton(_ configuration: Configuration) -> some View {
         Button {
             configuration.trigger()
@@ -30,13 +32,14 @@ struct SupplementActionButtonStyle: PrimitiveButtonStyle {
             baseLabel(configuration)
                 .background {
                     RoundedRectangle(cornerRadius: 7)
-                        .fill(.white)
+                        .fill(configuration.role == .destructive ? .red : .white)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.card)
     }
 
+    @ContentBuilder
     @available(iOS 26.0, tvOS 26.0, *)
     private func glassButton(_ configuration: Configuration) -> some View {
         Button {
@@ -45,18 +48,18 @@ struct SupplementActionButtonStyle: PrimitiveButtonStyle {
             baseLabel(configuration)
                 .glassEffect(
                     .regular
-                        .tint(.white)
+                        .tint(configuration.role == .destructive ? .red : .white)
                         .interactive(),
                     in: Capsule()
                 )
         }
         .buttonBorderShape(.capsule)
         #if os(tvOS)
-            .buttonStyle(.card)
+        .buttonStyle(.card)
         #endif
     }
 
-    @ViewBuilder
+    @ContentBuilder
     func makeBody(configuration: Configuration) -> some View {
         if #available(iOS 26.0, *), UIDevice.supportsLiquidGlass {
             glassButton(configuration)

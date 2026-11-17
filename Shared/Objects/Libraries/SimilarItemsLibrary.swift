@@ -8,19 +8,32 @@
 
 import JellyfinAPI
 
-struct SimilarItemsLibrary: PagingLibrary {
+struct SimilarItemsLibrary: MediaLibrary {
+
+    let hasNextPage = false
 
     let itemID: String
     let parent: TitledLibraryParent = .init(displayTitle: L10n.recommended, id: "similar-items")
 
+    private let itemType: BaseItemKind?
+
+    init(itemID: String, itemType: BaseItemKind?) {
+        self.itemID = itemID
+        self.itemType = itemType
+    }
+
     func retrievePage(
         environment: Empty,
         pageState: LibraryPageState
-    ) async throws -> [BaseItemDto] {
+    ) async throws -> [ItemPatch] {
         var parameters = Paths.GetSimilarItemsParameters()
-        parameters.fields = .MinimumFields.appending(.channelInfo)
+        parameters.fields = PosterSubtitleField.itemFields
         parameters.limit = pageState.pageSize
         parameters.userID = pageState.userSession.user.id
+
+        if let itemType, [.liveTvProgram, .program, .tvProgram].contains(itemType) {
+            parameters.fields = PosterSubtitleField.itemFields + [.channelInfo]
+        }
 
         let request = Paths.getSimilarItems(
             itemID: itemID,
@@ -28,6 +41,6 @@ struct SimilarItemsLibrary: PagingLibrary {
         )
         let response = try await pageState.userSession.client.send(request)
 
-        return response.value.items ?? []
+        return try pageState.items(from: response)
     }
 }

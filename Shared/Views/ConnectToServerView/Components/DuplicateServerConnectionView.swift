@@ -10,7 +10,7 @@ import SwiftUI
 
 extension ConnectToServerView {
 
-    struct DuplicateServerConnectionView: PlatformView {
+    struct DuplicateServerConnectionView: PresentationView {
 
         @Environment(\.dismiss)
         private var dismiss
@@ -21,7 +21,8 @@ extension ConnectToServerView {
         let server: ServerState
         let action: () -> Void
 
-        var iOSView: some View {
+        @ContentBuilder
+        var standardView: some View {
             NavigationStack {
                 Form {
                     Section {
@@ -52,14 +53,14 @@ extension ConnectToServerView {
                     .listRowInsets(.zero)
                     .listRowBackground(Color.clear)
                     #if os(iOS)
-                        .listRowSeparator(.hidden)
+                    .listRowSeparator(.hidden)
                     #endif
-                        .fontWeight(.semibold)
-                        .backport
-                        .buttonStyle(.glassProminent.shadow(false))
-                        .tint(.jellyfinPurple)
+                    .fontWeight(.semibold)
+                    .backport
+                    .buttonStyle(.glassProminent.shadow(false))
+                    .tint(.jellyfinPurple)
                     #if os(iOS)
-                        .controlSize(.large)
+                    .controlSize(.large)
                     #endif
                 }
                 .toolbarTitleDisplayMode(.inline)
@@ -70,7 +71,8 @@ extension ConnectToServerView {
             }
         }
 
-        var tvOSView: some View {
+        @ContentBuilder
+        var largeView: some View {
             VStack(spacing: 8) {
                 Text(L10n.connection)
                     .font(.title3)

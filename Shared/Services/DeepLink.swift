@@ -11,6 +11,7 @@ import Foundation
 struct DeepLink: Equatable {
 
     enum Destination: Equatable {
+
         case item(id: String)
 
         // TODO: able to launch library by ID without item pre-retrieval?
@@ -23,7 +24,7 @@ struct DeepLink: Equatable {
 
     init?(_ url: URL) {
         guard let match = url.absoluteString.wholeMatch(
-            of: /^swiftfin:\/\/(?<serverID>[A-Za-z0-9-]+)\/(?<userID>[A-Za-z0-9-]+)\/(?<destinationType>item|library)\/(?<destinationID>[A-Za-z0-9-]+)\/?$/
+            of: /^(?:swiftfin|jellyfin):\/\/(?<serverID>[A-Za-z0-9-]+)\/(?<userID>[A-Za-z0-9-]+)\/(?<destinationType>item|library)\/(?<destinationID>[A-Za-z0-9-]+)\/?$/
         ) else { return nil }
 
         self.serverID = String(match.output.serverID)
@@ -45,6 +46,7 @@ struct DeepLink: Equatable {
 }
 
 enum DeepLinkError: Error {
+
     case missingServer(String)
     case missingUser(String)
 }

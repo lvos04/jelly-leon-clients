@@ -18,20 +18,23 @@ struct UserSessionRootView: View {
     @InjectedObject(\.userSessionManager)
     private var userSessionManager
 
+    @ContentBuilder
     var body: some View {
         ZStack {
             switch userSessionManager.state {
             case .initial:
                 ProgressView()
+
             case .signedOut:
                 NavigationInjectionView(coordinator: .init()) {
                     SelectUserView()
                 }
+
             case .signedIn:
                 PosterPreferencesEnvironment {
                     MainTabView()
                 }
-                .id(userSessionManager.currentSession?.user.id)
+                .id(userSessionManager.currentSession.map(ObjectIdentifier.init))
             }
         }
         .animation(.linear(duration: 0.1), value: userSessionManager.state)
@@ -53,20 +56,18 @@ struct UserSessionRootView: View {
 
 private struct PosterPreferencesEnvironment<Content: View>: View {
 
-    @Default(.Customization.Indicators.enabled)
-    private var enabledPosterIndicators
-    @Default(.Customization.Episodes.useSeriesLandscapeBackdrop)
-    private var useSeriesLandscapeBackdrop
+    @Default(.Customization.Poster.configuration)
+    private var posterConfiguration
 
     let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(@ContentBuilder content: () -> Content) {
         self.content = content()
     }
 
+    @ContentBuilder
     var body: some View {
         content
-            .environment(\.enabledPosterIndicators, enabledPosterIndicators)
-            .environment(\.useSeriesLandscapeBackdrop, useSeriesLandscapeBackdrop)
+            .environment(\.posterConfiguration, posterConfiguration)
     }
 }

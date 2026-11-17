@@ -27,10 +27,11 @@ struct ServerConnectionView: View {
         editMode.isEditing
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private func serverConnectionRow(_ connection: ServerConnection) -> some View {
         Button {
             guard !isEditing else { return }
+
             router.route(to: .editServerConnection(viewModel: viewModel, connection: connection))
         } label: {
             HStack(spacing: 12) {
@@ -66,6 +67,7 @@ struct ServerConnectionView: View {
         .foregroundStyle(.primary, .secondary)
     }
 
+    @ContentBuilder
     var body: some View {
         Form(systemImage: "network") {
             if isAutoSwitchFeatureEnabled {
@@ -80,8 +82,7 @@ struct ServerConnectionView: View {
                         } label: {
                             HStack {
                                 Text(L10n.evaluate)
-
-                                Spacer()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
 
                                 if viewModel.isEvaluatingAutoSwitchConnection {
                                     ProgressView()
@@ -125,8 +126,8 @@ struct ServerConnectionView: View {
                 }
                 #if os(iOS)
                 .backport
-                .buttonStyle(.glass)
-                .controlSize(.small)
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                 #endif
             }
         }

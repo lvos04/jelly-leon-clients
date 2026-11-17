@@ -6,15 +6,14 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import Foundation
 import JellyfinAPI
 import SwiftUI
 
 struct QuickConnectAuthorizeView: View {
 
-    @Default(.accentColor)
-    private var accentColor
+    @AppTheme
+    private var theme
 
     @Router
     private var router
@@ -34,7 +33,7 @@ struct QuickConnectAuthorizeView: View {
         self._viewModel = StateObject(wrappedValue: QuickConnectAuthorizeViewModel(user: user))
     }
 
-    @ViewBuilder
+    @ContentBuilder
     private var loginUserRow: some View {
         HStack {
             if let userSession = viewModel.userSession {
@@ -51,11 +50,11 @@ struct QuickConnectAuthorizeView: View {
             Text(viewModel.user.name ?? L10n.unknown)
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
-
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
+    @ContentBuilder
     var body: some View {
         Form {
             Section {
@@ -90,7 +89,7 @@ struct QuickConnectAuthorizeView: View {
                 .backport
                 .buttonStyle(.glassProminent.shadow(false))
                 #if os(iOS)
-                    .controlSize(.large)
+                .controlSize(.large)
                 #endif
             } else {
                 Button {
@@ -105,11 +104,11 @@ struct QuickConnectAuthorizeView: View {
                 .fontWeight(.semibold)
                 .backport
                 .buttonStyle(.glassProminent.shadow(false))
-                .tint(accentColor)
+                .tint(theme.accentColor)
                 #if os(iOS)
-                    .controlSize(.large)
+                .controlSize(.large)
                 #endif
-                    .disabled(code.count != 6 || viewModel.state == .authorizing)
+                .disabled(code.count != 6 || viewModel.state == .authorizing)
             }
         }
         .interactiveDismissDisabled(viewModel.state == .authorizing)
@@ -121,15 +120,14 @@ struct QuickConnectAuthorizeView: View {
         .onChange(of: code) {
             code = String(code.prefix(6))
         }
-        .onReceive(viewModel.$error) { error in
-            guard error != nil else { return }
-            UIDevice.feedback(.error)
-        }
         .onReceive(viewModel.events) { event in
             switch event {
             case .authorized:
                 UIDevice.feedback(.success)
                 isPresentingSuccess = true
+
+            case .error:
+                UIDevice.feedback(.error)
             }
         }
         .topBarTrailing {

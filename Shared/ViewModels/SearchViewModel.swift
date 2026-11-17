@@ -17,6 +17,7 @@ final class SearchViewModel: ViewModel {
 
     @CasePathable
     enum Action {
+
         case getSuggestions
         case search(query: String)
         case _actuallySearch
@@ -35,12 +36,13 @@ final class SearchViewModel: ViewModel {
     }
 
     enum State {
+
         case error
         case initial
         case searching
     }
 
-    @Published
+    @SharedBaseItems
     private(set) var suggestions: [BaseItemDto] = []
 
     let itemContentGroupViewModel: ContentGroupViewModel<SearchContentGroupProvider>
@@ -66,10 +68,18 @@ final class SearchViewModel: ViewModel {
 
         super.init()
 
+        itemContentGroupViewModel.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
         observeFilters()
     }
 
     private func observeFilters() {
+        filterViewModel.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
         filterViewModel.$currentFilters
             .debounce(for: 0.5, scheduler: RunLoop.main)
             .sink { [weak self] _ in
@@ -87,7 +97,6 @@ final class SearchViewModel: ViewModel {
 
     @Function(\Action.Cases._actuallySearch)
     private func __actuallySearch() async throws {
-
         guard canSearch else { return }
 
         let filters = filterViewModel.currentFilters
@@ -99,10 +108,10 @@ final class SearchViewModel: ViewModel {
 
     @Function(\Action.Cases.getSuggestions)
     private func _getSuggestions() async throws {
-
         await filterViewModel.getQueryFilters()
 
         var parameters = Paths.GetItemsParameters()
+        parameters.fields = PosterSubtitleField.itemFields
         parameters.includeItemTypes = [.movie, .series]
         parameters.isRecursive = true
         parameters.limit = 10

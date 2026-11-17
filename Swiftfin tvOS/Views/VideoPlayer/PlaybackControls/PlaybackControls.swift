@@ -13,82 +13,87 @@ extension VideoPlayer {
 
     struct PlaybackControls: View {
 
+        typealias ViewState = VideoPlayer.ViewState
+
         @Default(.VideoPlayer.jumpBackwardInterval)
         var jumpBackwardInterval
         @Default(.VideoPlayer.jumpForwardInterval)
         var jumpForwardInterval
 
+        @Environment(ViewState.self)
+        var viewState
+        @Environment(MediaSession.self)
+        var mediaSession
+
         @EnvironmentObject
-        var containerState: VideoPlayerContainerState
-        @EnvironmentObject
-        var manager: MediaPlayerManager
+        private var focusCoordinator: FocusCoordinator
 
-        @Toaster
-        var toaster: ToastProxy
-
-        @FocusState
-        private var isPlaybackProgressFocused: Bool
-
+        @State
+        var seekingPress: UIPress.PressType?
         @State
         var speedBoostTimer: Timer?
         @State
         var isSpeedBoosting: Bool = false
-        @State
-        var pendingJumpWork: DispatchWorkItem?
 
+        @Toaster
+        var toaster: ToastProxy
+
+        @ContentBuilder
         var body: some View {
-            VStack(spacing: 30) {
+            @Bindable
+            var viewState = viewState
 
+            VStack(spacing: 0) {
                 Toolbar()
-                    .isVisible(
-                        containerState.isPresentingOverlay &&
-                            !containerState.isScrubbing &&
-                            !containerState.isPresentingSupplement
-                    )
-                    .disabled(containerState.isPresentingSupplement)
+                    .isVisible(viewState.visibleElements.contains(.toolbar))
+                    .enabled(viewState.visibleElements.contains(.toolbar))
+                    .padding(.bottom, 30)
 
                 PlaybackProgress()
-                    .focused($isPlaybackProgressFocused)
                     .fixedSize(horizontal: false, vertical: true)
-                    .isVisible(
-                        (containerState.isPresentingOverlay || containerState.isScrubbing) &&
-                            !containerState.isPresentingSupplement
-                    )
+                    .isVisible(viewState.isPresentingProgress)
+                    .enabled(viewState.isPresentingProgress)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .edgePadding(.horizontal)
             .focusSection()
-            .animation(.easeInOut(duration: 0.25), value: containerState.isPresentingSupplement)
-            .animation(.easeInOut(duration: 0.25), value: containerState.isPresentingOverlay)
-            .animation(.linear(duration: 0.1), value: containerState.isScrubbing)
-            .alert(L10n.closePlayer, isPresented: $containerState.isPresentingCloseConfirmation) {
+            .coordinatedFocus(ViewState.Focus.controls)
+            .animation(.easeInOut(duration: 0.25), value: viewState.isPresentingSupplement)
+            .animation(.easeInOut(duration: 0.25), value: viewState.presentation)
+            .animation(.linear(duration: 0.1), value: viewState.isScrubbing)
+            .alert(L10n.closePlayer, isPresented: $viewState.isPresentingCloseConfirmation) {
                 Button(L10n.cancel, role: .cancel) {}
 
                 Button(L10n.ok, role: .destructive) {
-                    manager.stop()
+                    mediaSession.stop()
                 }
             } message: {
                 Text(L10n.closePlayerWarning)
             }
-            .onChange(of: containerState.isPresentingOverlay) {
-                isPlaybackProgressFocused = true
-            }
-            .onChange(of: manager.playbackRequestStatus) {
-                if manager.playbackRequestStatus == .paused, !containerState.isPresentingOverlay {
-                    containerState.isPresentingOverlay = true
-                }
-            }
-            .onReceive(containerState.containerView?.onPressEvent ?? .init()) { press in
+            .onReceive(viewState.containerView?.onPressEvent ?? .init()) { press in
                 handlePressEvent(press)
             }
-            .onChange(of: containerState.isProgressBarFocused) {
-                if !containerState.isProgressBarFocused {
-                    containerState.cancelScrub()
+            .onDisappear {
+                stopSpeedBoost()
+                viewState.cancelScrub()
+            }
+            .onChange(of: mediaSession.playbackItem.map(ObjectIdentifier.init), initial: true) { _, _ in
+                stopSpeedBoost()
+                seekingPress = nil
+                viewState.jumpProgressObserver.reset()
+            }
+            .onReceive(
+                focusCoordinator.$focusedIDs
+                    .map { $0.contains(ViewState.Focus.progress) }
+                    .removeDuplicates()
+                    .dropFirst()
+            ) { isFocused in
+                guard !isFocused else { return }
 
-                    if isSpeedBoosting {
-                        stopSpeedBoost()
-                    }
-                }
+                viewState.cancelScrub()
+
+                stopSpeedBoost()
+                seekingPress = nil
             }
         }
     }

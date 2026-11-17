@@ -9,21 +9,23 @@
 import SwiftUI
 
 protocol _PanHandlingAction {
+
     associatedtype Value: Comparable & AdditiveArithmetic
 
     typealias OnChangeAction = (
         _ startState: _PanStartHandlingState<Value>,
         _ panState: _PanHandlingState,
-        _ containerState: VideoPlayerContainerState
+        _ viewState: VideoPlayer.ViewState
     ) -> Void
 
     var startState: _PanStartHandlingState<Value> { get set }
-    var startValue: (VideoPlayerContainerState) -> Value { get set }
+    var startValue: (VideoPlayer.ViewState) -> Value { get set }
 
     var onChange: OnChangeAction { get }
 }
 
 struct _PanHandlingState {
+
     let translation: CGPoint
     let velocity: CGPoint
     let location: CGPoint
@@ -32,9 +34,9 @@ struct _PanHandlingState {
 }
 
 struct _PanStartHandlingState<Value: Comparable & AdditiveArithmetic> {
+
     let direction: Direction
     let location: CGPoint
-    let startedWithOverlay: Bool
     let value: Value
 }
 
@@ -43,16 +45,15 @@ struct PanHandlingAction<Value: Comparable & AdditiveArithmetic>: _PanHandlingAc
     typealias OnChangeAction = (
         _ startState: _PanStartHandlingState<Value>,
         _ panState: _PanHandlingState,
-        _ containerState: VideoPlayerContainerState
+        _ viewState: VideoPlayer.ViewState
     ) -> Void
 
     var startState: _PanStartHandlingState<Value> = .init(
         direction: .all,
         location: .zero,
-        startedWithOverlay: false,
         value: .zero
     )
-    var startValue: (VideoPlayerContainerState) -> Value
+    var startValue: (VideoPlayer.ViewState) -> Value
     let onChange: OnChangeAction
 
     init(
@@ -64,7 +65,7 @@ struct PanHandlingAction<Value: Comparable & AdditiveArithmetic>: _PanHandlingAc
     }
 
     init(
-        startValue: @escaping (VideoPlayerContainerState) -> Value,
+        startValue: @escaping (VideoPlayer.ViewState) -> Value,
         onChange: @escaping OnChangeAction
     ) {
         self.startValue = startValue

@@ -18,13 +18,15 @@ final class FilterViewModel: ViewModel {
 
     @CasePathable
     enum Action {
+
         case cancel
         case getQueryFilters
         case reset(filterType: ItemFilterType?)
 
         var transition: Transition {
             switch self {
-            case .cancel, .reset: .none
+            case .cancel, .reset:
+                .none
             case .getQueryFilters:
                 .background(.retrievingQueryFilters)
             }
@@ -32,6 +34,7 @@ final class FilterViewModel: ViewModel {
     }
 
     enum BackgroundState {
+
         case retrievingQueryFilters
     }
 
@@ -39,55 +42,129 @@ final class FilterViewModel: ViewModel {
     private(set) var allFilters: ItemFilterCollection = .all
     @Published
     var currentFilters: ItemFilterCollection
+    @Published
+    private(set) var savedFilters: [StoredItemFilter] = []
+    @Published
+    private var selectedSavedFilterID: String?
 
-    private let parent: (any LibraryParent)?
+    /// Fixed filters, excluded from selection state and reset actions
+    let staticFilters: ItemFilterCollection
+
+    private let parent: any LibraryParent?
+    let libraryItemTypes: [BaseItemKind]
+
+    var savableFilters: ItemFilterCollection {
+        currentFilters
+            .mutating(\.itemTypes, with: [])
+            .mutating(\.query, with: nil)
+    }
+
+    var hasActiveFilters: Bool {
+        staticFilters.union(savableFilters) != staticFilters
+    }
+
+    var hasFilterOptions: Bool {
+        hasActiveFilters || savedFilters.isNotEmpty
+    }
+
+    var selectedSavedFilter: StoredItemFilter? {
+        get {
+            savedFilters.first { $0.id == selectedSavedFilterID }
+        }
+        set {
+            guard let newValue else { return }
+
+            selectedSavedFilterID = newValue.id
+            currentFilters = newValue.filters
+                .mutating(\.itemTypes, with: currentFilters.itemTypes)
+                .mutating(\.query, with: currentFilters.query)
+        }
+    }
+
+    private var itemTypes: [BaseItemKind] {
+        staticFilters.itemTypes.isEmpty ?
+            parent?.supportedItemTypes ?? BaseItemKind.supportedCases :
+            staticFilters.itemTypes
+    }
 
     init(
-        parent: (any LibraryParent)? = nil,
-        currentFilters: ItemFilterCollection = .default
+        parent: any LibraryParent? = nil,
+        currentFilters: ItemFilterCollection = .default,
+        staticFilters: ItemFilterCollection = .default
     ) {
         self.parent = parent
         self.currentFilters = currentFilters
+        self.staticFilters = staticFilters
+        self.libraryItemTypes = staticFilters.union(currentFilters).itemTypes
 
         super.init()
+
+        Notifications[.savedFiltersDidChange]
+            .publisher
+            .prepend(())
+            .sink { [weak self] _ in
+                guard let self else { return }
+
+                savedFilters = StoredValues[.User.savedFilters]
+            }
+            .store(in: &cancellables)
+
+        selectedSavedFilterID = savedFilters.first {
+            $0.filters == savableFilters
+        }?.id
     }
 
     func isFilterSelected(type: ItemFilterType) -> Bool {
-        type.group
-            .map(\.keyPath)
-            .contains { keyPath in
-                currentFilters[keyPath: keyPath] != ItemFilterCollection.default[keyPath: keyPath]
+        guard !staticFilters.containsFilters(ofType: type) else { return false }
+
+        return currentFilters.containsFilters(ofType: type)
+    }
+
+    func availableFilterTypes(from types: [ItemFilterType]) -> [ItemFilterType] {
+        types.filter { type in
+            type.group.contains {
+                allFilters[keyPath: $0.keyPath].isNotEmpty
             }
+        }
     }
 
     @Function(\Action.Cases.reset)
     private func resetCurrentFilters(_ type: ItemFilterType?) {
-
         guard let type else {
-            currentFilters = .default
+            selectedSavedFilterID = nil
+            currentFilters = .default.mutating(\.itemTypes, with: currentFilters.itemTypes)
             return
         }
 
         switch type {
         case .audioLanguage:
             currentFilters.audioLanguages = ItemFilterCollection.default.audioLanguages
+
         case .category:
             currentFilters.categories = ItemFilterCollection.default.categories
+
         case .genres:
             currentFilters.genres = ItemFilterCollection.default.genres
+
         case .letter:
             currentFilters.letter = ItemFilterCollection.default.letter
+
         case .officialRatings:
             currentFilters.officialRatings = ItemFilterCollection.default.officialRatings
+
         case .sortBy:
             currentFilters.sortBy = ItemFilterCollection.default.sortBy
             currentFilters.sortOrder = ItemFilterCollection.default.sortOrder
+
         case .subtitleLanguage:
             currentFilters.subtitleLanguages = ItemFilterCollection.default.subtitleLanguages
+
         case .tags:
             currentFilters.tags = ItemFilterCollection.default.tags
+
         case .traits:
             currentFilters.traits = ItemFilterCollection.default.traits
+
         case .years:
             currentFilters.years = ItemFilterCollection.default.years
         }
@@ -95,17 +172,15 @@ final class FilterViewModel: ViewModel {
 
     @Function(\Action.Cases.getQueryFilters)
     private func _getQueryFilters() async throws {
-
         try await getFilters()
         try await getFiltersLegacy()
     }
 
     private func getFiltersLegacy() async throws {
-
         let parameters = try Paths.GetQueryFiltersLegacyParameters(
             userID: authenticatedUser.id,
             parentID: parent?.id,
-            includeItemTypes: parent?.supportedItemTypes ?? BaseItemKind.supportedCases
+            includeItemTypes: itemTypes
         )
 
         let request = Paths.getQueryFiltersLegacy(parameters: parameters)
@@ -124,11 +199,10 @@ final class FilterViewModel: ViewModel {
     }
 
     private func getFilters() async throws {
-
         let parameters = try Paths.GetQueryFiltersParameters(
             userID: authenticatedUser.id,
             parentID: parent?.id,
-            includeItemTypes: parent?.supportedItemTypes ?? BaseItemKind.supportedCases,
+            includeItemTypes: itemTypes,
             isRecursive: true
         )
 

@@ -8,15 +8,15 @@
 
 import SwiftUI
 
+@ContentBuilder
 func BulletedList(
     spacing: CGFloat = 8,
-    @ViewBuilder content: @escaping () -> some View
+    @ContentBuilder content: @escaping () -> some View
 ) -> some View {
     MarkedList(spacing: spacing) { _ in
         ZStack {
             // Capture local font line height
-            // swiftlint:disable:next hard_coded_display_string
-            Text(" ")
+            Text(String.space)
                 .hidden()
 
             Circle()

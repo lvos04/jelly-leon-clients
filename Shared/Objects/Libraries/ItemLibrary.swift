@@ -12,9 +12,10 @@ import JellyfinAPI
 import SwiftUI
 
 @MainActor
-struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLibrary {
+struct ItemLibrary: MediaLibrary, SearchablePagingLibrary, WithRandomElementLibrary {
 
     struct Environment: WithDefaultValue {
+
         var grouping: BaseItemDto.Grouping?
         var filters: ItemFilterCollection
 
@@ -26,28 +27,43 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
 
     let environment: Environment?
     let filterViewModel: FilterViewModel
-    let parent: BaseItemDto
+    @SharedBaseItem
+    var parent: BaseItemDto
 
     init(
         parent: BaseItemDto,
-        filters: ItemFilterCollection? = nil
+        filters: ItemFilterCollection? = nil,
+        staticFilters: ItemFilterCollection = .default,
+        grouping: BaseItemDto.Grouping? = nil
     ) {
-        var environment = Environment(
-            grouping: parent.groupings?.defaultSelection,
-            filters: filters ?? .default
-        )
+        var filters = filters ?? .default
 
-        if let id = parent.id, Defaults[.Customization.Library.rememberSort] {
-            let storedFilters = StoredValues[.User.libraryFilters(parentID: id)]
-
-            environment.filters.sortBy = storedFilters.sortBy
-            environment.filters.sortOrder = storedFilters.sortOrder
+        if let id = parent.id,
+           Defaults[.Customization.Library.rememberFilters],
+           staticFilters.union(filters).itemTypes.isEmpty {
+            filters = filters.union(StoredValues[.User.libraryFilters(parentID: id)])
         }
 
-        self.environment = environment
+        var resolvedGrouping = grouping
+
+        if resolvedGrouping == nil,
+           let groupings = parent.groupings,
+           Defaults[.Customization.Library.rememberLayout] {
+            let storedGrouping = StoredValues[
+                .User.libraryGrouping(id: parent.pagingLibraryID, default: groupings.defaultSelection)
+            ]
+
+            resolvedGrouping = groupings.elements.first { $0.id == storedGrouping.id }
+        }
+
+        self.environment = .init(
+            grouping: resolvedGrouping ?? parent.groupings?.defaultSelection,
+            filters: staticFilters.union(filters)
+        )
         self.filterViewModel = .init(
             parent: parent,
-            currentFilters: environment.filters
+            currentFilters: filters,
+            staticFilters: staticFilters
         )
         self.parent = parent
     }
@@ -80,7 +96,7 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
 
     func makeLibraryBody(
         viewModel: PagingLibraryViewModel<Self>,
-        @ViewBuilder content: @escaping () -> some View
+        @ContentBuilder content: @escaping () -> some View
     ) -> AnyView {
         ItemLibraryBody(
             filterViewModel: filterViewModel,
@@ -101,7 +117,7 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
     func retrievePage(
         environment: Environment,
         pageState: LibraryPageState
-    ) async throws -> [BaseItemDto] {
+    ) async throws -> [ItemPatch] {
         var parameters = attachPage(
             to: attachFilters(
                 to: makeBaseItemParameters(environment: environment),
@@ -111,16 +127,13 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
         )
         parameters.userID = pageState.userSession.user.id
 
-        let request = Paths.getItems(parameters: parameters)
-        let response = try await pageState.userSession.client.send(request)
-
-        return normalize(response.value.items ?? [])
+        return try await retrieveItems(parameters: parameters, environment: environment, pageState: pageState)
     }
 
     func retrieveRandomElement(
         environment: Environment,
         pageState: LibraryPageState
-    ) async throws -> BaseItemDto? {
+    ) async throws -> ItemPatch? {
         var parameters = attachFilters(
             to: makeBaseItemParameters(environment: environment),
             using: environment.filters
@@ -129,38 +142,66 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
         parameters.sortBy = [.random]
         parameters.userID = pageState.userSession.user.id
 
-        let request = Paths.getItems(parameters: parameters)
-        let response = try await pageState.userSession.client.send(request)
-
-        return response.value.items?.first
+        return try await retrieveItems(parameters: parameters, environment: environment, pageState: pageState).first
     }
 
     func retrieveSearchPage(
         query: String,
         environment: Environment,
         pageState: LibraryPageState
-    ) async throws -> [BaseItemDto] {
+    ) async throws -> [ItemPatch] {
         var parameters = attachPage(
             to: attachFilters(
                 to: makeBaseItemParameters(environment: environment),
-                using: environment.filters,
-                isLetterFilterIncluded: false
+                using: environment.filters
             ),
             pageState: pageState
         )
-        parameters.searchTerm = query
+        parameters.searchTerm = filterViewModel.staticFilters.query ?? query
         parameters.userID = pageState.userSession.user.id
+
+        return try await retrieveItems(parameters: parameters, environment: environment, pageState: pageState)
+    }
+
+    private func retrieveItems(
+        parameters: Paths.GetItemsParameters,
+        environment: Environment,
+        pageState: LibraryPageState
+    ) async throws -> [ItemPatch] {
+        var parameters = parameters
+        let groupedFolders: [String]?
+
+        if environment.grouping == .folders,
+           parent.libraryType == .userView,
+           parent.collectionType == .movies || parent.collectionType == .tvshows {
+            groupedFolders = pageState.userSession.userData.configuration?.groupedFolders ?? []
+            guard let groupedFolders, groupedFolders.isNotEmpty else { return [] }
+
+            parameters.parentID = nil
+            parameters.ids = groupedFolders
+
+            if parameters.sortBy == [.random] {
+                parameters.limit = nil
+            }
+        } else {
+            groupedFolders = nil
+        }
 
         let request = Paths.getItems(parameters: parameters)
         let response = try await pageState.userSession.client.send(request)
 
-        return normalize(response.value.items ?? [])
+        return try pageState.items(from: response).filter { patch in
+            guard let groupedFolders else { return true }
+
+            return groupedFolders.contains(patch.value.id ?? "") &&
+                (patch.value.collectionType == nil || patch.value.collectionType == parent.collectionType)
+        }
     }
 
     private func makeBaseItemParameters(environment: Environment) -> Paths.GetItemsParameters {
         var parameters = Paths.GetItemsParameters()
         parameters.enableUserData = true
-        parameters.fields = .MinimumFields.appending(.channelInfo)
+        parameters.fields = PosterSubtitleField.itemFields
         parameters.includeItemTypes = parent.supportedItemTypes(for: environment.grouping)
         parameters.isRecursive = parent.isRecursiveCollection(for: environment.grouping)
         parameters.sortBy = [.name]
@@ -169,13 +210,12 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
         guard let parentID = parent.id else { return parameters }
 
         switch parent.libraryType {
-        case .folder:
-            parameters.parentID = parentID
-            parameters.isRecursive = nil
         case .person:
             parameters.personIDs = [parentID]
+
         case .studio:
             parameters.studioIDs = [parentID]
+
         default:
             parameters.parentID = parentID
         }
@@ -183,28 +223,44 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
         return parameters
     }
 
-    private func normalize(_ items: [BaseItemDto]) -> [BaseItemDto] {
-        items
-            .filter { item in
-                if let collectionType = item.collectionType {
-                    return CollectionType.supportedCases.contains(collectionType)
-                }
-
-                return true
+    func materialize(_ page: [ItemPatch], pageState: LibraryPageState) throws -> [ItemEntry] {
+        try page.compactMap { patch in
+            if let type = patch.value.collectionType, !CollectionType.supportedCases.contains(type) {
+                return nil
             }
-            .map { item in
-                if parent.libraryType == .folder, item.type == .collectionFolder {
-                    return item.mutating(\.type, with: .folder)
-                }
-
-                return item
+            guard let record = try pageState.userSession.items.merge(patch, token: pageState.itemRequest) else {
+                return nil
             }
+
+            return ItemEntry(
+                item: record,
+                occurrence: patch.value.playlistItemID,
+                grouping: patch.value.type == .collectionFolder ? .folders : nil
+            )
+        }
+    }
+
+    func includes(_ element: ItemEntry, environment: Environment) -> Bool {
+        element.item.confirmedUserData?.matches(environment.filters.traits) != false
+    }
+
+    func shouldRefreshForUserDataChange(environment: Environment) -> Bool {
+        environment.filters.traits.contains {
+            switch $0 {
+            case .isFavorite, .isPlayed, .isUnplayed, .isResumable, .likes, .dislikes, .isFavoriteOrLikes: true
+            default: false
+            }
+        } || environment.filters.sortBy.contains {
+            switch $0 {
+            case .datePlayed, .playCount, .isUnplayed, .isPlayed, .isFavoriteOrLiked, .seriesDatePlayed: true
+            default: false
+            }
+        }
     }
 
     private func attachFilters(
         to parameters: Paths.GetItemsParameters,
-        using filters: ItemFilterCollection,
-        isLetterFilterIncluded: Bool = true
+        using filters: ItemFilterCollection
     ) -> Paths.GetItemsParameters {
         var parameters = parameters
         parameters.audioLanguages = filters.audioLanguages.map(\.value)
@@ -231,15 +287,12 @@ struct ItemLibrary: PagingLibrary, SearchablePagingLibrary, WithRandomElementLib
             parameters.includeItemTypes = filters.itemTypes
         }
 
-        guard isLetterFilterIncluded else { return parameters }
-
-        if filters.letter.first?.value == "#" {
-            parameters.nameLessThan = "A"
-        } else {
-            parameters.nameStartsWith = filters.letter
-                .map(\.value)
-                .filter { $0 != "#" }
-                .first
+        if let letter = filters.letter.first {
+            if letter.value == "#" {
+                parameters.nameLessThan = "A"
+            } else {
+                parameters.nameStartsWith = letter.value
+            }
         }
 
         return parameters
@@ -270,58 +323,75 @@ private struct ItemLibraryBody<Content: View>: View {
     private let content: Content
     private let filterViewModel: FilterViewModel
 
+    private var filterTypes: [ItemFilterType] {
+        enabledDrawerFilters.filter { !filterViewModel.staticFilters.containsFilters(ofType: $0) }
+    }
+
     init(
         filterViewModel: FilterViewModel,
         viewModel: PagingLibraryViewModel<ItemLibrary>,
-        @ViewBuilder content: () -> Content
+        @ContentBuilder content: () -> Content
     ) {
         self.filterViewModel = filterViewModel
         self.viewModel = viewModel
         self.content = content()
     }
 
+    @ContentBuilder
     var body: some View {
         content
-            .letterPickerBar(filterViewModel: filterViewModel)
             .onFirstAppear {
                 Task {
                     await filterViewModel.getQueryFilters()
                 }
             }
             .onChange(of: filterViewModel.currentFilters) {
-                rememberSort(from: filterViewModel.currentFilters)
+                rememberFilters(from: filterViewModel.currentFilters)
             }
             .onReceive(
                 filterViewModel.$currentFilters
-                    .dropFirst()
+                    .map { filterViewModel.staticFilters.union($0) }
                     .removeDuplicates()
                     .debounce(for: 1, scheduler: RunLoop.main)
             ) { filters in
+                guard viewModel.environment.filters != filters else { return }
+
                 viewModel.environment.filters = filters
             }
-        #if os(tvOS)
+            .onChange(of: viewModel.environment.grouping) { _, grouping in
+                guard let grouping, Defaults[.Customization.Library.rememberLayout] else { return }
+
+                StoredValues[
+                    .User.libraryGrouping(id: viewModel.library.parent.pagingLibraryID, default: grouping)
+                ] = grouping
+            }
+            #if os(tvOS)
+            .filterBar(
+                viewModel: filterViewModel,
+                types: filterTypes
+            )
+            #endif
+            .letterPickerBar(filterViewModel: filterViewModel)
+            #if os(tvOS)
             .background(alignment: .top) {
                 if !router.isRootOfPath {
                     FocusedPosterCinematicBackgroundView()
                 }
             }
-        #else
+            #else
             .navigationBarFilterDrawer(
                 viewModel: filterViewModel,
-                types: enabledDrawerFilters
+                types: filterTypes
             )
-        #endif
+            #endif
     }
 
-    private func rememberSort(from filters: ItemFilterCollection) {
+    private func rememberFilters(from filters: ItemFilterCollection) {
         guard let id = viewModel.library.parent.id,
-              Defaults[.Customization.Library.rememberSort]
+              Defaults[.Customization.Library.rememberFilters],
+              filterViewModel.libraryItemTypes.isEmpty
         else { return }
 
-        let storedFilters = StoredValues[.User.libraryFilters(parentID: id)]
-            .mutating(\.sortBy, with: filters.sortBy)
-            .mutating(\.sortOrder, with: filters.sortOrder)
-
-        StoredValues[.User.libraryFilters(parentID: id)] = storedFilters
+        StoredValues[.User.libraryFilters(parentID: id)] = filters.mutating(\.query, with: nil)
     }
 }

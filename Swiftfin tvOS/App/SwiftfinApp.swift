@@ -14,14 +14,16 @@ struct SwiftfinApp: App {
     init() {
         Self.configure()
 
-        UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: UIColor.label]
+        UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: UIColor.clear]
     }
 
     var body: some Scene {
         WindowGroup {
-            OverlayToastView {
-                WithUserAuthentication {
-                    RootView()
+            ThemePreferencesEnvironment {
+                OverlayToastView {
+                    WithLocalUserAuthentication {
+                        RootView()
+                    }
                 }
             }
         }

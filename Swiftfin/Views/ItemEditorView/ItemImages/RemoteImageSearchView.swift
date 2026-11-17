@@ -12,6 +12,9 @@ import SwiftUI
 
 struct RemoteImageSearchView: View {
 
+    @AdaptiveLayout
+    private var viewLayout
+
     @ObservedObject
     private var viewModel: ItemImageViewModel
 
@@ -26,11 +29,11 @@ struct RemoteImageSearchView: View {
     }
 
     private var layout: CollectionVGridLayout {
-        guard UIDevice.isPhone else {
-            return .minWidth(150)
-        }
-
-        return posterType == .landscape ? .columns(2) : .columns(3)
+        .minWidth(
+            posterType == .landscape ? 170 : 120,
+            itemSpacing: viewLayout.itemSpacing,
+            lineSpacing: viewLayout.itemSpacing
+        )
     }
 
     private var posterType: PosterDisplayType {
@@ -39,6 +42,7 @@ struct RemoteImageSearchView: View {
 
     init(viewModel: ItemImageViewModel, imageType: ImageType) {
         self.viewModel = viewModel
+
         self._remoteImageInfoViewModel = StateObject(
             wrappedValue: .init(
                 itemID: viewModel.item.id ?? "unknown",
@@ -47,6 +51,7 @@ struct RemoteImageSearchView: View {
         )
     }
 
+    @ContentBuilder
     var body: some View {
         ImageElementsView(
             viewModel: remoteImageInfoViewModel.remoteImageLibrary,
@@ -106,7 +111,7 @@ extension RemoteImageSearchView {
             self.posterType = posterType
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private var gridView: some View {
             if viewModel.elements.isEmpty {
                 ContentUnavailableView(
@@ -126,7 +131,7 @@ extension RemoteImageSearchView {
             }
         }
 
-        @ViewBuilder
+        @ContentBuilder
         private func imageButton(_ image: RemoteImageInfo) -> some View {
             PosterButton(
                 item: image,
@@ -136,11 +141,13 @@ extension RemoteImageSearchView {
                     to: .remoteImageDetail(
                         viewModel: itemImageViewModel,
                         remoteImageInfo: image
-                    ), in: namespace
+                    ),
+                    in: namespace
                 )
             }
         }
 
+        @ContentBuilder
         var body: some View {
             ZStack {
                 switch viewModel.state {
@@ -168,6 +175,7 @@ extension RemoteImageSearchView {
             self.providersViewModel = viewModel.remoteImageProvidersLibrary
         }
 
+        @ContentBuilder
         var body: some View {
             Group {
                 Toggle(

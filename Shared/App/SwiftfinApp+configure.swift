@@ -16,16 +16,14 @@ import UIKit
 extension SwiftfinApp {
 
     static func configure() {
-
         // Logging
         LoggingSystem.bootstrap { label in
-
             // TODO: have setting for log level
             //       - default info, boolean to go down to trace
             let handlers: [any LogHandler] = [PersistentLogHandler(label: label)]
-            #if DEBUG
-                .appending(SwiftfinConsoleHandler())
-            #endif
+                #if DEBUG
+                    .appending(SwiftfinConsoleHandler())
+                #endif
 
             var multiplexHandler = MultiplexLogHandler(handlers)
             multiplexHandler.logLevel = .trace
@@ -44,6 +42,7 @@ extension SwiftfinApp {
 
         ImageDecoderRegistry.shared.register { context in
             guard let mimeType = context.urlResponse?.mimeType else { return nil }
+
             return mimeType.contains("svg") ? ImageDecoders.Empty() : nil
         }
 

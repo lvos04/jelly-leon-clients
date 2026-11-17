@@ -11,13 +11,19 @@ import SwiftUI
 
 struct SearchView: View {
 
-    #if os(iOS)
+    @AdaptiveLayout
+    private var viewLayout
+
     @Default(.Customization.Search.enabledDrawerFilters)
     private var enabledDrawerFilters
-    #endif
 
     @FocusState
     private var isSearchFocused: Bool
+
+    #if os(tvOS)
+    @FocusState
+    private var focusedFilter: FilterTrack.FocusTarget?
+    #endif
 
     @State
     private var searchQuery = ""
@@ -30,7 +36,7 @@ struct SearchView: View {
     @TabItemSelected
     private var tabItemSelected
 
-    @ViewBuilder
+    @ContentBuilder
     private var suggestionsView: some View {
         VStack(spacing: 20) {
             ForEach(viewModel.suggestions) { item in
@@ -39,43 +45,68 @@ struct SearchView: View {
                 }
                 #if os(tvOS)
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary)
                 #endif
             }
         }
+        .multilineTextAlignment(.center)
     }
 
-    @ViewBuilder
-    private var resultsView: some View {
-        ScrollView {
-            ContentGroupVStack(
-                groups: viewModel.itemContentGroupViewModel.groups
-            )
-            .edgePadding(.vertical)
-        }
-        .scrollIndicators(.hidden)
-    }
-
+    @ContentBuilder
     var body: some View {
-        ZStack {
-            switch viewModel.state {
-            case .error:
-                viewModel.error.map(ErrorView.init)
-            case .initial:
-                if viewModel.canSearch {
-                    if viewModel.isEmpty {
-                        Text(L10n.noResults)
-                    } else {
-                        resultsView
+        ScrollView {
+            VStack(spacing: 0) {
+                #if os(tvOS)
+                if enabledDrawerFilters.isNotEmpty {
+                    let availableTypes = viewModel.filterViewModel.availableFilterTypes(from: enabledDrawerFilters)
+
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 20) {
+                            FilterTrack(viewModel: viewModel.filterViewModel, types: availableTypes, focus: $focusedFilter)
+                        }
                     }
-                } else {
-                    suggestionsView
+                    .scrollClipDisabled()
+                    .scrollIndicators(.hidden)
+                    .frame(height: FilterTrack.metrics(for: viewLayout).minimumHeight)
+                    .coordinatedFocusScope(
+                        $focusedFilter,
+                        values: availableTypes.map(FilterTrack.FocusTarget.filter)
+                            .appending(.options, if: viewModel.filterViewModel.hasFilterOptions)
+                    )
+                    .edgePadding(.horizontal)
+                    .padding(.vertical, viewLayout.itemSpacing)
                 }
-            case .searching:
-                ProgressView()
+                #endif
+
+                ZStack {
+                    switch viewModel.state {
+                    case .error:
+                        viewModel.error.map(ErrorView.init)
+
+                    case .initial:
+                        if viewModel.canSearch {
+                            if viewModel.isEmpty {
+                                Text(L10n.noResults)
+                            } else {
+                                ContentGroupVStack(
+                                    groups: viewModel.itemContentGroupViewModel.groups
+                                )
+                            }
+                        } else {
+                            suggestionsView
+                        }
+
+                    case .searching:
+                        ProgressView()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .focusSection()
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(edges: viewLayout.scrollContentEdges(extendsTop: false))
+        .defaultScrollAnchor(viewLayout.isLarge || viewModel.canSearch ? .top : .center, for: .alignment)
+        .scrollIndicators(.hidden)
         .animation(.linear(duration: 0.2), value: viewModel.state)
         .ignoresSafeArea(.keyboard)
         .navigationTitle(L10n.search)
@@ -98,12 +129,16 @@ struct SearchView: View {
         )
         .environmentObject(focusCoordinator)
         #if os(tvOS)
-            .edgePadding(.top)
-        #else
-            .navigationBarFilterDrawer(
-                viewModel: viewModel.filterViewModel,
-                types: enabledDrawerFilters
-            )
+        .modifier(SearchSafeAreaModifier())
+        .onReceive(viewModel.filterViewModel.$currentFilters) { filters in
+            searchQuery = filters.query ?? ""
+        }
+        #endif
+        #if os(iOS)
+        .navigationBarFilterDrawer(
+            viewModel: viewModel.filterViewModel,
+            types: enabledDrawerFilters
+        )
         #endif
     }
 }
