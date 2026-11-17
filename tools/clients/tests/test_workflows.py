@@ -130,6 +130,38 @@ def test_alleen_de_syncstap_pusht_en_alleen_een_nieuwe_syncbranch():
     assert "github.token" in str(push_steps[0].get("env")), "token hoort alleen in de pushstap"
 
 
+PIJP_RE = re.compile(r"(?<!\|)\|(?!\|)")
+PIPEFAIL_RE = re.compile(r"^\s*set -[a-z]*o pipefail\b", re.MULTILINE)
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+def test_pijp_in_een_stap_maskeert_geen_fout(path):
+    """Zonder pipefail telt alleen de exitcode van het laatste commando: `python3 … | tee` blijft dan groen, ook als
+    python3 faalt (KLEIN-100 B-1). Standaard draait een stap als `bash -e {0}`; `shell: bash` = `bash -eo pipefail`."""
+    data = load(path)
+    for job_id, job, step in steps(data):
+        run = code_only(str(step.get("run") or ""))
+        if not PIJP_RE.search(run):
+            continue
+        shell = (step.get("shell") or ((job.get("defaults") or {}).get("run") or {}).get("shell")
+                 or ((data.get("defaults") or {}).get("run") or {}).get("shell"))
+        assert shell == "bash" or PIPEFAIL_RE.search(run), (
+            f"{path.name}:{job_id}: stap '{step.get('name')}' gebruikt een pijp zonder pipefail")
+
+
+COMPAT_CLIENT_RE = re.compile(r'--client\s+(?:"([a-z]+)=([^"\n]+)"|([a-z]+)=(\S+))')
+
+
+def test_compat_clientmappen_bestaan():
+    """Een verplaatste clientmap (Swiftfin 1.7.1: PreferencesView) mag de routevergelijking niet ongemerkt breken."""
+    root = Path(DEFAULT_REPO_ROOT)
+    runs = "\n".join(str(s.get("run") or "") for _j, _job, s in steps(load(WORKFLOW_DIR / "clients-compat.yml")))
+    clients = [(m[0] or m[2], m[1] or m[3]) for m in COMPAT_CLIENT_RE.findall(runs)]
+    assert {c for c, _paden in clients} == {"android", "androidtv", "swiftfin"}, clients
+    ontbrekend = [p for _c, paden in clients for p in paden.split(",") if not (root / p).is_dir()]
+    assert not ontbrekend, f"clients-compat.yml: --client-map(pen) bestaan niet: {ontbrekend}"
+
+
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_checkout_zonder_opgeslagen_token(path):
     for job_id, _job, step in steps(load(path)):
