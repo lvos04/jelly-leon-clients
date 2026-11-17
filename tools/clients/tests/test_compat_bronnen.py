@@ -16,7 +16,7 @@ ROOT = Path(DEFAULT_REPO_ROOT)
 def test_echte_repo_kotlin_en_swift():
     assert bronnen.kotlin_sdk(ROOT) == {"android": "1.7.1", "androidtv": "1.7.1"}
     s = bronnen.swift_sdk(ROOT)
-    assert s["versie"] == "3.0.0" and len(s["revisie"]) == 40
+    assert s["versie"] == "3.4.0" and len(s["revisie"]) == 40  # Swiftfin 1.7.1 (was 3.0.0 bij 1.6.1)
     uit = bronnen.github_output(ROOT)
     assert "server_tag=v12.4\n" in uit and "kotlin_sdk=v1.7.1\n" in uit and uit.endswith("\n")
 
