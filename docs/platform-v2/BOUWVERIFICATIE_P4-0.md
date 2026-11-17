@@ -348,9 +348,8 @@ is bijgewerkt. Alles **Sim-getest**; echte apparaten **NIET GEVALIDEERD (hardwar
    corpusbestand, time-out), dan gaan container, netwerk en map weg.
 7. **Verwijderd buildbestand van upstream (R-TECH-3).** Echte test: upstream trackt `app/build/x.apk`, de fork
    verwijdert het en registreert dat; geen melding.
-8. **Opruimen na een afgebroken proces (vervolgpunt R-TECH).** Elk testnetwerk krijgt het eigenaarproces (pid en
-   starttijd) als label; vóór een nieuw netwerk gaan de netwerken van een proces dat niet meer bestaat weg, die van een
-   lopend proces nooit (ook echt met Docker geprobeerd).
+8. **Opruimen na een afgebroken proces (vervolgpunt R-TECH).** Dit punt beschrijft de stand van efe0daa en is
+   daarna gewijzigd; de huidige regels staan in §9.2 en in ADR-0011 besluit 15.
 
 Opnieuw gedraaid met dezelfde serverbron als het vorige bewijs:
 
@@ -363,3 +362,48 @@ Opnieuw gedraaid met dezelfde serverbron als het vorige bewijs:
 
 Geen scenario ging van geslaagd naar mislukt. Na de runs: geen testnetwerk en geen testcontainer over. Niet herhaald:
 tablet, Android TV, de migratieproef, de hervatproef en het Swiftfin-protocol (alleen unit-tests, zoals in §9).
+
+### 9.2 Herstelrondes na de herreviews van S-P40-72 (38ae5fb..a4f8ce0, 2026-11-17)
+
+De herreviews (R-HERREV-1, R-HERREV-2, R-HERREV2-1, R-HERREV2-2) en twee aanvullingen van de regisseur leidden tot
+vier commits: `38ae5fb`, `7f576bb`, `a5881cc` en `a4f8ce0`. Elk herstel heeft een test die zonder het herstel faalt.
+De volledige regels staan in ADR-0011 besluit 15. Alles **Sim-getest**; echte apparaten **NIET GEVALIDEERD
+(hardware)**.
+
+1. **Eigenaarlabel met PID-namespace, onder een nieuwe sleutel.** Het label heeft de vorm
+   `<pid>:<starttijd>:<PID-namespace>` en staat onder de sleutel `jelly-leon-clients.compat.eigenaar2`. Opgeruimd wordt
+   alleen bij een dode eigenaar in dezelfde PID-namespace. Een object uit een andere of onbekende namespace blijft
+   staan, en ook als het eigen `/proc` niet leesbaar is. Een oudere harnasversie (381ad53 t/m efe0daa) las de oude
+   sleutel `jelly-leon-clients.compat.eigenaar` en kon zo het netwerk van een levende nieuwe run weghalen; onder de
+   nieuwe sleutel laat die versie het object staan. De nieuwe versie leest de oude sleutel niet: een object met alleen
+   de oude sleutel blijft staan en moet met de hand weg.
+2. **Labels ook op containers.** Server-, emulator- en desktopcontainers krijgen een eigen label
+   (`jelly-leon-clients.compat=server`, `=emulator` of `=desktop`) en het eigenaarlabel. Vóór een nieuwe start gaat een
+   achtergebleven container van die soort weg, met dezelfde regels (alleen bij een dode eigenaar in dezelfde
+   PID-namespace).
+3. **Unieke containernamen.** Server, emulator en desktop krijgen per run een naam met een willekeurig achtervoegsel
+   (`jlc-jc3-server-<pid>-<n>-<12 hex>`, `jlc-jc3-emulator-<willekeurig>`, `jlc-jc3-desktop-<willekeurig>`). De vaste
+   namen `jlc-jc3-emulator` en `jlc-jc3-desktop` zijn vervallen, zodat `docker rm -f` alleen de eigen container raakt.
+4. **Datamap van een opgeruimde server.** De datamap gaat alleen mee weg als die precies `<werkmap>/<servernaam>` is:
+   een naam die `TestServer` zelf kiest, geen symlink, na `resolve` direct onder de werkmap, en met alleen `config` en
+   `cache` erin. Elk ander pad blijft staan.
+5. **Terugval bij `hidepid`.** Is `/proc/<pid>` niet leesbaar terwijl het eigen `/proc` dat wel is, dan beslist
+   `os.kill(pid, 0)`. Alleen `ProcessLookupError` betekent dood; `PermissionError` of geen fout betekent levend. Een
+   pid van 0 of lager telt als levend.
+6. **AVD gedeeld onder `gradle.lock`.** De AVD-map (`<werkmap>/avd`) en de AVD-naam `jlc-jc3-<soort>` blijven gedeeld
+   tussen runs. Dat is veilig omdat een emulator alleen binnen `gradle.lock` draait (machinebreed één tegelijk; met een
+   test). Voorwaarde: runs met dezelfde werkmap (`JLC_WERK`) gebruiken ook dezelfde `.lokaal` voor de sloten.
+
+Rooktests in deze rondes, met dezelfde serverbron als het vorige bewijs (jelly-leon `e294f84` + jelly-leon-web
+`5ced8a2`; images uit de buildcache):
+
+| Rooktest | Uitkomst |
+|---|---|
+| desktop (`client_compat.py desktop --met-stock`), ronde 38ae5fb | Jelly Leon en stock **Sim-geslaagd**; afscherming geslaagd (0 verbindingen); uitkomsten gelijk aan het vorige desktopbewijs |
+| telefoon (`client_compat.py android --soorten telefoon --vergelijk-soorten telefoon`), ronde 7f576bb, zelfde APK (`07b9e65f…`) | Jelly Leon en stock **Sim-geslaagd**; afscherming geslaagd (0 verbindingen); 24 van 24 uitkomsten gelijk aan het vorige telefoonbewijs |
+| desktop (`client_compat.py desktop --met-stock`), ronde a4f8ce0 | Jelly Leon en stock **Sim-geslaagd**; afscherming geslaagd (0 verbindingen); tijdens de run droegen netwerk, server- en desktopcontainer alleen de sleutel `eigenaar2` |
+
+Vergeleken per uitkomstveld: desktop 22 van 22 en telefoon 24 van 24 gelijk aan het vorige bewijs, 0 verschillen.
+Na de runs: geen testnetwerk en geen testcontainer over. De uitvoer van deze rooktests (bewijs-JSON's en
+schermafdrukken) staat lokaal op de ontwikkelmachine, niet in deze repo; `test-evidence/` heeft geen nieuwe bestanden.
+Niet herhaald: tablet, Android TV, de migratieproef, de hervatproef en het Swiftfin-protocol (alleen unit-tests).
