@@ -101,7 +101,16 @@
     PID-namespace); vóór een nieuw netwerk worden de testnetwerken van een harnasproces in dezelfde PID-namespace dat
     niet meer bestaat (bijvoorbeeld na een SIGKILL) opgeruimd, die van een lopend proces nooit. Een netwerk uit een
     andere of onbekende PID-namespace (een harnas in een container of sandbox) blijft altijd staan, want daar zegt het
-    pid niets (review R-HERREV-1). Server-, emulator- en desktopcontainers hebben per run een unieke naam (met een
+    pid niets (review R-HERREV-1). Het eigenaarlabel (`<pid>:<starttijd>:<PID-namespace>`) staat onder de sleutel
+    `jelly-leon-clients.compat.eigenaar2`, op netwerken en op containers (review R-HERREV2-1): een oudere harnasversie
+    (381ad53 t/m efe0daa) las de oude sleutel `jelly-leon-clients.compat.eigenaar` als `<pid>:<starttijd>`, hield
+    de waarde met drie delen voor een dode eigenaar en haalde het netwerk van een levende nieuwe run weg. Onder de
+    nieuwe sleutel ziet zo'n versie geen eigenaarlabel en laat het object staan; de nieuwe versie leest de oude sleutel
+    niet, dus een object met alleen de oude sleutel blijft staan (bij twijfel blijven staan; een achtergebleven object
+    van een oude run moet met de hand weg). Is `/proc/<pid>` niet leesbaar terwijl het eigen `/proc` dat wel is
+    (`/proc` met `hidepid` verbergt een proces van een andere gebruiker), dan beslist `os.kill(pid, 0)`: alleen
+    `ProcessLookupError` betekent dood, `PermissionError` of geen fout betekent levend (review R-HERREV2-2); een pid
+    van 0 of lager telt als levend. Server-, emulator- en desktopcontainers hebben per run een unieke naam (met een
     willekeurig achtervoegsel; geen vaste namen `jlc-jc3-emulator` en `jlc-jc3-desktop` meer), zodat `docker rm -f`
     alleen de eigen container raakt. Elk van de drie krijgt een eigen label (`jelly-leon-clients.compat=server`,
     `=emulator` of `=desktop`) en het eigenaarlabel; vóór een nieuwe start wordt een achtergebleven container van die

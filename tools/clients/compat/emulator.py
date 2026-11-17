@@ -11,8 +11,10 @@ de emulator de loopback van de container, niet de host). Vóór het opstarten to
 de container geen poort van de host bereikt en de testserver wel; anders stopt de run.
 
 Naam (herstel 2 van S-P40-72): elke emulatorcontainer heeft een unieke naam (``jlc-jc3-emulator-<willekeurig>``) en een
-eigenaarlabel; ``docker rm -f`` raakt alleen de eigen container. Een achtergebleven emulatorcontainer van een
-harnasproces dat in dezelfde PID-namespace niet meer bestaat, ruimt ``netwerk.ruim_verweesde_containers`` op.
+eigenaarlabel (``netwerk.EIGENAAR_LABEL``); ``docker rm -f`` raakt alleen de eigen container. Een achtergebleven
+emulatorcontainer van een harnasproces dat in dezelfde PID-namespace niet meer bestaat, ruimt
+``netwerk.ruim_verweesde_containers`` op; een container met alleen de oude sleutel van het eigenaarlabel blijft staan
+(review R-HERREV2-1).
 """
 
 from __future__ import annotations

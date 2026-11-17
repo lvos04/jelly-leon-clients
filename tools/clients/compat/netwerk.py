@@ -26,7 +26,19 @@ Opruimen: elk testnetwerk krijgt ``LABEL`` en het eigenaarproces (pid, starttijd
 in dezelfde PID-namespace dat niet meer bestaat (bv. na SIGKILL); een netwerk van een lopend proces, ook van een andere
 agent, blijft staan. Een pid zegt alleen iets binnen de eigen PID-namespace: een netwerk uit een andere (of onbekende)
 PID-namespace, bijvoorbeeld van een harnas in een container of sandbox, blijft altijd staan (review R-HERREV-1).
-Hetzelfde geldt voor de desktopcontainer (``ruim_verweesde_containers``); containers hebben per run een unieke naam.
+Hetzelfde geldt voor de server-, emulator- en desktopcontainer (``ruim_verweesde_containers``); containers hebben per
+run een unieke naam.
+
+De sleutel van het eigenaarlabel is ``jelly-leon-clients.compat.eigenaar2`` (review R-HERREV2-1). Een oudere
+harnasversie (381ad53 t/m efe0daa) las onder de oude sleutel ``jelly-leon-clients.compat.eigenaar`` alleen
+``<pid>:<starttijd>`` en hield de waarde met drie delen voor een dode eigenaar: zij haalde dan het netwerk van een
+levende nieuwe run weg. Onder de nieuwe sleutel ziet zo'n versie geen eigenaarlabel en laat het object staan. Andersom
+leest deze versie alleen de nieuwe sleutel: een object met alleen de oude sleutel blijft staan (bij twijfel blijven
+staan; een netwerk van een oude, afgebroken run moet dan met de hand weg).
+
+Is ``/proc/<pid>`` niet leesbaar terwijl het eigen ``/proc`` dat wel is (``/proc`` met ``hidepid``: een proces van een
+andere gebruiker is onzichtbaar), dan beslist ``os.kill(pid, 0)``: alleen ``ProcessLookupError`` betekent dood;
+``PermissionError`` of geen fout betekent levend (review R-HERREV2-2).
 """
 
 from __future__ import annotations
@@ -44,8 +56,11 @@ from .scenario import GESLAAGD, MISLUKT
 
 NETWERK_OPTIES = ("--internal", "--ipv6=false", "-o", "com.docker.network.bridge.inhibit_ipv4=true")
 LABEL = "jelly-leon-clients.compat=testnetwerk"
-# "<pid>:<starttijd>:<PID-namespace>" van het harnasproces dat het netwerk (of de container) maakte
-EIGENAAR_LABEL = "jelly-leon-clients.compat.eigenaar"
+# "<pid>:<starttijd>:<PID-namespace>" van het harnasproces dat het netwerk (of de container) maakte. Bewust een nieuwe
+# sleutel (review R-HERREV2-1): een oudere harnasversie las de oude sleutel ("jelly-leon-clients.compat.eigenaar") als
+# "<pid>:<starttijd>" en ruimde dan het netwerk van een levende run op. Deze versie leest de oude sleutel niet: een
+# object met alleen die sleutel blijft staan.
+EIGENAAR_LABEL = "jelly-leon-clients.compat.eigenaar2"
 SERVER_ALIAS = "testserver"
 SERVER_POORT = 8096
 BESCHRIJVING = (
@@ -95,7 +110,9 @@ class Testnetwerk:
 
 
 def _starttijd(pid: int) -> str | None:
-    """Starttijd van een proces (veld 22 van ``/proc/<pid>/stat``); None als het proces niet bestaat."""
+    """Starttijd van een proces (veld 22 van ``/proc/<pid>/stat``); None als het niet leesbaar is: het proces bestaat
+    niet, of ``/proc`` verbergt het (``hidepid``, een proces van een andere gebruiker). ``eigenaar_leeft`` maakt dat
+    onderscheid met ``os.kill(pid, 0)``."""
     try:
         stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
     except OSError:
@@ -123,12 +140,17 @@ def eigenaar() -> str:
 def eigenaar_leeft(waarde: str) -> bool:
     """Bestaat het proces uit ``EIGENAAR_LABEL`` nog? Bij twijfel ja: dan blijft het netwerk staan. Alleen binnen
     dezelfde PID-namespace is dat vast te stellen; een andere, onbekende of ontbrekende namespace telt als levend
-    (review R-HERREV-1)."""
+    (review R-HERREV-1). Is ``/proc/<pid>`` niet leesbaar, dan beslist ``os.kill(pid, 0)``: alleen
+    ``ProcessLookupError`` is dood; ``PermissionError`` (een proces van een andere gebruiker dat ``/proc`` met
+    ``hidepid`` verbergt), geen fout of een andere fout is levend (review R-HERREV2-2). Een pid van 0 of lager (in
+    ``os.kill`` een procesgroep of alle processen) telt als levend."""
     pid_tekst, start, namespace = ([*waarde.split(":", 2), "", ""])[:3]
     try:
         pid = int(pid_tekst)
     except ValueError:
         return True
+    if pid <= 0:
+        return True  # geen enkel proces: os.kill zou een groep of alle processen bedoelen
     eigen = pid_namespace()
     if eigen is None or namespace != eigen:
         return True  # andere of onbekende PID-namespace: dit pid zegt hier niets
@@ -136,8 +158,20 @@ def eigenaar_leeft(waarde: str) -> bool:
         return True  # /proc niet leesbaar: niets vast te stellen
     huidig = _starttijd(pid)
     if huidig is None:
-        return False  # het proces bestaat niet meer
+        return not _bestaat_niet(pid)  # /proc/<pid> niet leesbaar: weg, of verborgen (hidepid)
     return start in ("", "onbekend") or huidig == start  # andere starttijd: het pid is hergebruikt
+
+
+def _bestaat_niet(pid: int) -> bool:
+    """Alleen True als de kernel zegt dat ``pid`` niet bestaat (``os.kill(pid, 0)`` geeft ``ProcessLookupError``).
+    ``PermissionError`` (het proces bestaat, van een andere gebruiker), geen fout of een andere fout: False."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (OSError, OverflowError):
+        return False  # PermissionError en al het andere: bij twijfel levend
+    return False
 
 
 def ruim_verweesde_netwerken() -> list[str]:

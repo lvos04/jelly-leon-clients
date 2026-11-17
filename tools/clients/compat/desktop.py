@@ -10,7 +10,8 @@ het X-scherm (``xwd``).
 Naam (vervolgpunt herreview S-P40-72): elke desktopcontainer heeft een unieke naam (``jlc-jc3-desktop-<willekeurig>``)
 en een eigenaarlabel; er is geen vaste naam meer die een volgende run eerst met ``docker rm -f`` weghaalt (die kon de
 container van een andere lopende run raken). Een achtergebleven desktopcontainer van een harnasproces dat niet meer
-bestaat, ruimt ``netwerk.ruim_verweesde_containers`` op (zelfde regels als voor de testnetwerken).
+bestaat, ruimt ``netwerk.ruim_verweesde_containers`` op (zelfde regels als voor de testnetwerken; het eigenaarlabel
+staat onder ``netwerk.EIGENAAR_LABEL``, een container met alleen de oude sleutel blijft staan, review R-HERREV2-1).
 
 Volgorde (review R-VEILIG-3): de container start met ``sleep infinity``; eerst de afschermingsproef
 (``netwerk.eis_afscherming``), pas daarna Xvfb en de app met ``docker exec -d``. Faalt de proef, dan heeft de app nooit

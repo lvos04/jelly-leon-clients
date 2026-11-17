@@ -71,7 +71,46 @@ class _DockerMetLijst(DockerOpname):
         return [a for a in self.aanroepen if a[:2] in {("network", "rm"), ("network", "disconnect"), ("rm", "-f")}]
 
 
+class _DockerMetLabels(DockerOpname):
+    """Als DockerOpname, maar ``docker network ls`` en ``docker ps -a`` lezen echte labels per object: het filter
+    ``label=<sleutel>=<waarde>`` en ``{{.Label "<sleutel>"}}`` in ``--format`` werken zoals in Docker (een sleutel die
+    het object niet heeft, geeft een lege waarde). Zo telt welke labelsleutel de code leest."""
+
+    def __init__(self, netwerken: dict[str, dict[str, str]], containers: dict[str, dict[str, str]]) -> None:
+        super().__init__()
+        self.netwerken, self.containers = netwerken, containers
+
+    def __call__(self, *args: str, check: bool = True, timeout: float = 600) -> subprocess.CompletedProcess[str]:
+        self.aanroepen.append(args)
+        objecten = {("network", "ls"): self.netwerken, ("ps", "-a"): self.containers}.get(args[:2])
+        if objecten is None:
+            return subprocess.CompletedProcess(["docker", *args], 0, stdout="cid123\n", stderr="")
+        sleutel, _, waarde = waarde_na(args, "--filter")[0].removeprefix("label=").partition("=")
+        sjabloon = waarde_na(args, "--format")[0]
+        regels = []
+        for naam, labels in objecten.items():
+            if sleutel not in labels or (waarde and labels[sleutel] != waarde):
+                continue
+            regel = re.sub(r'\{\{\.Label "([^"]+)"\}\}', lambda m, labels=labels: labels.get(m.group(1), ""), sjabloon)
+            regels.append(regel.replace("{{.Names}}", naam).replace("{{.Name}}", naam))
+        return subprocess.CompletedProcess(["docker", *args], 0, stdout="".join(f"{r}\n" for r in regels), stderr="")
+
+    def weg(self) -> list[tuple[str, ...]]:
+        return [a for a in self.aanroepen if a[:2] in {("network", "rm"), ("network", "disconnect"), ("rm", "-f")}]
+
+
 NS = os.readlink("/proc/self/ns/pid")  # de eigen PID-namespace
+# Review R-HERREV2-1: letterlijk, zodat een terugval op de oude sleutel in de code een test laat falen.
+NIEUWE_SLEUTEL = "jelly-leon-clients.compat.eigenaar2"
+OUDE_SLEUTEL = "jelly-leon-clients.compat.eigenaar"
+
+
+def alleen_nieuwe_sleutel(args: tuple[str, ...]) -> bool:
+    """Het eigenaarlabel staat onder de nieuwe sleutel en nergens onder de oude (``--label <sleutel>=<waarde>``)."""
+    labels = waarde_na(args, "--label")
+    return f"{NIEUWE_SLEUTEL}={netwerk.eigenaar()}" in labels and not any(
+        x.startswith(f"{OUDE_SLEUTEL}=") for x in labels
+    )
 
 
 def waarde_na(args: tuple[str, ...], vlag: str) -> list[str]:
@@ -166,6 +205,7 @@ def test_emulatorcontainer_heeft_een_unieke_naam_en_raakt_geen_andere_container(
     run = opname.run()
     assert waarde_na(run, "--name") == [a.naam]
     assert waarde_na(run, "--label") == [emulator.CONTAINER_LABEL, f"{netwerk.EIGENAAR_LABEL}={netwerk.eigenaar()}"]
+    assert alleen_nieuwe_sleutel(run)  # review R-HERREV2-1
     assert [x for x in opname.weg() if x[0] == "rm"] == [("rm", "-f", "jlc-jc3-emulator-dood"), ("rm", "-f", a.naam)]
     assert opname.aanroepen.index(("rm", "-f", "jlc-jc3-emulator-dood")) < opname.aanroepen.index(run)
     assert proeven == [(a.naam, "n-a")]
@@ -268,6 +308,7 @@ def test_servercontainer_met_eigenaarlabel_en_verweesde_servers_worden_opgeruimd
     s.start()
     run = opname.run()
     assert waarde_na(run, "--label") == [server.CONTAINER_LABEL, f"{netwerk.EIGENAAR_LABEL}={netwerk.eigenaar()}"]
+    assert alleen_nieuwe_sleutel(run)  # review R-HERREV2-1
     ps = next(a for a in opname.aanroepen if a[:2] == ("ps", "-a"))
     assert f"label={server.CONTAINER_LABEL}" in ps
     rm = [x for x in opname.weg() if x[0] == "rm"]
@@ -416,6 +457,74 @@ def test_proc_onleesbaar_ruimt_niets_op(monkeypatch):
     assert opname.weg() == []
 
 
+def test_hidepid_eigenaar_van_een_andere_gebruiker_telt_als_levend(monkeypatch):
+    """Review R-HERREV2-2: met /proc op ``hidepid`` is ``/proc/<pid>`` van een andere gebruiker niet leesbaar, terwijl
+    het eigen ``/proc`` dat wel is. Dan beslist ``os.kill(pid, 0)``: alleen ``ProcessLookupError`` is dood;
+    ``PermissionError`` of geen fout is levend. Geen ``rm`` en geen ``network rm`` voor een levende eigenaar."""
+    eigen, echte = os.getpid(), netwerk._starttijd
+    monkeypatch.setattr(netwerk, "_starttijd", lambda pid: echte(pid) if pid == eigen else None)  # /proc verbergt
+    # met de echte os.kill: pid 1 bestaat altijd (gewone gebruiker: PermissionError; root: geen fout)
+    assert netwerk.eigenaar_leeft(f"1:1:{NS}")
+    assert not netwerk.eigenaar_leeft(f"999999999:1:{NS}")  # bestaat echt niet (boven pid_max): ProcessLookupError
+    signalen: list = []
+
+    def nep_kill(pid: int, sig: int) -> None:
+        signalen.append((pid, sig))
+        if pid == 4242:
+            raise PermissionError(1, "Operation not permitted")  # van een andere gebruiker
+        if pid == 4343:
+            return  # van dezelfde gebruiker
+        raise ProcessLookupError(3, "No such process")
+
+    monkeypatch.setattr(netwerk.os, "kill", nep_kill)
+    assert netwerk.eigenaar_leeft(f"4242:1:{NS}") and netwerk.eigenaar_leeft(f"4343:1:{NS}")
+    assert not netwerk.eigenaar_leeft(f"4444:1:{NS}")
+    assert netwerk.eigenaar_leeft(f"0:1:{NS}") and netwerk.eigenaar_leeft(f"-1:1:{NS}")  # geen enkel proces
+    opname = _DockerMetLijst(
+        netwerken=f"jlc-ander-net\t4242:1:{NS}\njlc-zelfde-net\t4343:1:{NS}\njlc-dood-net\t4444:1:{NS}\n",
+        containers=f"jlc-jc3-server-ander\t4242:1:{NS}\njlc-jc3-server-zelfde\t4343:1:{NS}\njlc-jc3-server-dood\t4444:1:{NS}\n",
+    )
+    monkeypatch.setattr(netwerk, "docker", opname)
+    assert netwerk.ruim_verweesde_netwerken() == ["jlc-dood-net"]
+    assert netwerk.ruim_verweesde_containers(server.CONTAINER_LABEL) == ["jlc-jc3-server-dood"]
+    weg = opname.weg()
+    assert weg and all("jlc-dood-net" in a or "jlc-jc3-server-dood" in a for a in weg)
+    assert signalen and all(sig == 0 and pid > 0 for pid, sig in signalen)
+
+
+def test_eigenaarlabel_onder_een_nieuwe_sleutel_oude_sleutel_blijft_staan(monkeypatch):
+    """Review R-HERREV2-1: het eigenaarlabel met drie delen staat onder een nieuwe sleutel, op netwerken en op
+    containers; een oudere harnasversie (die de oude sleutel als "<pid>:<starttijd>" las) ziet het dan niet en laat het
+    object staan. Andersom leest deze versie alleen de nieuwe sleutel: een object met alleen de oude sleutel blijft
+    staan, ook met een dode eigenaar (bij twijfel blijven staan)."""
+    assert netwerk.EIGENAAR_LABEL == NIEUWE_SLEUTEL
+    dood, levend = f"999999999:1:{NS}", netwerk.eigenaar()
+
+    def objecten(label: str, achter: str) -> dict[str, dict[str, str]]:
+        sleutel, _, waarde = label.partition("=")
+        return {
+            f"jlc-nieuw-dood{achter}": {sleutel: waarde, NIEUWE_SLEUTEL: dood},
+            f"jlc-oud-dood{achter}": {sleutel: waarde, OUDE_SLEUTEL: dood},
+            f"jlc-oud-dood-2-delen{achter}": {sleutel: waarde, OUDE_SLEUTEL: "999999999:1"},
+            f"jlc-nieuw-levend-oud-dood{achter}": {sleutel: waarde, NIEUWE_SLEUTEL: levend, OUDE_SLEUTEL: dood},
+        }
+
+    soorten = (server.CONTAINER_LABEL, emulator.CONTAINER_LABEL, desktop.CONTAINER_LABEL)
+    containers = {}
+    for n, label in enumerate(soorten):
+        containers.update(objecten(label, f"-c{n}"))
+    opname = _DockerMetLabels(netwerken=objecten(netwerk.LABEL, "-net"), containers=containers)
+    monkeypatch.setattr(netwerk, "docker", opname)
+    assert netwerk.ruim_verweesde_netwerken() == ["jlc-nieuw-dood-net"]
+    for n, label in enumerate(soorten):
+        assert netwerk.ruim_verweesde_containers(label) == [f"jlc-nieuw-dood-c{n}"]
+    assert sorted(a[-1] for a in opname.weg()) == ["jlc-nieuw-dood-c0", "jlc-nieuw-dood-c1", "jlc-nieuw-dood-c2",
+                                                    "jlc-nieuw-dood-net"]
+    netwerk.Testnetwerk("jlc-nieuw-net").maak()
+    maak = next(a for a in opname.aanroepen if a[:2] == ("network", "create"))
+    assert alleen_nieuwe_sleutel(maak)
+
+
 def test_eigen_pid_namespace_onleesbaar_ruimt_niets_op(monkeypatch):
     """Review R-HERREV-1, bij twijfel blijven staan: is de eigen PID-namespace niet leesbaar, dan is niet vast te
     stellen of een pid uit een label hier iets betekent; er gaat niets weg, ook geen dode eigenaar."""
@@ -540,6 +649,7 @@ def test_desktopcontainer_heeft_een_unieke_naam_en_raakt_geen_andere_container(m
     run = opname.run()
     assert waarde_na(run, "--name") == [a.naam]
     assert waarde_na(run, "--label") == [desktop.CONTAINER_LABEL, f"{netwerk.EIGENAAR_LABEL}={netwerk.eigenaar()}"]
+    assert alleen_nieuwe_sleutel(run)  # review R-HERREV2-1
     # alleen de verweesde container (vóór de run) en de eigen container (bij stop) gaan weg
     assert [x for x in opname.weg() if x[0] == "rm"] == [("rm", "-f", "jlc-jc3-desktop-dood"), ("rm", "-f", a.naam)]
     assert opname.aanroepen.index(("rm", "-f", "jlc-jc3-desktop-dood")) < opname.aanroepen.index(run)
