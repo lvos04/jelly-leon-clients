@@ -189,19 +189,30 @@ def test_hostadressen_v6_zonder_loopback_en_link_local_met_de_zone_van_de_contai
 
 # --- opruimen van netwerken van een afgebroken harnasproces (vervolgpunt R-TECH) ------------------------------------
 
+NS = os.readlink("/proc/self/ns/pid")  # de eigen PID-namespace
+
+
 def test_eigenaar_leeft_alleen_met_hetzelfde_pid_en_dezelfde_starttijd():
     assert netwerk.eigenaar_leeft(netwerk.eigenaar())  # dit proces
-    pid, _, start = netwerk.eigenaar().partition(":")
-    assert start != "onbekend"
-    assert not netwerk.eigenaar_leeft(f"{pid}:1")  # zelfde pid, andere starttijd: hergebruikt pid
-    assert not netwerk.eigenaar_leeft("999999999:1")  # bestaat niet (boven pid_max)
+    pid, start, ns = netwerk.eigenaar().split(":", 2)
+    assert start != "onbekend" and ns == NS
+    assert not netwerk.eigenaar_leeft(f"{pid}:1:{NS}")  # zelfde pid, andere starttijd: hergebruikt pid
+    assert not netwerk.eigenaar_leeft(f"999999999:1:{NS}")  # bestaat niet (boven pid_max)
     assert netwerk.eigenaar_leeft("geen-pid")  # onbekende vorm: niet aanraken
+
+
+def test_eigenaar_in_een_andere_of_onbekende_pid_namespace_telt_als_levend():
+    """Review R-HERREV-1: een pid zegt alleen iets in de eigen PID-namespace; bij twijfel blijft het netwerk staan."""
+    assert netwerk.eigenaar_leeft("999999999:1:pid:[1]")  # andere namespace, pid bestaat hier niet
+    assert netwerk.eigenaar_leeft(f"{os.getpid()}:1:pid:[1]")  # andere namespace, hier een ander proces
+    assert netwerk.eigenaar_leeft("999999999:1")  # oude vorm zonder namespace
+    assert netwerk.eigenaar_leeft("999999999:1:onbekend")
 
 
 def test_alleen_netwerken_van_een_afgebroken_proces_worden_opgeruimd(monkeypatch):
     levend = netwerk.eigenaar()
-    lijst = (f"jlc-dood-net\t999999999:1\njlc-levend-net\t{levend}\njlc-oud-net\t\n"
-             f"jlc-hergebruikt-net\t{os.getpid()}:1\n")
+    lijst = (f"jlc-dood-net\t999999999:1:{NS}\njlc-levend-net\t{levend}\njlc-oud-net\t\n"
+             f"jlc-hergebruikt-net\t{os.getpid()}:1:{NS}\njlc-andere-ns-net\t999999999:1:pid:[1]\n")
     aanroepen = []
 
     def nep(*args, check=True, timeout=600):
@@ -215,7 +226,7 @@ def test_alleen_netwerken_van_een_afgebroken_proces_worden_opgeruimd(monkeypatch
     ls = next(a for a in aanroepen if a[:2] == ("network", "ls"))
     assert f"label={netwerk.LABEL}" in ls
     weg = [a[2] for a in aanroepen if a[:2] == ("network", "rm")]
-    assert weg == ["jlc-dood-net", "jlc-hergebruikt-net"]  # levend en zonder eigenaarlabel blijven staan
+    assert weg == ["jlc-dood-net", "jlc-hergebruikt-net"]  # levend, zonder eigenaarlabel of andere namespace: staan
 
 
 def test_maak_ruimt_eerst_verweesde_netwerken_op_en_zet_de_eigenaar(monkeypatch):
@@ -223,7 +234,7 @@ def test_maak_ruimt_eerst_verweesde_netwerken_op_en_zet_de_eigenaar(monkeypatch)
 
     def nep(*args, check=True, timeout=600):
         aanroepen.append(args)
-        uit = "jlc-dood-net\t999999999:1\n" if args[:2] == ("network", "ls") else ""
+        uit = f"jlc-dood-net\t999999999:1:{NS}\n" if args[:2] == ("network", "ls") else ""
         return subprocess.CompletedProcess(args, 0, stdout=uit, stderr="")
 
     monkeypatch.setattr(netwerk, "docker", nep)

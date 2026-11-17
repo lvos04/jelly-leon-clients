@@ -97,9 +97,14 @@
     `sleep infinity`; de emulator, en bij de desktop Xvfb en de app, starten pas na de proef met `docker exec -d`
     (review R-VEILIG-3). Het netwerk gaat met de server weg (`TestServer.verwijder`); faalt `TestServer.start` zelf
     (bijvoorbeeld `docker run`, een ontbrekend corpusbestand of een time-out), dan ruimt `start` container, netwerk en
-    map op (review R-TECH-1). Elk testnetwerk krijgt een label met het eigenaarproces (pid en starttijd); vóór een
-    nieuw netwerk worden de testnetwerken van een harnasproces dat niet meer bestaat (bijvoorbeeld na een SIGKILL)
-    opgeruimd, die van een lopend proces nooit. De testwachtwoorden zijn per server willekeurig (24 letters en cijfers
+    map op (review R-TECH-1). Elk testnetwerk krijgt een label met het eigenaarproces (pid, starttijd en
+    PID-namespace); vóór een nieuw netwerk worden de testnetwerken van een harnasproces in dezelfde PID-namespace dat
+    niet meer bestaat (bijvoorbeeld na een SIGKILL) opgeruimd, die van een lopend proces nooit. Een netwerk uit een
+    andere of onbekende PID-namespace (een harnas in een container of sandbox) blijft altijd staan, want daar zegt het
+    pid niets (review R-HERREV-1). Server- en desktopcontainers hebben per run een unieke naam (met een willekeurig
+    achtervoegsel; geen vaste naam `jlc-jc3-desktop` meer), zodat `docker rm -f` nooit een container van een andere run
+    raakt; een achtergebleven desktopcontainer wordt met hetzelfde eigenaarlabel en dezelfde regels opgeruimd. De
+    testwachtwoorden zijn per server willekeurig (24 letters en cijfers
     uit `secrets`, omdat `adb input text` geen leestekens betrouwbaar typt); elk bewijsdocument wordt geweigerd als er
     een wachtwoord van die run in staat, in elk schrijfpad (Android, desktop, hervatproef, Swiftfin), elk met een
     eigen test. `check_clients.py` faalt op een buildbestand (`.kotlin`, `.gradle`, `build/`, APK, klassebestand,

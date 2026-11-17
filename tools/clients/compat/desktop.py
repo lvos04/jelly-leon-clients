@@ -7,6 +7,11 @@ niet-root, zonder capabilities, met de build alleen-lezen, alleen op het eigen t
 ruwe CDP (``desktop_cdp.mjs``); afspelen gaat via libmpv, dus beoordeeld wordt wat de server ziet en het beeld komt van
 het X-scherm (``xwd``).
 
+Naam (vervolgpunt herreview S-P40-72): elke desktopcontainer heeft een unieke naam (``jlc-jc3-desktop-<willekeurig>``)
+en een eigenaarlabel; er is geen vaste naam meer die een volgende run eerst met ``docker rm -f`` weghaalt (die kon de
+container van een andere lopende run raken). Een achtergebleven desktopcontainer van een harnasproces dat niet meer
+bestaat, ruimt ``netwerk.ruim_verweesde_containers`` op (zelfde regels als voor de testnetwerken).
+
 Volgorde (review R-VEILIG-3): de container start met ``sleep infinity``; eerst de afschermingsproef
 (``netwerk.eis_afscherming``), pas daarna Xvfb en de app met ``docker exec -d``. Faalt de proef, dan heeft de app nooit
 gedraaid.
@@ -28,6 +33,7 @@ import argparse
 import contextlib
 import json
 import os
+import secrets
 import socket
 import subprocess
 import threading
@@ -43,7 +49,8 @@ from .jfapi import TICKS
 from .server import KIJKER, TestServer, docker, run_wachtwoorden
 
 IMAGE = os.environ.get("JLC_DESKTOP_IMAGE", "jelly-leon-clients/desktop-test:dev")
-NAAM = "jlc-jc3-desktop"
+NAAM_VOORVOEGSEL = "jlc-jc3-desktop-"  # plus een willekeurig achtervoegsel per Desktop: nooit een vaste naam
+CONTAINER_LABEL = "jelly-leon-clients.compat=desktop"
 CDP_JS = Path(__file__).resolve().parent / "desktop_cdp.mjs"
 CLIENT = "Jellyfin Desktop"
 CDP_POORT = 9222  # in de eigen netwerknamespace van de container: botst niet met andere agents (V-008)
@@ -144,6 +151,7 @@ class Desktop:
         self.cid = ""
         self.afscherming: dict[str, Any] = {}
         self.doorgifte: CdpDoorgifte | None = None
+        self.naam = f"{NAAM_VOORVOEGSEL}{secrets.token_hex(6)}"
 
     APP = (
         "Xvfb :99 -screen 0 1600x900x24 >/tmp/xvfb.log 2>&1 & sleep 2; DISPLAY=:99 "
@@ -154,12 +162,16 @@ class Desktop:
     def start(self) -> None:
         if self.netwerk is None:  # fail-closed: nooit zonder eigen testnetwerk (ook niet op het hostnetwerk)
             raise RuntimeError("geen testnetwerk: de desktop start alleen op het afgeschermde netwerk van de server")
-        docker("rm", "-f", NAAM, check=False)
+        nw.ruim_verweesde_containers(CONTAINER_LABEL)  # alleen van een harnasproces dat aantoonbaar niet meer bestaat
         self.cid = docker(
             "run",
             "-d",
             "--name",
-            NAAM,
+            self.naam,
+            "--label",
+            CONTAINER_LABEL,
+            "--label",
+            f"{nw.EIGENAAR_LABEL}={nw.eigenaar()}",
             "--network",
             self.netwerk.naam,
             "--shm-size",
@@ -183,9 +195,9 @@ class Desktop:
             "infinity",
         ).stdout.strip()
         # Eerst de afschermingsproef (fail-closed), pas daarna Xvfb en de app (review R-VEILIG-3; ADR-0011 besluit 15).
-        self.afscherming = nw.eis_afscherming(NAAM, self.netwerk)
-        docker("exec", "-d", NAAM, "sh", "-c", self.APP)
-        self.doorgifte = CdpDoorgifte(NAAM)
+        self.afscherming = nw.eis_afscherming(self.naam, self.netwerk)
+        docker("exec", "-d", self.naam, "sh", "-c", self.APP)
+        self.doorgifte = CdpDoorgifte(self.naam)
         self.poort = self.doorgifte.poort
         for _ in range(60):
             if self.cdp("doelen").get("doelen"):
@@ -209,7 +221,7 @@ class Desktop:
         """X-scherm (met het mpv-beeld) via xwd in de container, omgezet met ffmpeg op de host."""
         xwd = pad.with_suffix(".xwd")
         r = subprocess.run(
-            ["docker", "exec", "-e", "DISPLAY=:99", NAAM, "xwd", "-root", "-silent"],
+            ["docker", "exec", "-e", "DISPLAY=:99", self.naam, "xwd", "-root", "-silent"],
             capture_output=True,
             timeout=60,
             check=False,
@@ -227,7 +239,7 @@ class Desktop:
         return c.returncode == 0
 
     def log(self, regels: int = 30) -> str:
-        return docker("exec", NAAM, "tail", f"-{regels}", "/tmp/app.log", check=False).stdout[-2000:]  # noqa: S108
+        return docker("exec", self.naam, "tail", f"-{regels}", "/tmp/app.log", check=False).stdout[-2000:]  # noqa: S108
 
     def geheugen(self) -> dict[str, Any]:
         basis = Path(f"/sys/fs/cgroup/system.slice/docker-{self.cid}.scope")
@@ -240,7 +252,7 @@ class Desktop:
     def stop(self) -> None:
         if self.doorgifte:
             self.doorgifte.sluit()
-        docker("rm", "-f", NAAM, check=False)
+        docker("rm", "-f", self.naam, check=False)
 
 
 def stap(ok: bool, **gegevens: Any) -> dict[str, Any]:

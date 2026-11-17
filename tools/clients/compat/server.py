@@ -103,9 +103,11 @@ class TestServer:
         cpus: str = "4",
     ) -> None:
         self.image = image
-        # Eigen naam en map per proces: twee harnasruns naast elkaar mogen elkaars server nooit vervangen
-        # (gemeten: met een vaste naam verwijderde de ene run de server van de andere).
-        self.naam = naam or f"jlc-jc3-server-{os.getpid()}-{next(_TELLER)}"
+        # Eigen naam en map per server: twee harnasruns naast elkaar mogen elkaars server nooit vervangen
+        # (gemeten: met een vaste naam verwijderde de ene run de server van de andere). pid en teller zijn alleen
+        # binnen één PID-namespace uniek (een harnas in een container of sandbox kan hetzelfde pid hebben); daarom
+        # ook een willekeurig achtervoegsel (vervolgpunt herreview S-P40-72): "docker rm -f" raakt nooit een andere run.
+        self.naam = naam or f"jlc-jc3-server-{os.getpid()}-{next(_TELLER)}-{secrets.token_hex(6)}"
         self.map = werk / self.naam
         self.corpus = corpus
         self.geheugen = geheugen

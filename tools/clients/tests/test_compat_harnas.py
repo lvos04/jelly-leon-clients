@@ -14,7 +14,9 @@ server willekeurig zijn en in geen enkel bewijs mogen staan.
 from __future__ import annotations
 
 import contextlib
+import itertools
 import json
+import os
 import re
 import socket
 import subprocess
@@ -50,6 +52,26 @@ class DockerOpname:
 
     def run(self) -> tuple[str, ...]:
         return next(a for a in self.aanroepen if a and a[0] == "run")
+
+
+class _DockerMetLijst(DockerOpname):
+    """Als DockerOpname, maar ``docker network ls`` en ``docker ps -a`` geven de meegegeven regels (naam TAB label)."""
+
+    def __init__(self, netwerken: str = "", containers: str = "") -> None:
+        super().__init__()
+        self.netwerken, self.containers = netwerken, containers
+
+    def __call__(self, *args: str, check: bool = True, timeout: float = 600) -> subprocess.CompletedProcess[str]:
+        self.aanroepen.append(args)
+        uit = {("network", "ls"): self.netwerken, ("ps", "-a"): self.containers}.get(args[:2], "cid123\n")
+        return subprocess.CompletedProcess(["docker", *args], 0, stdout=uit, stderr="")
+
+    def weg(self) -> list[tuple[str, ...]]:
+        """Alles wat iets verwijdert of loskoppelt."""
+        return [a for a in self.aanroepen if a[:2] in {("network", "rm"), ("network", "disconnect"), ("rm", "-f")}]
+
+
+NS = os.readlink("/proc/self/ns/pid")  # de eigen PID-namespace
 
 
 def waarde_na(args: tuple[str, ...], vlag: str) -> list[str]:
@@ -227,6 +249,73 @@ def test_netwerk_met_een_achtergebleven_container_wordt_toch_verwijderd(monkeypa
     assert aanroepen[-1] == ("network", "rm", "n1")
 
 
+def test_eigenaarlabel_bevat_pid_starttijd_en_pid_namespace():
+    pid, start, ns = netwerk.eigenaar().split(":", 2)
+    assert pid == str(os.getpid()) and start.isdigit() and ns == NS and ns.startswith("pid:[")
+
+
+def test_netwerk_uit_een_andere_pid_namespace_wordt_niet_opgeruimd(monkeypatch):
+    """Review R-HERREV-1: een harnas in een container of sandbox heeft een eigen PID-namespace; zijn pid (hier pid 1 of
+    een pid dat in de eigen namespace niet bestaat) zegt hier niets. Alleen een dode eigenaar in de eigen namespace
+    wordt opgeruimd; netwerken uit een andere of onbekende namespace blijven staan (geen rm en geen disconnect)."""
+    opname = _DockerMetLijst(netwerken=(
+        "jlc-ander-ns-1-net\t1:119025387:pid:[4026532759]\n"
+        "jlc-ander-ns-2-net\t999999999:1:pid:[4026532760]\n"
+        "jlc-oude-vorm-net\t999999999:1\n"
+        "jlc-onbekend-ns-net\t999999999:1:onbekend\n"
+        f"jlc-dood-net\t999999999:1:{NS}\n"
+    ))
+    monkeypatch.setattr(netwerk, "docker", opname)
+    assert netwerk.ruim_verweesde_netwerken() == ["jlc-dood-net"]
+    assert {a[-1] if a[1] != "disconnect" else a[3] for a in opname.weg()} == {"jlc-dood-net"}
+
+
+def test_netwerk_uit_een_andere_pid_namespace_blijft_staan_bij_maak(monkeypatch):
+    opname = _DockerMetLijst(netwerken="jlc-ander-ns-net\t1:5:pid:[4026532759]\n")
+    monkeypatch.setattr(netwerk, "docker", opname)
+    netwerk.Testnetwerk("jlc-nieuw-net").maak()
+    assert all(a[-1] == "jlc-nieuw-net" for a in opname.weg())  # alleen de eigen naam (een oude eigen run)
+    maak = next(a for a in opname.aanroepen if a[:2] == ("network", "create"))
+    assert f"{netwerk.EIGENAAR_LABEL}={netwerk.eigenaar()}" in maak and netwerk.eigenaar().endswith(f":{NS}")
+
+
+def test_proc_onleesbaar_ruimt_niets_op(monkeypatch):
+    """Review R-HERREV-2 (mutatie N4): is /proc niet leesbaar (geen starttijd voor het eigen pid), dan is niets vast te
+    stellen: de eigenaar telt als levend en er gaat geen netwerk weg, ook niet van een ander."""
+    monkeypatch.setattr(netwerk, "_starttijd", lambda pid: None)
+    assert netwerk.eigenaar_leeft(f"123:456:{NS}")
+    opname = _DockerMetLijst(netwerken=f"jlc-ander-net\t123:456:{NS}\njlc-ander2-net\t999999999:1:{NS}\n")
+    monkeypatch.setattr(netwerk, "docker", opname)
+    assert netwerk.ruim_verweesde_netwerken() == []
+    assert opname.weg() == []
+
+
+def test_eigen_pid_namespace_onleesbaar_ruimt_niets_op(monkeypatch):
+    """Review R-HERREV-1, bij twijfel blijven staan: is de eigen PID-namespace niet leesbaar, dan is niet vast te
+    stellen of een pid uit een label hier iets betekent; er gaat niets weg, ook geen dode eigenaar."""
+    monkeypatch.setattr(netwerk, "pid_namespace", lambda: None)
+    assert netwerk.eigenaar_leeft(f"999999999:1:{NS}") and netwerk.eigenaar_leeft("999999999:1:onbekend")
+    opname = _DockerMetLijst(netwerken=f"jlc-dood-net\t999999999:1:{NS}\njlc-onbekend-net\t999999999:1:onbekend\n",
+                             containers=f"jlc-jc3-desktop-dood\t999999999:1:{NS}\n")
+    monkeypatch.setattr(netwerk, "docker", opname)
+    assert netwerk.ruim_verweesde_netwerken() == [] and netwerk.ruim_verweesde_containers(desktop.CONTAINER_LABEL) == []
+    assert opname.weg() == []
+
+
+def test_verweesde_desktopcontainer_alleen_van_een_dode_eigenaar_in_de_eigen_namespace(monkeypatch):
+    opname = _DockerMetLijst(containers=(
+        f"jlc-jc3-desktop-dood\t999999999:1:{NS}\n"
+        f"jlc-jc3-desktop-levend\t{netwerk.eigenaar()}\n"
+        "jlc-jc3-desktop-ander-ns\t999999999:1:pid:[4026532759]\n"
+        "jlc-jc3-desktop-zonder-label\t\n"
+    ))
+    monkeypatch.setattr(netwerk, "docker", opname)
+    assert netwerk.ruim_verweesde_containers(desktop.CONTAINER_LABEL) == ["jlc-jc3-desktop-dood"]
+    ps = next(a for a in opname.aanroepen if a[:2] == ("ps", "-a"))
+    assert f"label={desktop.CONTAINER_LABEL}" in ps
+    assert opname.weg() == [("rm", "-f", "jlc-jc3-desktop-dood")]
+
+
 class _FaalOpRun(DockerOpname):
     """``docker run`` faalt (zoals bij een ontbrekende image); de rest slaagt."""
 
@@ -263,6 +352,76 @@ def test_mislukte_start_van_de_testserver_ruimt_container_netwerk_en_map_op(monk
     assert not s.map.exists()
 
 
+def test_keyboardinterrupt_in_de_serverstart_ruimt_op_en_wordt_doorgegeven(monkeypatch, tmp_path):
+    """Review R-HERREV-2 (mutatie N14): ook bij Ctrl-C (KeyboardInterrupt, geen Exception) tijdens het wachten op de
+    server gaan container, testnetwerk en datamap weg, en de onderbreking wordt doorgegeven."""
+    corpus = tmp_path / "corpus"
+    for bron in {**server.FILMS, **server.SERIES}.values():
+        (corpus / bron).parent.mkdir(parents=True, exist_ok=True)
+        (corpus / bron).write_bytes(b"x")
+    opname = DockerOpname()
+    monkeypatch.setattr(server, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+
+    def onderbroken(url, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(server, "wacht_klaar", onderbroken)
+    s = server.TestServer("img", werk=tmp_path / "werk", corpus=corpus)
+    with pytest.raises(KeyboardInterrupt):
+        s.start()
+    maak = next(i for i, a in enumerate(opname.aanroepen) if a[:2] == ("network", "create"))
+    na = opname.aanroepen[maak + 1:]
+    assert ("rm", "-f", s.naam) in na and ("network", "rm", s.netwerk.naam) in na
+    assert not s.map.exists()
+
+
+def test_servernaam_uniek_ook_met_hetzelfde_pid_en_dezelfde_teller(monkeypatch, tmp_path):
+    """Vervolgpunt herreview S-P40-72: pid en teller zijn alleen binnen één PID-namespace uniek. Twee harnassen in
+    verschillende namespaces met hetzelfde pid mogen toch nooit dezelfde server- of netwerknaam krijgen (anders haalt
+    'docker rm -f' de server van de andere run weg)."""
+    monkeypatch.setattr(server.os, "getpid", lambda: 1)
+    monkeypatch.setattr(server, "_TELLER", itertools.count(1))
+    a = server.TestServer("img", werk=tmp_path)
+    monkeypatch.setattr(server, "_TELLER", itertools.count(1))
+    b = server.TestServer("img", werk=tmp_path)
+    assert a.naam.startswith("jlc-jc3-server-1-1-") and b.naam.startswith("jlc-jc3-server-1-1-")
+    assert a.naam != b.naam and a.netwerk.naam != b.netwerk.naam and a.map != b.map
+
+
+def test_desktopcontainer_heeft_een_unieke_naam_en_raakt_geen_andere_container(monkeypatch, tmp_path):
+    """Vervolgpunt herreview S-P40-72: geen vaste naam jlc-jc3-desktop meer. Elke Desktop heeft een eigen naam met een
+    eigenaarlabel; vóór de start gaat alleen een desktopcontainer van een dode eigenaar in de eigen namespace weg."""
+    opname = _DockerMetLijst(containers=(
+        f"jlc-jc3-desktop-dood\t999999999:1:{NS}\n"
+        "jlc-jc3-desktop-ander-ns\t1:5:pid:[4026532759]\n"
+        f"jlc-jc3-desktop-levend\t{netwerk.eigenaar()}\n"
+    ))
+    monkeypatch.setattr(desktop, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+    proeven: list = []
+    monkeypatch.setattr(desktop.nw, "eis_afscherming", _afscherming_ok(proeven))
+    doorgiften: list = []
+    nep_doorgifte = SimpleNamespace(poort=1, sluit=lambda: None)
+    monkeypatch.setattr(desktop, "CdpDoorgifte", lambda c: doorgiften.append(c) or nep_doorgifte)
+    a = desktop.Desktop(tmp_path, netwerk=netwerk.Testnetwerk("jlc-net-a"))
+    b = desktop.Desktop(tmp_path, netwerk=netwerk.Testnetwerk("jlc-net-b"))
+    assert a.naam != b.naam and a.naam.startswith(desktop.NAAM_VOORVOEGSEL) and a.naam != "jlc-jc3-desktop"
+    assert not hasattr(desktop, "NAAM")
+    monkeypatch.setattr(a, "cdp", lambda actie, **k: {"doelen": [{"type": "page"}]})
+    a.start()
+    a.stop()
+    run = opname.run()
+    assert waarde_na(run, "--name") == [a.naam]
+    assert waarde_na(run, "--label") == [desktop.CONTAINER_LABEL, f"{netwerk.EIGENAAR_LABEL}={netwerk.eigenaar()}"]
+    # alleen de verweesde container (vóór de run) en de eigen container (bij stop) gaan weg
+    assert [x for x in opname.weg() if x[0] == "rm"] == [("rm", "-f", "jlc-jc3-desktop-dood"), ("rm", "-f", a.naam)]
+    assert opname.aanroepen.index(("rm", "-f", "jlc-jc3-desktop-dood")) < opname.aanroepen.index(run)
+    execs = [x for x in opname.aanroepen if x[0] == "exec"]
+    assert execs and all(x[2] == a.naam for x in execs)
+    assert proeven == [(a.naam, "jlc-net-a")] and doorgiften == [a.naam]
+
+
 def test_mislukte_serverstart_in_desktop_main_laat_geen_netwerk_achter(monkeypatch, tmp_path):
     """Review R-TECH-1: desktop.main zet de serverstart vóór try/finally; ook dan gaat het netwerk weg."""
     opname = _FaalOpRun()
@@ -292,6 +451,7 @@ def test_desktop_container_met_grote_shm_en_zonder_rechten(monkeypatch, tmp_path
     opname = DockerOpname()
     proeven: list = []
     monkeypatch.setattr(desktop, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
     monkeypatch.setattr(desktop.nw, "eis_afscherming", _afscherming_ok(proeven))
     d = desktop.Desktop(tmp_path, netwerk=netwerk.Testnetwerk("jlc-net-d"))
     monkeypatch.setattr(d, "cdp", lambda actie, **k: {"doelen": [{"type": "page"}]})
@@ -305,7 +465,7 @@ def test_desktop_container_met_grote_shm_en_zonder_rechten(monkeypatch, tmp_path
         assert waarde_na(args, "--network") == ["jlc-net-d"] and "host" not in args and not waarde_na(args, "-p")
         app = next(a for a in opname.aanroepen if a[:2] == ("exec", "-d"))
         assert f"--remote-debugging-port {desktop.CDP_POORT} " in app[-1]
-        assert proeven == [(desktop.NAAM, "jlc-net-d")]
+        assert proeven == [(d.naam, "jlc-net-d")]
         assert d.doorgifte is not None and d.poort == d.doorgifte.poort != desktop.CDP_POORT
     finally:
         d.stop()
@@ -316,6 +476,7 @@ def test_desktop_app_start_pas_na_de_afschermingsproef(monkeypatch, tmp_path):
     met 'docker exec -d' (ADR-0011 besluit 15: vóór elke desktopstart)."""
     opname = DockerOpname()
     monkeypatch.setattr(desktop, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
 
     def proef(container, net):
         opname.aanroepen.append(("afschermingsproef", container, net.naam))
@@ -329,7 +490,7 @@ def test_desktop_app_start_pas_na_de_afschermingsproef(monkeypatch, tmp_path):
         run = opname.run()
         assert run[-2:] == ("sleep", "infinity") and "jellyfin-desktop" not in " ".join(run)
         app = next(a for a in opname.aanroepen if a[:2] == ("exec", "-d"))
-        assert app[2:5] == (desktop.NAAM, "sh", "-c") and "/out/build/src/jellyfin-desktop" in app[-1]
+        assert app[2:5] == (d.naam, "sh", "-c") and "/out/build/src/jellyfin-desktop" in app[-1]
         assert "Xvfb :99" in app[-1] and f"--remote-debugging-port {desktop.CDP_POORT}" in app[-1]
         volgorde = [a[0] for a in opname.aanroepen]
         assert volgorde.index("run") < volgorde.index("afschermingsproef") < opname.aanroepen.index(app)
@@ -340,6 +501,7 @@ def test_desktop_app_start_pas_na_de_afschermingsproef(monkeypatch, tmp_path):
 def test_desktop_app_start_niet_als_de_afschermingsproef_faalt(monkeypatch, tmp_path):
     opname = DockerOpname()
     monkeypatch.setattr(desktop, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
 
     def lek(container, net):
         raise RuntimeError("testnetwerk niet afgeschermd: hostadres 1 (netwerkinterface): bereikt")
@@ -356,6 +518,7 @@ def test_desktop_app_start_niet_als_de_afschermingsproef_faalt(monkeypatch, tmp_
 def test_desktop_zonder_testnetwerk_start_niet(monkeypatch, tmp_path):
     opname = DockerOpname()
     monkeypatch.setattr(desktop, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
     with pytest.raises(RuntimeError, match="testnetwerk"):
         desktop.Desktop(tmp_path).start()
     assert opname.aanroepen == []

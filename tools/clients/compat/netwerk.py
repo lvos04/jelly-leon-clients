@@ -21,9 +21,12 @@ enkele verbinding. Controles laten zien dat de proef kan falen: de luisteraar is
 en IPv6), en de testserver is vanuit de container bereikbaar. In het bewijs staan geen adressen en geen interfacenamen
 (die kunnen een MAC-adres bevatten), alleen het soort interface en de uitkomst.
 
-Opruimen: elk testnetwerk krijgt ``LABEL`` en het eigenaarproces (pid en starttijd, ``EIGENAAR_LABEL``). Vóór een nieuw
-netwerk ruimt ``ruim_verweesde_netwerken`` de testnetwerken op van een harnasproces dat niet meer bestaat (bv. na
-SIGKILL); een netwerk van een lopend proces, ook van een andere agent, blijft staan.
+Opruimen: elk testnetwerk krijgt ``LABEL`` en het eigenaarproces (pid, starttijd en PID-namespace,
+``EIGENAAR_LABEL``). Vóór een nieuw netwerk ruimt ``ruim_verweesde_netwerken`` de testnetwerken op van een harnasproces
+in dezelfde PID-namespace dat niet meer bestaat (bv. na SIGKILL); een netwerk van een lopend proces, ook van een andere
+agent, blijft staan. Een pid zegt alleen iets binnen de eigen PID-namespace: een netwerk uit een andere (of onbekende)
+PID-namespace, bijvoorbeeld van een harnas in een container of sandbox, blijft altijd staan (review R-HERREV-1).
+Hetzelfde geldt voor de desktopcontainer (``ruim_verweesde_containers``); containers hebben per run een unieke naam.
 """
 
 from __future__ import annotations
@@ -41,7 +44,8 @@ from .scenario import GESLAAGD, MISLUKT
 
 NETWERK_OPTIES = ("--internal", "--ipv6=false", "-o", "com.docker.network.bridge.inhibit_ipv4=true")
 LABEL = "jelly-leon-clients.compat=testnetwerk"
-EIGENAAR_LABEL = "jelly-leon-clients.compat.eigenaar"  # "<pid>:<starttijd>" van het harnasproces dat het netwerk maakte
+# "<pid>:<starttijd>:<PID-namespace>" van het harnasproces dat het netwerk (of de container) maakte
+EIGENAAR_LABEL = "jelly-leon-clients.compat.eigenaar"
 SERVER_ALIAS = "testserver"
 SERVER_POORT = 8096
 BESCHRIJVING = (
@@ -102,18 +106,32 @@ def _starttijd(pid: int) -> str | None:
         return None
 
 
+def pid_namespace() -> str | None:
+    """PID-namespace van dit proces (``pid:[<inode>]`` uit ``/proc/self/ns/pid``); None als dat niet leesbaar is."""
+    try:
+        return os.readlink("/proc/self/ns/pid")
+    except OSError:
+        return None
+
+
 def eigenaar() -> str:
-    """``<pid>:<starttijd>`` van dit proces (de starttijd beschermt tegen een hergebruikt pid)."""
-    return f"{os.getpid()}:{_starttijd(os.getpid()) or 'onbekend'}"
+    """``<pid>:<starttijd>:<PID-namespace>`` van dit proces (de starttijd beschermt tegen een hergebruikt pid, de
+    namespace tegen hetzelfde pid in een container of sandbox)."""
+    return f"{os.getpid()}:{_starttijd(os.getpid()) or 'onbekend'}:{pid_namespace() or 'onbekend'}"
 
 
 def eigenaar_leeft(waarde: str) -> bool:
-    """Bestaat het proces uit ``EIGENAAR_LABEL`` nog? Bij twijfel ja: dan blijft het netwerk staan."""
-    pid_tekst, _, start = waarde.partition(":")
+    """Bestaat het proces uit ``EIGENAAR_LABEL`` nog? Bij twijfel ja: dan blijft het netwerk staan. Alleen binnen
+    dezelfde PID-namespace is dat vast te stellen; een andere, onbekende of ontbrekende namespace telt als levend
+    (review R-HERREV-1)."""
+    pid_tekst, start, namespace = ([*waarde.split(":", 2), "", ""])[:3]
     try:
         pid = int(pid_tekst)
     except ValueError:
         return True
+    eigen = pid_namespace()
+    if eigen is None or namespace != eigen:
+        return True  # andere of onbekende PID-namespace: dit pid zegt hier niets
     if _starttijd(os.getpid()) is None:
         return True  # /proc niet leesbaar: niets vast te stellen
     huidig = _starttijd(pid)
@@ -124,8 +142,8 @@ def eigenaar_leeft(waarde: str) -> bool:
 
 def ruim_verweesde_netwerken() -> list[str]:
     """Testnetwerken (``LABEL``) waarvan het eigenaarproces aantoonbaar niet meer bestaat, weghalen (vervolgpunt van de
-    review R-TECH: na een SIGKILL bleef het netwerk staan). Zonder eigenaarlabel of met een levend eigenaarproces blijft
-    een netwerk staan. Geeft de namen van de verwijderde netwerken."""
+    review R-TECH: na een SIGKILL bleef het netwerk staan). Zonder eigenaarlabel, met een levend eigenaarproces of uit
+    een andere PID-namespace blijft een netwerk staan. Geeft de namen van de verwijderde netwerken."""
     r = docker(
         "network", "ls", "--filter", f"label={LABEL}", "--format", '{{.Name}}\t{{.Label "' + EIGENAAR_LABEL + '"}}',
         check=False,
@@ -137,6 +155,25 @@ def ruim_verweesde_netwerken() -> list[str]:
         naam, _, waarde = regel.partition("\t")
         if naam.strip() and waarde.strip() and not eigenaar_leeft(waarde.strip()):
             Testnetwerk(naam.strip()).verwijder()
+            weg.append(naam.strip())
+    return weg
+
+
+def ruim_verweesde_containers(label: str) -> list[str]:
+    """Containers met ``label`` waarvan het eigenaarproces aantoonbaar niet meer bestaat (zelfde regels als
+    ``ruim_verweesde_netwerken``) weghalen. Nodig omdat containers per run een unieke naam hebben: een vaste naam die de
+    volgende run eerst weghaalt, kon ook de container van een andere lopende run raken. Geeft de verwijderde namen."""
+    r = docker(
+        "ps", "-a", "--filter", f"label={label}", "--format", '{{.Names}}\t{{.Label "' + EIGENAAR_LABEL + '"}}',
+        check=False,
+    )  # fmt: skip
+    weg: list[str] = []
+    if r.returncode != 0:
+        return weg
+    for regel in r.stdout.splitlines():
+        naam, _, waarde = regel.partition("\t")
+        if naam.strip() and waarde.strip() and not eigenaar_leeft(waarde.strip()):
+            docker("rm", "-f", naam.strip(), check=False)
             weg.append(naam.strip())
     return weg
 
