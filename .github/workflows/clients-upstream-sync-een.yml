@@ -3,6 +3,8 @@
 # in branch sync/<client>-<tag>, inclusief geneste subtrees (ADR-0005), basislijn en forkregels.
 # Conflict of overtreding → job rood (EX48), er wordt niets gepusht. Gelukt → alleen de syncbranch pushen;
 # nooit samenvoegen met de hoofdbranch, nooit een release of image (R2: mens beoordeelt).
+# Bestaat de syncbranch al (`wacht_op_review`), dan wordt niets gepusht, maar gaat die bestaande branch wel als output
+# `branch` door: forkregels en client-CI controleren hem dan opnieuw (KLEIN-100 B-2), met een waarschuwing.
 # Het token staat tijdens de sync níet in de git-config (persist-credentials: false); alleen de laatste stap
 # gebruikt het, en alleen om de nieuwe branch sync/<client>-<tag> te maken (geen force, nooit overschrijven).
 name: Clients / Upstream-sync (één client)
@@ -19,7 +21,7 @@ on:
         default: ""
     outputs:
       branch:
-        description: "Gepushte syncbranch, of leeg als de client al actueel is"
+        description: "Gepushte of al bestaande (wacht op review) syncbranch, of leeg als de client al actueel is"
         value: ${{ jobs.sync.outputs.branch }}
 
 permissions:
@@ -73,10 +75,16 @@ jobs:
             echo "::error::Upstream-sync $CLIENT mislukt (exitcode $rc): niets gepusht. Zie de samenvatting (EX48)."
             exit "$rc"
           fi
-          branch="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("branch") or "")' "$RUNNER_TEMP/sync.json")"
+          lees() { python -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")' "$RUNNER_TEMP/sync.json" "$1"; }
+          branch="$(lees branch)"
+          resultaat="$(lees resultaat)"
+          if [ "$resultaat" = "wacht_op_review" ]; then
+            echo "::warning::$CLIENT: $branch bestaat al op origin (commit $(lees bestaande_commit), $(lees bestaande_datum)) en wacht op review (R2); niets gepusht, forkregels en client-CI draaien er opnieuw op."
+          fi
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-      - name: Syncbranch pushen (alleen de syncbranch, nooit overschrijven)
-        if: steps.sync.outputs.branch != ''
+          echo "resultaat=$resultaat" >> "$GITHUB_OUTPUT"
+      - name: Syncbranch pushen (alleen een nieuw gesynchroniseerde syncbranch, nooit overschrijven)
+        if: steps.sync.outputs.resultaat == 'gesynchroniseerd' && steps.sync.outputs.branch != ''
         env:
           BRANCH: ${{ steps.sync.outputs.branch }}
           GH_TOKEN: ${{ github.token }}

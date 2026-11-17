@@ -128,6 +128,13 @@ def test_alleen_de_syncstap_pusht_en_alleen_een_nieuwe_syncbranch():
     assert "ls-remote --exit-code --heads" in run, "bestaande syncbranch wordt niet eerst gecontroleerd"
     assert '[ "$rc" -eq 2 ]' in run, "push hoort alleen te gebeuren als de branch aantoonbaar niet bestaat"
     assert "github.token" in str(push_steps[0].get("env")), "token hoort alleen in de pushstap"
+    # wacht_op_review geeft de bestaande branch door voor forkregels + client-CI, maar pusht nooit (KLEIN-100 B-2)
+    assert push_steps[0].get("if") == ("steps.sync.outputs.resultaat == 'gesynchroniseerd' && "
+                                       "steps.sync.outputs.branch != ''")
+    sync_run = next(s["run"] for _j, _job, s in steps(data) if s.get("id") == "sync")
+    assert 'echo "resultaat=$resultaat" >> "$GITHUB_OUTPUT"' in sync_run
+    assert '"$resultaat" = "wacht_op_review"' in sync_run and "::warning::" in sync_run
+    assert "$(lees bestaande_commit)" in sync_run and "$(lees bestaande_datum)" in sync_run
 
 
 PIJP_RE = re.compile(r"(?<!\|)\|(?!\|)")
