@@ -104,10 +104,14 @@ def test_sync_met_bestaande_syncbranch_op_origin_wacht_op_review(simple_setup, c
     summary = upstream_sync.sync(fork.path, "app")
 
     assert summary["resultaat"] == "wacht_op_review"
-    assert summary["branch"] is None and summary["bestaande_branch"] == "sync/app-v1.1.0"
+    # De bestaande branch gaat als `branch` naar de workflow: forkregels en client-CI draaien er opnieuw op (B-2).
+    assert summary["branch"] == summary["bestaande_branch"] == "sync/app-v1.1.0"
+    assert summary["bestaande_commit"] == head_before
+    assert summary["bestaande_datum"] == git(fork.path, "log", "-1", "--format=%cI", head_before).strip()
     assert_unchanged(fork, head_before)
     assert upstream_sync.main(["--repo-root", str(fork.path), "sync", "app"]) == 0
-    assert "wacht op review" in capsys.readouterr().out
+    uit = capsys.readouterr().out
+    assert "wacht op review" in uit and head_before[:12] in uit
     assert_unchanged(fork, head_before)
     # Een andere tag heeft geen bestaande branch: die sync loopt gewoon (en faalt hier op het conflict).
     up.commit({"README.md": "app 1.2\n"}, "v1.2", tag="v1.2.0")

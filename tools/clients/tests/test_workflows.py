@@ -128,6 +128,45 @@ def test_alleen_de_syncstap_pusht_en_alleen_een_nieuwe_syncbranch():
     assert "ls-remote --exit-code --heads" in run, "bestaande syncbranch wordt niet eerst gecontroleerd"
     assert '[ "$rc" -eq 2 ]' in run, "push hoort alleen te gebeuren als de branch aantoonbaar niet bestaat"
     assert "github.token" in str(push_steps[0].get("env")), "token hoort alleen in de pushstap"
+    # wacht_op_review geeft de bestaande branch door voor forkregels + client-CI, maar pusht nooit (KLEIN-100 B-2)
+    assert push_steps[0].get("if") == ("steps.sync.outputs.resultaat == 'gesynchroniseerd' && "
+                                       "steps.sync.outputs.branch != ''")
+    sync_run = next(s["run"] for _j, _job, s in steps(data) if s.get("id") == "sync")
+    assert 'echo "resultaat=$resultaat" >> "$GITHUB_OUTPUT"' in sync_run
+    assert '"$resultaat" = "wacht_op_review"' in sync_run and "::warning::" in sync_run
+    assert "$(lees bestaande_commit)" in sync_run and "$(lees bestaande_datum)" in sync_run
+
+
+PIJP_RE = re.compile(r"(?<!\|)\|(?!\|)")
+PIPEFAIL_RE = re.compile(r"^\s*set -[a-z]*o pipefail\b", re.MULTILINE)
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+def test_pijp_in_een_stap_maskeert_geen_fout(path):
+    """Zonder pipefail telt alleen de exitcode van het laatste commando: `python3 … | tee` blijft dan groen, ook als
+    python3 faalt (KLEIN-100 B-1). Standaard draait een stap als `bash -e {0}`; `shell: bash` = `bash -eo pipefail`."""
+    data = load(path)
+    for job_id, job, step in steps(data):
+        run = code_only(str(step.get("run") or ""))
+        if not PIJP_RE.search(run):
+            continue
+        shell = (step.get("shell") or ((job.get("defaults") or {}).get("run") or {}).get("shell")
+                 or ((data.get("defaults") or {}).get("run") or {}).get("shell"))
+        assert shell == "bash" or PIPEFAIL_RE.search(run), (
+            f"{path.name}:{job_id}: stap '{step.get('name')}' gebruikt een pijp zonder pipefail")
+
+
+COMPAT_CLIENT_RE = re.compile(r'--client\s+(?:"([a-z]+)=([^"\n]+)"|([a-z]+)=(\S+))')
+
+
+def test_compat_clientmappen_bestaan():
+    """Een verplaatste clientmap (Swiftfin 1.7.1: PreferencesView) mag de routevergelijking niet ongemerkt breken."""
+    root = Path(DEFAULT_REPO_ROOT)
+    runs = "\n".join(str(s.get("run") or "") for _j, _job, s in steps(load(WORKFLOW_DIR / "clients-compat.yml")))
+    clients = [(m[0] or m[2], m[1] or m[3]) for m in COMPAT_CLIENT_RE.findall(runs)]
+    assert {c for c, _paden in clients} == {"android", "androidtv", "swiftfin"}, clients
+    ontbrekend = [p for _c, paden in clients for p in paden.split(",") if not (root / p).is_dir()]
+    assert not ontbrekend, f"clients-compat.yml: --client-map(pen) bestaan niet: {ontbrekend}"
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
@@ -157,7 +196,12 @@ def test_onbeoordeelde_upstream_code_schrijft_geen_cache():
     caches = [s for _j, _job, s in steps(load(WORKFLOW_DIR / "clients-swiftfin.yml"))
               if str(s.get("uses", "")).startswith("actions/cache")]
     schrijvend = [s for s in caches if str(s["uses"]).startswith("actions/cache@")]
-    assert schrijvend and all(s.get("if") == "inputs.ref == ''" for s in schrijvend)
+    # ook niet bij een gewone push naar een syncbranch (dan is inputs.ref leeg; KLEIN-100 V2)
+    assert schrijvend and all(s.get("if") == "inputs.ref == '' && !startsWith(github.ref, 'refs/heads/sync/')"
+                              for s in schrijvend)
+    lezend = [s for s in caches if str(s["uses"]).startswith("actions/cache/restore@")]
+    assert lezend and all(s.get("if") == "inputs.ref != '' || startsWith(github.ref, 'refs/heads/sync/')"
+                          for s in lezend)
     for name in CLIENT_WORKFLOWS | {"clients-forkregels.yml", SYNC_ONE, SYNC_ALL}:
         for _j, _job, step in steps(load(WORKFLOW_DIR / name)):
             uses = str(step.get("uses", ""))

@@ -61,6 +61,7 @@ jobs:
           python-version: "3.12"
       - name: Server-tag en SDK-versies uit de clientbronnen
         id: bronnen
+        shell: bash  # = bash -eo pipefail: een fout vóór `| tee` laat de stap falen (KLEIN-100 B-1)
         run: python3 tools/clients/client_compat.py bronnen | tee -a "$GITHUB_OUTPUT"
       - name: Publieke bronnen ophalen (ondiep, alleen de nodige mappen)
         env:
@@ -85,6 +86,7 @@ jobs:
             jellyfin-api/src/commonMain/kotlin-generated/org/jellyfin/sdk/api/operations
           haal sdk-swift https://github.com/jellyfin/jellyfin-sdk-swift.git "$SWIFT_SDK" Sources/Paths
       - name: android en androidtv (jellyfin-sdk-kotlin) tegen de 12.x-server
+        shell: bash  # pipefail: exitcode 1 (ontbrekende route) of 2 (fout) mag `| tee` niet maskeren
         run: >-
           python3 tools/clients/server_api_compat.py
           --server-a "$RUNNER_TEMP/srv-vorig/Jellyfin.Api/Controllers"
@@ -94,6 +96,7 @@ jobs:
           --client androidtv=androidtv/app/src/main,androidtv/playback,androidtv/preference
           --root . | tee "$RUNNER_TEMP/compat-kotlin.json"
       - name: Swiftfin (jellyfin-sdk-swift) tegen de 12.x-server — de app zelf blijft NIET GEVALIDEERD (Mac/Xcode)
+        shell: bash  # pipefail: exitcode 1 (ontbrekende route) of 2 (fout) mag `| tee` niet maskeren
         run: >-
           python3 tools/clients/server_api_compat.py --sdk-taal swift
           --server-a "$RUNNER_TEMP/srv-vorig/Jellyfin.Api/Controllers"

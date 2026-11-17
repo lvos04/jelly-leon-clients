@@ -71,13 +71,13 @@ jobs:
       - name: Hulpmiddelen uit de upstream-Brewfile (swiftformat, swiftlint)
         run: brew bundle --file Brewfile
       - name: Swift-pakketcache (lezen en schrijven; niet voor een syncbranch)
-        if: inputs.ref == ''
+        if: inputs.ref == '' && !startsWith(github.ref, 'refs/heads/sync/')
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: swiftfin/build/SourcePackages
           key: ${{ runner.os }}-spm-${{ env.XCODE_VERSION }}-${{ hashFiles('swiftfin/Swiftfin.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
       - name: Swift-pakketcache (alleen lezen voor een syncbranch met nog niet beoordeelde upstream-code)
-        if: inputs.ref != ''
+        if: inputs.ref != '' || startsWith(github.ref, 'refs/heads/sync/')
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: swiftfin/build/SourcePackages

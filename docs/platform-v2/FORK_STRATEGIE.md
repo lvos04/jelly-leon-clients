@@ -40,23 +40,36 @@ python3 tools/clients/upstream_sync.py sync desktop --tag v2.0.1
 `sync` = `git subtree pull --prefix <map> --squash <upstream-url> <tag>` in branch **`sync/<client>-<tag>`**, met:
 vorige upstream-commit ophalen (verse clone), gewijzigde mpvqt-pin volgen, basislijn bijwerken, forkregels controleren.
 Conflict, nieuwe/verdwenen submodule of geschonden forkregel → alles terug en exitcode 2; niets gepusht.
-Workflow `Clients / Upstream-sync` doet dit wekelijks en handmatig, pusht alleen de syncbranch (token alleen in de
-pushstap) en draait daarop forkregels + client-CI met alleen leesrechten en zonder schrijfbare cache.
+Workflow `Clients / Upstream-sync` doet dit wekelijks en handmatig, pusht alleen een nieuw gesynchroniseerde
+syncbranch (token alleen in de pushstap) en draait daarop forkregels + client-CI met alleen leesrechten en zonder
+schrijfbare cache. Bestaat `origin/sync/<client>-<tag>` al (`wacht_op_review`), dan pusht de workflow niets, maar
+draait hij forkregels + client-CI opnieuw op die bestaande branch en geeft hij een waarschuwing met commit en datum:
+een rode of verouderde syncbranch maakt de run dus rood (KLEIN-100 B-2). Let op: die client-CI is de workflow van de
+hoofdbranch; vraagt de nieuwe upstream-versie een andere bouwomgeving (Swiftfin 1.7.1: Xcode 27.1, geen Carthage),
+dan blijft `ci-<client>` rood tot de overname. Op een met de hand gepushte syncbranch draait de push-CI van die branch
+zelf; ook daar schrijft de client-CI geen cache (Gradle alleen-lezen buiten de standaardbranch, Swiftfin-cache niet
+bij `refs/heads/sync/*`).
 **Overnemen in de hoofdbranch en elke release zijn handmatige R2-stappen.**
 
 **Handmatige weg bij een mergeconflict** (de tool lost alleen gitlink-conflicten op; KLEIN-100):
 
-1. Vanaf de hoofdbranch `git switch -c sync/<client>-<tag>`; de tag en de vorige upstream-commit ophalen
-   (`git fetch --no-tags <upstream-url> +refs/tags/<tag>:refs/jlc/<client> <vorige upstream_commit>`), dan
-   `git subtree merge --prefix <map> --squash <tag-commit>`.
+1. Eerst `git fetch --prune origin`: een niet-opgeruimde `origin/sync/…`-ref van een verwijderde branch geeft anders
+   een onterecht `wacht_op_review`. Vanaf de hoofdbranch `git switch -c sync/<client>-<tag>`; de tag en de vorige
+   upstream-commit ophalen (`git fetch --no-tags <upstream-url> +refs/tags/<tag>:refs/jlc/<client> <vorige
+   upstream_commit>`), dan `git subtree merge --prefix <map> --squash <tag-commit>`; daarna de hulpref opruimen
+   (`git update-ref -d refs/jlc/<client>`).
 2. Conflict oplossen: de upstream-wijziging overnemen en alleen de regels van de patches uit `PATCHES.md` behouden;
    daarna moet de patch dezelfde omvang hebben (`test_app_identiteit.py`, `PATCH_OMVANG`). Mergecommit maken.
 3. `baseline.json`: `upstream_tag`, `upstream_commit`, `upstream_tree` (`git rev-parse <tag-commit>^{tree}`) en
    forkversie `<versie>-jl.0`; apart committen.
 4. `check_clients.py`, `app_identiteit.py bron` en de tests moeten in orde zijn; alleen die syncbranch pushen (nooit
    force); de push-CI (*Forkregels* en de client-workflow) draait erop.
-5. Zolang `origin/sync/<client>-<tag>` bestaat, doet `upstream_sync.py sync` voor die tag niets (`wacht_op_review`,
-   exitcode 0): de wekelijkse run blijft groen tot een mens de branch beoordeelt en overneemt (R2).
+5. Zolang `origin/sync/<client>-<tag>` bestaat, synchroniseert `upstream_sync.py sync` die tag niet opnieuw
+   (`wacht_op_review`, exitcode 0, `branch` = de bestaande branch): de wekelijkse run controleert die branch elke
+   keer opnieuw (forkregels + client-CI, zie hierboven) en is alleen groen als die controles groen zijn, tot een mens
+   de branch beoordeelt en overneemt (R2).
+6. Wijzigt de hoofdbranch daarna (tooling, workflows), dan de hoofdbranch in de syncbranch mergen (`git merge`, geen
+   rebase, nooit force-push), zodat de syncbranch met dezelfde controles draait.
 
 Voorbeeld: Swiftfin 1.6.1 → 1.7.1 in `sync/swiftfin-1.7.1` (2026-11-17): conflict in `project.pbxproj` op de
 JLC-0004-regel van *Swiftfin iOS*/Release (upstream zette daar `PRODUCT_NAME = Swiftfin`); opgelost met de eigen
