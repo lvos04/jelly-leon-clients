@@ -31,13 +31,12 @@ from clients_common import DEFAULT_REPO_ROOT
 ROOT = Path(DEFAULT_REPO_ROOT)
 KOPIE_DIR = ROOT / "docs" / "platform-v2"
 BRON_REL = "docs/platform-v2"
-#: ai-server-manager (branch ccr-c133d7a0-kuz1cv), laatste wijziging van de contractbestanden onder contracts 1.3,
-#: inclusief de reviewcorrecties RV1–RV13 (ADR-0028 daar): "Contract 1.3: MediaGuard-overstap naar de publieke repo
-#: gemeten (RV13)".
-BRON_COMMIT = "02b119cb84be9a307a88532f6692ea8a4bcb12f1"
+#: ai-server-manager (branch ccr-c133d7a0-kuz1cv), contracts 1.3 met de reviewcorrecties RV1–RV13 (ADR-0028 daar) en
+#: de aanvulling C-12 (ADR-0031 daar; blijft 1.3). De 1.2-historie is op deze commit ongewijzigd.
+BRON_COMMIT = "e88a290c9ad5fef4acf498d05ad3414395a4fcb5"
 KOPIEEN = {
-    "PLATFORM_CONTRACTEN.md": "15b30cf17f91b606451ef9c41f02327076ef76ce655ee94e40e3538106962310",
-    "CONTRACT_1.3_CONFORMITEIT.md": "f0a2352ddb27088ae668013501c62a1eaaf879efe742a2d4422ffe8d33b43466",
+    "PLATFORM_CONTRACTEN.md": "4712dd62c837c2f2594fa4152a925464f6f7481e898473660f09607cc113c511",
+    "CONTRACT_1.3_CONFORMITEIT.md": "b5ebba073a8fe8beb715d58e6760feae38e33ad445956d107e64840133dd7924",
     # historie (C1.3-ALG-01), dezelfde bron-commit; vervangt de stand van 1.2 (8b54f3940) door die van de bron nu
     "CONTRACT_1.2_CONFORMITEIT.md": "634941340afd2d9a55846076ab468ea4aacddb32dd8be6a7b92dd113661d39a4",
 }

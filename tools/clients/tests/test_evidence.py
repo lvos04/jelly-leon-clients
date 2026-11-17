@@ -42,6 +42,7 @@ VALIDATIE = {
     "Intel-iGPU-getest (ontwikkelmachine)",  # nieuw in 1.3
     "NIET GEVALIDEERD (echte NAS)", "NIET GEVALIDEERD (hardware)", "NIET GEVALIDEERD (account)",
     "NIET GEVALIDEERD (Mac/Xcode)",
+    "NIET GEVALIDEERD (echte Hub)",  # aanvulling C-12 (C12-6)
     NIET_GETEST,
 }
 SCHEIDING = "; "
@@ -189,6 +190,21 @@ def test_geldige_regels_van_elk_soort():
     assert fouten_in_regel(regel(id="C1.3-JLC-02", validatie="Unit-getest; NIET GEVALIDEERD (Mac/Xcode)")) == []
     assert fouten_in_regel(regel(id="B03-077", status="Niet gestart", validatie="Niet getest")) == []
     assert fouten_in_regel(regel(validatie="Intel-iGPU-getest (ontwikkelmachine); NIET GEVALIDEERD (hardware)")) == []
+    assert fouten_in_regel(regel(validatie="Unit-getest; NIET GEVALIDEERD (echte Hub)",
+                                 blokkade="Hub-koppeling alleen met de simulator: NIET GEVALIDEERD (echte Hub).")) == []
+
+
+def test_vaste_lijst_is_de_tabel_van_paragraaf_11():
+    """De vaste lijst volgt het contract: een waarde erbij of eraf zonder contracttekst is rood (C12-6: echte Hub)."""
+    tekst = (PV2 / "PLATFORM_CONTRACTEN.md").read_text(encoding="utf-8")
+    begin = tekst.index("## 11. Bewijs en Excel")
+    p11 = tekst[begin : tekst.index("## 12.", begin)]
+    in_tabel: set[str] = set()
+    for ruw in p11.splitlines():
+        regel_ = ruw.strip()
+        if regel_.startswith("| `"):
+            in_tabel.update(re.findall(r"`([^`]+)`", regel_.split(" | ")[0]))
+    assert in_tabel == VALIDATIE, f"verschil met contract §11: {sorted(in_tabel ^ VALIDATIE)}"
 
 
 @pytest.mark.parametrize(("wijziging", "melding"), [

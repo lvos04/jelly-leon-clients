@@ -125,9 +125,9 @@
     "validatie": "Unit-getest",
     "bewijs": "commit e3ff0df: docs/platform-v2/PLATFORM_CONTRACTEN.md (contracts 1.3) en CONTRACT_1.3_CONFORMITEIT.md byte-gelijk overgenomen uit ai-server-manager 02b119c (laatste wijziging van beide bestanden daar; gecontroleerd met git log in die checkout); CONTRACT_1.2_CONFORMITEIT.md blijft als historie in de stand van dezelfde bron; tools/clients/tests/test_contract_kopie.py pint de SHA-256 van de drie kopieën, eist versie 1.3 met C1.3-JLC-01…03, faalt bij een contractbestand zonder pin en vergelijkt byte voor byte met de bron op de pin (lokaal op 2026-11-11 met de checkout van ai-server-manager naast deze repo: 9 passed, niets overgeslagen, geen waarschuwing); in CI alleen de hash-laag (de bronrepo staat daar niet naast): GitHub Actions Clients / Forkregels 42813382160 groen op 0573a55; docs: commit 2d71522 (ADR-0012, README's); na de push: Clients / Forkregels 42969899251 groen op 13ff0eb (326 passed, 3 skipped: de byte-vergelijking met de bron, die daar niet naast staat)",
     "blokkade": "",
-    "opmerking": "Repowerk voor dit punt is uitgevoerd; 'Gereed' wordt in deze bouwomgeving nooit gezet. Een nieuwe contractstand overnemen blijft een bewuste stap (kopie, pin en hashes samen).",
+    "opmerking": "kopie aanvulling C-12, bron e88a290 (test_contract_kopie.py pint nu ai-server-manager@e88a290; 1.2-historie ongewijzigd). Repowerk voor dit punt is uitgevoerd; 'Gereed' wordt in deze bouwomgeving nooit gezet. Een nieuwe contractstand overnemen blijft een bewuste stap (kopie, pin en hashes samen).",
     "repo": "jelly-leon-clients",
-    "bijgewerkt": "2026-11-11"
+    "bijgewerkt": "2026-11-17"
   },
   {
     "id": "C1.3-JLC-02",
