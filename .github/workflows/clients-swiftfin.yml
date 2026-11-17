@@ -41,7 +41,7 @@ concurrency:
 jobs:
   simulator:
     name: Swiftfin — ${{ matrix.schema }} (simulator, zonder signing)
-    runs-on: macos-26
+    runs-on: xcode-27  # GitHub-image met Xcode 27.1 (public preview), zoals upstream ci.yml; 1.7.1 vraagt de iOS 27.1-SDK
     timeout-minutes: 90
     strategy:
       fail-fast: false

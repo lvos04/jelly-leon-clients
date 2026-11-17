@@ -1,0 +1,5 @@
+# actionlint kent het GitHub-image `xcode-27` (Xcode 27, public preview) nog niet als label; Swiftfin 1.7.1 heeft
+# de iOS 27.1-SDK nodig (clients-swiftfin.yml).
+self-hosted-runner:
+  labels:
+    - xcode-27
