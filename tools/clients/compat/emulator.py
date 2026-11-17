@@ -9,12 +9,17 @@ Netwerk (S-P40-72): nooit het hostnetwerk. De container hangt alleen aan het eig
 (``netwerk.py``); de app bereikt de server op ``http://testserver:8096`` (``TestServer.intern_url``; ``10.0.2.2`` is in
 de emulator de loopback van de container, niet de host). Vóór het opstarten toont ``netwerk.eis_afscherming`` aan dat
 de container geen poort van de host bereikt en de testserver wel; anders stopt de run.
+
+Naam (herstel 2 van S-P40-72): elke emulatorcontainer heeft een unieke naam (``jlc-jc3-emulator-<willekeurig>``) en een
+eigenaarlabel; ``docker rm -f`` raakt alleen de eigen container. Een achtergebleven emulatorcontainer van een
+harnasproces dat in dezelfde PID-namespace niet meer bestaat, ruimt ``netwerk.ruim_verweesde_containers`` op.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import secrets
 import shlex
 import subprocess
 import time
@@ -28,7 +33,8 @@ from .server import WERK, docker
 
 SDK = Path(os.environ.get("ANDROID_HOME", str(Path.home() / "android-sdk")))
 RUNNER_IMAGE = os.environ.get("JLC_EMULATOR_IMAGE", "jelly-leon-clients/emulator-runner:dev")
-NAAM = "jlc-jc3-emulator"
+NAAM_VOORVOEGSEL = "jlc-jc3-emulator-"  # plus een willekeurig achtervoegsel per Emulator: nooit een vaste naam
+CONTAINER_LABEL = "jelly-leon-clients.compat=emulator"
 
 # Kleinere schermen dan het standaardapparaat: met pixel_6 (1080x2400) haalde de emulator binnen 4 GiB een OOM-kill
 # zodra de app afspeelde (gemeten in jelly-leon B03-016). De vormfactor blijft gelijk.
@@ -167,10 +173,11 @@ class Emulator:
         self.avd = ""
         self.cid = ""
         self.afscherming: dict[str, Any] = {}
+        self.naam = f"{NAAM_VOORVOEGSEL}{secrets.token_hex(6)}"
 
     def adb(self, *args: str, timeout: float = 120) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["docker", "exec", "-e", "HOME=/tmp", NAAM, str(SDK / "platform-tools/adb"), *args],
+            ["docker", "exec", "-e", "HOME=/tmp", self.naam, str(SDK / "platform-tools/adb"), *args],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -184,13 +191,17 @@ class Emulator:
         if self.netwerk is None:  # fail-closed: zonder eigen testnetwerk nooit starten (ook niet op het hostnetwerk)
             raise RuntimeError("geen testnetwerk: de emulator start alleen op het afgeschermde netwerk van de server")
         self.avd = maak_avd(self.soort, self.avd_map)
-        docker("rm", "-f", NAAM, check=False)
+        nw.ruim_verweesde_containers(CONTAINER_LABEL)  # alleen van een harnasproces dat aantoonbaar niet meer bestaat
         kvm_gid = kvm_groep()
         self.cid = docker(
             "run",
             "-d",
             "--name",
-            NAAM,
+            self.naam,
+            "--label",
+            CONTAINER_LABEL,
+            "--label",
+            f"{nw.EIGENAAR_LABEL}={nw.eigenaar()}",
             "--user",
             f"{os.getuid()}:{os.getgid()}",
             "--device",
@@ -223,7 +234,7 @@ class Emulator:
             "sleep",
             "infinity",
         ).stdout.strip()
-        self.afscherming = nw.eis_afscherming(NAAM, self.netwerk)
+        self.afscherming = nw.eis_afscherming(self.naam, self.netwerk)
         # Eerst de adb-server (maakt /tmp/.android/adbkey): de emulator zet die sleutel bij het starten in het image;
         # zonder dit blijft het Android TV-image (ro.adb.secure) op 'unauthorized' (gemeten in jelly-leon B03-016).
         self.adb("start-server")
@@ -235,7 +246,7 @@ class Emulator:
                 "-d",
                 "-e",
                 "HOME=/tmp",
-                NAAM,
+                self.naam,
                 "sh",
                 "-c",
                 f"{SDK}/emulator/emulator -avd {self.avd} -no-window -no-audio -no-boot-anim -no-snapshot "
@@ -250,7 +261,7 @@ class Emulator:
             time.sleep(1)
         raise RuntimeError(
             "emulator niet opgestart binnen 600 s: "
-            + docker("exec", NAAM, "tail", "-20", "/tmp/emu.log", check=False).stdout[-800:]
+            + docker("exec", self.naam, "tail", "-20", "/tmp/emu.log", check=False).stdout[-800:]
         )  # noqa: S108
 
     def installeer(self, apk: Path) -> str:
@@ -281,7 +292,7 @@ class Emulator:
         return uit
 
     def stop(self) -> None:
-        docker("rm", "-f", NAAM, check=False)
+        docker("rm", "-f", self.naam, check=False)
 
     # --- UI ---------------------------------------------------------------------------------------------------
 
@@ -317,7 +328,8 @@ class Emulator:
     def schermafdruk(self, pad: Path) -> None:
         pad.parent.mkdir(parents=True, exist_ok=True)
         uit = subprocess.run(
-            ["docker", "exec", "-e", "HOME=/tmp", NAAM, str(SDK / "platform-tools/adb"), "exec-out", "screencap", "-p"],
+            ["docker", "exec", "-e", "HOME=/tmp", self.naam, str(SDK / "platform-tools/adb"), "exec-out", "screencap",
+             "-p"],  # fmt: skip
             capture_output=True,
             timeout=60,
             check=False,

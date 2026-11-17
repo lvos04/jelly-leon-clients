@@ -101,10 +101,12 @@
     PID-namespace); vóór een nieuw netwerk worden de testnetwerken van een harnasproces in dezelfde PID-namespace dat
     niet meer bestaat (bijvoorbeeld na een SIGKILL) opgeruimd, die van een lopend proces nooit. Een netwerk uit een
     andere of onbekende PID-namespace (een harnas in een container of sandbox) blijft altijd staan, want daar zegt het
-    pid niets (review R-HERREV-1). Server- en desktopcontainers hebben per run een unieke naam (met een willekeurig
-    achtervoegsel; geen vaste naam `jlc-jc3-desktop` meer), zodat `docker rm -f` nooit een container van een andere run
-    raakt; een achtergebleven desktopcontainer wordt met hetzelfde eigenaarlabel en dezelfde regels opgeruimd. De
-    testwachtwoorden zijn per server willekeurig (24 letters en cijfers
+    pid niets (review R-HERREV-1). Server-, emulator- en desktopcontainers hebben per run een unieke naam (met een
+    willekeurig achtervoegsel; geen vaste namen `jlc-jc3-emulator` en `jlc-jc3-desktop` meer), zodat `docker rm -f`
+    alleen de eigen container raakt. Elk van de drie krijgt een eigen label (`jelly-leon-clients.compat=server`,
+    `=emulator` of `=desktop`) en het eigenaarlabel; vóór een nieuwe start wordt een achtergebleven container van die
+    soort met dezelfde regels opgeruimd (alleen bij een dode eigenaar in dezelfde PID-namespace). De datamap van een zo
+    opgeruimde server blijft in de werkmap staan. De testwachtwoorden zijn per server willekeurig (24 letters en cijfers
     uit `secrets`, omdat `adb input text` geen leestekens betrouwbaar typt); elk bewijsdocument wordt geweigerd als er
     een wachtwoord van die run in staat, in elk schrijfpad (Android, desktop, hervatproef, Swiftfin), elk met een
     eigen test. `check_clients.py` faalt op een buildbestand (`.kotlin`, `.gradle`, `build/`, APK, klassebestand,

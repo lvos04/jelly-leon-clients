@@ -111,6 +111,7 @@ def test_emulator_container_volgt_de_regels(monkeypatch, tmp_path):
     opname = DockerOpname()
     proeven: list = []
     monkeypatch.setattr(emulator, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
     monkeypatch.setattr(emulator, "maak_avd", lambda soort, avd_map: f"jlc-jc3-{soort}")
     monkeypatch.setattr(emulator, "kvm_groep", lambda: 992)
     monkeypatch.setattr(emulator.nw, "eis_afscherming", _afscherming_ok(proeven))
@@ -121,7 +122,7 @@ def test_emulator_container_volgt_de_regels(monkeypatch, tmp_path):
     args = opname.run()
     # S-P40-72: alleen het eigen testnetwerk, nooit het hostnetwerk; de afschermingsproef draait vóór het opstarten.
     assert waarde_na(args, "--network") == ["jlc-net-x"] and "host" not in args
-    assert proeven == [(emulator.NAAM, "jlc-net-x")] and e.afscherming["uitkomst"] == sc.GESLAAGD
+    assert proeven == [(e.naam, "jlc-net-x")] and e.afscherming["uitkomst"] == sc.GESLAAGD
     assert not waarde_na(args, "-p")  # niets gepubliceerd
     assert "/dev/kvm" in waarde_na(args, "--device") and waarde_na(args, "--group-add") == ["992"]
     assert waarde_na(args, "--memory") == ["4g"] and waarde_na(args, "--memory-swap") == ["4g"]
@@ -130,6 +131,46 @@ def test_emulator_container_volgt_de_regels(monkeypatch, tmp_path):
     assert f"{emulator.SDK}:{emulator.SDK}:ro" in koppelingen and f"{tmp_path / 'apk'}:/apk:ro" in koppelingen
     assert not any("docker.sock" in k for k in koppelingen)
     assert "--privileged" not in args and emulator.RUNNER_IMAGE in args
+
+
+def test_emulatorcontainer_heeft_een_unieke_naam_en_raakt_geen_andere_container(monkeypatch, tmp_path):
+    """Herstel 2 van S-P40-72: geen vaste naam jlc-jc3-emulator meer. Elke Emulator heeft een eigen naam met een
+    eigenaarlabel; 'docker rm -f' raakt alleen de eigen container en een emulatorcontainer van een dode eigenaar in de
+    eigen PID-namespace (niet een levende, en niet een uit een andere namespace)."""
+    opname = _DockerMetLijst(containers=(
+        f"jlc-jc3-emulator-dood\t999999999:1:{NS}\n"
+        "jlc-jc3-emulator-ander-ns\t1:5:pid:[4026532759]\n"
+        f"jlc-jc3-emulator-levend\t{netwerk.eigenaar()}\n"
+        "jlc-jc3-emulator\t\n"
+    ))
+    monkeypatch.setattr(emulator, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+    monkeypatch.setattr(emulator, "maak_avd", lambda soort, avd_map: f"jlc-jc3-{soort}")
+    monkeypatch.setattr(emulator, "kvm_groep", lambda: 992)
+    proeven: list = []
+    monkeypatch.setattr(emulator.nw, "eis_afscherming", _afscherming_ok(proeven))
+    execs: list = []
+
+    def nep_run(a, **k):
+        execs.append(a)
+        return subprocess.CompletedProcess(a, 0, stdout=b"" if "screencap" in a else "1\n", stderr="")
+
+    monkeypatch.setattr(emulator.subprocess, "run", nep_run)
+    a = emulator.Emulator("telefoon", tmp_path / "apk", avd_map=tmp_path / "avd", netwerk=netwerk.Testnetwerk("n-a"))
+    b = emulator.Emulator("telefoon", tmp_path / "apk", avd_map=tmp_path / "avd", netwerk=netwerk.Testnetwerk("n-b"))
+    assert a.naam != b.naam and a.naam.startswith(emulator.NAAM_VOORVOEGSEL) and a.naam != "jlc-jc3-emulator"
+    assert not hasattr(emulator, "NAAM")
+    a.start()
+    a.schermafdruk(tmp_path / "s.png")
+    a.stop()
+    run = opname.run()
+    assert waarde_na(run, "--name") == [a.naam]
+    assert waarde_na(run, "--label") == [emulator.CONTAINER_LABEL, f"{netwerk.EIGENAAR_LABEL}={netwerk.eigenaar()}"]
+    assert [x for x in opname.weg() if x[0] == "rm"] == [("rm", "-f", "jlc-jc3-emulator-dood"), ("rm", "-f", a.naam)]
+    assert opname.aanroepen.index(("rm", "-f", "jlc-jc3-emulator-dood")) < opname.aanroepen.index(run)
+    assert proeven == [(a.naam, "n-a")]
+    docker_exec = [x for x in execs if x[:2] == ["docker", "exec"]]
+    assert len(docker_exec) >= 3 and all(a.naam in x and "jlc-jc3-emulator" not in x for x in docker_exec)
 
 
 def test_emulator_zonder_testnetwerk_start_niet(monkeypatch, tmp_path):
@@ -146,6 +187,7 @@ def test_emulator_stopt_als_het_netwerk_niet_afgeschermd_is(monkeypatch, tmp_pat
     opname = DockerOpname()
     opgestart = []
     monkeypatch.setattr(emulator, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
     monkeypatch.setattr(emulator, "maak_avd", lambda soort, avd_map: f"jlc-jc3-{soort}")
     monkeypatch.setattr(emulator, "kvm_groep", lambda: 992)
     monkeypatch.setattr(emulator.subprocess, "run", lambda *a, **k: opgestart.append(a))
@@ -203,6 +245,36 @@ def test_testserver_corpus_alleen_lezen_en_alleen_vrije_testdata(monkeypatch, tm
     assert len(media) == len(server.FILMS) + len(server.SERIES) and all(k.endswith(":ro") for k in media)
     assert waarde_na(args, "--cap-drop") == ["ALL"] and "--privileged" not in args
     assert not any("docker.sock" in k for k in waarde_na(args, "-v"))
+
+
+def test_servercontainer_met_eigenaarlabel_en_verweesde_servers_worden_opgeruimd(monkeypatch, tmp_path):
+    """Herstel 2 van S-P40-72: de servercontainer krijgt een eigenaarlabel. Vóór de start gaat alleen een
+    servercontainer van een dode eigenaar in de eigen PID-namespace weg (vóór de netwerken, dan is losmaken niet
+    nodig); een levende eigenaar, een andere namespace en een container zonder eigenaar blijven staan."""
+    corpus = tmp_path / "corpus"
+    for bron in {**server.FILMS, **server.SERIES}.values():
+        (corpus / bron).parent.mkdir(parents=True, exist_ok=True)
+        (corpus / bron).write_bytes(b"x")
+    opname = _DockerMetLijst(containers=(
+        f"jlc-jc3-server-1-1-dood\t999999999:1:{NS}\n"
+        "jlc-jc3-server-1-1-ander-ns\t1:5:pid:[4026532759]\n"
+        f"jlc-jc3-server-1-1-levend\t{netwerk.eigenaar()}\n"
+        "jlc-jc3-server-zonder-eigenaar\t\n"
+    ))
+    monkeypatch.setattr(server, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+    monkeypatch.setattr(server, "wacht_klaar", lambda url, **k: {})
+    s = server.TestServer("img", werk=tmp_path / "werk", corpus=corpus)
+    s.start()
+    run = opname.run()
+    assert waarde_na(run, "--label") == [server.CONTAINER_LABEL, f"{netwerk.EIGENAAR_LABEL}={netwerk.eigenaar()}"]
+    ps = next(a for a in opname.aanroepen if a[:2] == ("ps", "-a"))
+    assert f"label={server.CONTAINER_LABEL}" in ps
+    rm = [x for x in opname.weg() if x[0] == "rm"]
+    assert rm == [("rm", "-f", "jlc-jc3-server-1-1-dood"), ("rm", "-f", s.naam)]  # de tweede: de eigen naam vóór run
+    volgorde = opname.aanroepen
+    assert volgorde.index(rm[0]) < volgorde.index(next(a for a in volgorde if a[:2] == ("network", "ls")))
+    assert volgorde.index(rm[0]) < volgorde.index(run)
 
 
 def test_twee_testservers_krijgen_elk_een_eigen_naam_en_map(tmp_path):

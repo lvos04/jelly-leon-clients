@@ -21,9 +21,10 @@ from pathlib import Path
 from typing import Any
 
 from .jfapi import TICKS, Jellyfin, wacht_klaar
-from .netwerk import SERVER_ALIAS, SERVER_POORT, Testnetwerk
+from .netwerk import EIGENAAR_LABEL, SERVER_ALIAS, SERVER_POORT, Testnetwerk, eigenaar, ruim_verweesde_containers
 from .scenario import beoordeel_migratie
 
+CONTAINER_LABEL = "jelly-leon-clients.compat=server"  # plus EIGENAAR_LABEL: verweesde servers worden opgeruimd
 STOCK_12_4 = "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771"
 LOKAAL = Path(__file__).resolve().parents[4] / ".lokaal"  # .lokaal ligt naast de repo
 CORPUS = Path(os.environ.get("JLC_CORPUS", str(LOKAAL / "media-corpus")))
@@ -145,6 +146,7 @@ class TestServer:
         time-out van ``wacht_klaar``), dan ruimt ``start`` zelf container, netwerk en map op en geeft de fout door: de
         aanroepers zetten ``start()`` vóór hun ``try/finally`` (review R-TECH-1)."""
         try:
+            ruim_verweesde_containers(CONTAINER_LABEL)  # alleen van een harnasproces dat aantoonbaar niet meer bestaat
             shutil.rmtree(self.map, ignore_errors=True)
             for sub in ("config", "cache"):
                 (self.map / sub).mkdir(parents=True, exist_ok=True)
@@ -161,7 +163,8 @@ class TestServer:
         met de poort alleen op 127.0.0.1 (voor het harnas) plus het eigen testnetwerk (voor de app)."""
         docker("rm", "-f", self.naam, check=False)
         docker(
-            "run", "-d", "--name", self.naam, "--user", f"{os.getuid()}:{os.getgid()}", "--network", "bridge",
+            "run", "-d", "--name", self.naam, "--label", CONTAINER_LABEL, "--label", f"{EIGENAAR_LABEL}={eigenaar()}",
+            "--user", f"{os.getuid()}:{os.getgid()}", "--network", "bridge",
             "--memory", self.geheugen, "--cpus", self.cpus, "--security-opt", "no-new-privileges", "--cap-drop", "ALL",
             "-p", f"127.0.0.1:{self.poort}:{SERVER_POORT}", "-v", f"{self.map / 'config'}:/config",
             "-v", f"{self.map / 'cache'}:/cache", "-e", "TZ=UTC", *self.koppelingen(), self.image,
