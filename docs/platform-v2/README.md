@@ -10,8 +10,9 @@ Onbekende NAS-gegevens (D01–D18) worden nooit met voorbeeldwaarden ingevuld; z
 
 ## Contract (kopie, niet lokaal wijzigen)
 
-- `PLATFORM_CONTRACTEN.md` — `contracts 1.3`, byte-gelijke kopie van `lvos04/ai-server-manager`
-  `docs/platform-v2/PLATFORM_CONTRACTEN.md` (bron-commit `02b119c`); bij verschil wint de bron.
+- `PLATFORM_CONTRACTEN.md` — `contracts 1.3`, kopie van `lvos04/ai-server-manager`
+  `docs/platform-v2/PLATFORM_CONTRACTEN.md`: contractkopie byte-gelijk aan `ai-server-manager@e88a290` (aanvulling C-12,
+  blijft contracts 1.3); bij verschil wint de bron.
 - `CONTRACT_1.3_CONFORMITEIT.md` — wat elke repo voor 1.3 moet veranderen (deze repo: §11, C1.3-JLC-01…03); zelfde
   bron en bron-commit. Hoe deze repo eraan voldoet: `../adr/ADR-0012-contract-1-3-in-de-clients.md`.
 - `CONTRACT_1.2_CONFORMITEIT.md` — historie (deze repo: §11, JC1–JC5), ook byte-gelijk aan de bron op dezelfde
