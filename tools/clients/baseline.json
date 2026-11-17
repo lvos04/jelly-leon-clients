@@ -14,7 +14,9 @@
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
       "forkversie": "2.7.3-jl.1",
       "licentie": "GPL-2.0",
-      "beschermde_bestanden": ["LICENSE.md"],
+      "beschermde_bestanden": [
+        "LICENSE.md"
+      ],
       "geneste_subtrees": {}
     },
     "androidtv": {
@@ -22,13 +24,15 @@
       "zichtbare_naam_doel": "Jelly Leon",
       "prefix": "androidtv",
       "upstream_repo": "https://github.com/jellyfin/jellyfin-androidtv.git",
-      "upstream_tag": "v0.19.10",
-      "upstream_commit": "984181a3d6ab14e9a6d2dcc850c582e1c138bd95",
-      "upstream_tree": "7ca4f4838f49c0aec9c74aff405149d8140aef1c",
+      "upstream_tag": "v0.20.0",
+      "upstream_commit": "45c52925661ff51427cea46ebabcd3de656276cc",
+      "upstream_tree": "607e3808622478b09ab30c49b8b91a70ea489286",
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
-      "forkversie": "0.19.10-jl.1",
+      "forkversie": "0.20.0-jl.0",
       "licentie": "GPL-2.0",
-      "beschermde_bestanden": ["LICENSE"],
+      "beschermde_bestanden": [
+        "LICENSE"
+      ],
       "geneste_subtrees": {}
     },
     "desktop": {
@@ -42,7 +46,9 @@
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
       "forkversie": "2.0.0-jl.0",
       "licentie": "GPL-2.0",
-      "beschermde_bestanden": ["LICENSE"],
+      "beschermde_bestanden": [
+        "LICENSE"
+      ],
       "geneste_subtrees": {
         "external/mpvqt": {
           "naam": "KDE MpvQt",
@@ -51,7 +57,10 @@
           "upstream_commit": "2ebbd38bf65d01be9c55d673ecd43c8bb9a6fc8e",
           "upstream_tree": "7d1a4c1bcc95262daa35e60cfa010d544a57b953",
           "licentie": "LGPL-2.1-only OR LGPL-3.0-only (plus BSD-3-Clause/MIT/CC0 voor build-bestanden)",
-          "beschermde_bestanden": ["LICENSES/LGPL-2.1-only.txt", "LICENSES/LGPL-3.0-only.txt"]
+          "beschermde_bestanden": [
+            "LICENSES/LGPL-2.1-only.txt",
+            "LICENSES/LGPL-3.0-only.txt"
+          ]
         }
       }
     },
@@ -66,7 +75,9 @@
       "tag_patroon": "^(\\d+)\\.(\\d+)(?:\\.(\\d+))?$",
       "forkversie": "1.6.1-jl.1",
       "licentie": "MPL-2.0",
-      "beschermde_bestanden": ["LICENSE.md"],
+      "beschermde_bestanden": [
+        "LICENSE.md"
+      ],
       "geneste_subtrees": {}
     }
   }
