@@ -196,7 +196,12 @@ def test_onbeoordeelde_upstream_code_schrijft_geen_cache():
     caches = [s for _j, _job, s in steps(load(WORKFLOW_DIR / "clients-swiftfin.yml"))
               if str(s.get("uses", "")).startswith("actions/cache")]
     schrijvend = [s for s in caches if str(s["uses"]).startswith("actions/cache@")]
-    assert schrijvend and all(s.get("if") == "inputs.ref == ''" for s in schrijvend)
+    # ook niet bij een gewone push naar een syncbranch (dan is inputs.ref leeg; KLEIN-100 V2)
+    assert schrijvend and all(s.get("if") == "inputs.ref == '' && !startsWith(github.ref, 'refs/heads/sync/')"
+                              for s in schrijvend)
+    lezend = [s for s in caches if str(s["uses"]).startswith("actions/cache/restore@")]
+    assert lezend and all(s.get("if") == "inputs.ref != '' || startsWith(github.ref, 'refs/heads/sync/')"
+                          for s in lezend)
     for name in CLIENT_WORKFLOWS | {"clients-forkregels.yml", SYNC_ONE, SYNC_ALL}:
         for _j, _job, step in steps(load(WORKFLOW_DIR / name)):
             uses = str(step.get("uses", ""))
