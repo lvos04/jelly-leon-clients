@@ -277,6 +277,60 @@ def test_servercontainer_met_eigenaarlabel_en_verweesde_servers_worden_opgeruimd
     assert volgorde.index(rm[0]) < volgorde.index(run)
 
 
+DOOD = "jlc-jc3-server-41-1-0123456789ab"
+LEVEND = "jlc-jc3-server-42-1-ba9876543210"
+
+
+def _datamap(werk: Path, naam: str, extra: str | None = None) -> Path:
+    for sub in ("config", "cache"):
+        (werk / naam / sub).mkdir(parents=True, exist_ok=True)
+    (werk / naam / "config" / "db").write_bytes(b"x")
+    if extra:
+        (werk / naam / extra).write_bytes(b"x")
+    return werk / naam
+
+
+def test_datamap_van_een_verweesde_server_alleen_onder_de_eigen_werkmap(monkeypatch, tmp_path):
+    """Herstel 2 van S-P40-72: de datamap van een opgeruimde verweesde server gaat alleen weg als het precies
+    <werkmap>/<servernaam> is, met een naam die TestServer zelf kiest en alleen config en cache erin. Elk ander pad
+    (andere naam, '..', symlink naar buiten, map met andere inhoud, map buiten de werkmap) blijft staan."""
+    werk, buiten = tmp_path / "werk", tmp_path / "buiten"
+    assert server.ruim_verweesde_datamap(werk, DOOD) is False  # bestaat niet
+    dood = _datamap(werk, DOOD)
+    assert server.ruim_verweesde_datamap(werk, DOOD) and not dood.exists() and werk.exists()
+    doel = _datamap(buiten, "jlc-jc3-server-43-1-aaaaaaaaaaaa")
+    (werk / "jlc-jc3-server-43-1-aaaaaaaaaaaa").symlink_to(doel, target_is_directory=True)
+    vreemd = _datamap(werk, "jlc-jc3-server-44-1-bbbbbbbbbbbb", extra="iets-anders")
+    oud = _datamap(werk, "jlc-jc3-server-45-1")  # zonder willekeurig achtervoegsel: geen naam van deze code
+    weggehaald: list = []  # rmtree mag voor een geweigerd pad niet eens aangeroepen worden (ook niet op een symlink)
+    monkeypatch.setattr(server.shutil, "rmtree", lambda pad, **k: weggehaald.append(pad))
+    for naam in ("jlc-jc3-server-43-1-aaaaaaaaaaaa", "jlc-jc3-server-44-1-bbbbbbbbbbbb", "jlc-jc3-server-45-1",
+                 "../buiten", f"../buiten/{DOOD}", "", ".", "jlc-jc3-desktop-0123456789ab", f"{DOOD}/config"):
+        assert server.ruim_verweesde_datamap(werk, naam) is False, naam
+    assert weggehaald == []
+    assert doel.exists() and (doel / "config" / "db").exists() and vreemd.exists() and oud.exists()
+
+
+def test_start_ruimt_de_datamap_van_een_verweesde_server_op_en_laat_de_rest_staan(monkeypatch, tmp_path):
+    corpus, werk = tmp_path / "corpus", tmp_path / "werk"
+    for bron in {**server.FILMS, **server.SERIES}.values():
+        (corpus / bron).parent.mkdir(parents=True, exist_ok=True)
+        (corpus / bron).write_bytes(b"x")
+    dood, levend = _datamap(werk, DOOD), _datamap(werk, LEVEND)
+    ander_ns = _datamap(werk, "jlc-jc3-server-1-1-cccccccccccc")
+    opname = _DockerMetLijst(containers=(
+        f"{DOOD}\t999999999:1:{NS}\n{LEVEND}\t{netwerk.eigenaar()}\n"
+        "jlc-jc3-server-1-1-cccccccccccc\t1:5:pid:[4026532759]\n"
+    ))
+    monkeypatch.setattr(server, "docker", opname)
+    monkeypatch.setattr(netwerk, "docker", opname)
+    monkeypatch.setattr(server, "wacht_klaar", lambda url, **k: {})
+    s = server.TestServer("img", werk=werk, corpus=corpus)
+    s.start()
+    assert ("rm", "-f", DOOD) in opname.aanroepen and not dood.exists()
+    assert levend.exists() and ander_ns.exists() and s.map.exists()
+
+
 def test_twee_testservers_krijgen_elk_een_eigen_naam_en_map(tmp_path):
     a, b = server.TestServer("img", werk=tmp_path), server.TestServer("img", werk=tmp_path)
     assert a.naam != b.naam and a.map != b.map and a.naam.startswith("jlc-jc3-server-")
@@ -1101,6 +1155,53 @@ def test_android_cmd_herhaalt_alleen_na_een_oom_kill_met_5_gib_en_bewaart_beide(
     assert geschreven["samenvatting"] == {"jelly-leon/telefoon": "Sim-geslaagd", "jelly-leon/tablet": "Sim-mislukt",
                                           "stock/telefoon": "Sim-geslaagd"}
     assert geschreven["regressies"] == [] and geschreven["vervangen_mislukt"] == []
+
+
+def test_emulator_alleen_binnen_gradle_lock(monkeypatch, tmp_path):
+    """ADR-0011 besluit 15 (herstel 2 van S-P40-72): de AVD-map (<werkmap>/avd) en de AVD-naam jlc-jc3-<soort> zijn
+    gedeeld; dat is veilig omdat een emulator alleen binnen gradle.lock draait (machinebreed één tegelijk). Een Emulator
+    wordt alleen gemaakt in android.run en hervatproef.herhaal, en die worden alleen vanuit cli.py binnen het slot
+    aangeroepen (een_android_run: zie de test hieronder; hervatproef_cmd: hier)."""
+    makers = {b.name for b in COMPAT.glob("*.py") if "Emulator(" in b.read_text(encoding="utf-8")}
+    assert makers == {"android.py", "hervatproef.py"}
+    for bron in COMPAT.glob("*.py"):
+        tekst = bron.read_text(encoding="utf-8")
+        for aanroep in ("android.run(", "hervatproef.herhaal("):
+            assert aanroep not in tekst or bron.name == "cli.py", (bron.name, aanroep)
+    actief: list[str] = []
+
+    @contextlib.contextmanager
+    def nep_slot(naam, log=None):
+        actief.append(naam)
+        try:
+            yield 0.0
+        finally:
+            actief.remove(naam)
+
+    class NepServer:
+        def __init__(self, image):
+            pass
+
+        def start(self):
+            return self
+
+        def inrichten(self):
+            return {}
+
+        def verwijder(self):
+            pass
+
+    from compat import hervatproef
+    gezien: list = []
+    monkeypatch.setattr(cli.bewijs, "slot", nep_slot)
+    monkeypatch.setattr(cli, "TestServer", NepServer)
+    monkeypatch.setattr(cli.apk, "bereid_voor", lambda *a, **k: {})
+    monkeypatch.setattr(cli, "image_herkomst", lambda img: {"image": img})
+    monkeypatch.setattr(cli.bewijs, "schrijf", lambda *a, **k: None)
+    monkeypatch.setattr(hervatproef, "herhaal", lambda *a, **k: gezien.append(list(actief)) or {"geslaagd": 1, "n": 1})
+    a = SimpleNamespace(image="i", stock_image="s", soort="tv", bediend="fork", n=1, uit=tmp_path / "h.json")
+    assert cli.hervatproef_cmd(a) == 0
+    assert gezien == [["stack.lock", "gradle.lock"]] * 2
 
 
 def test_een_android_run_neemt_stack_en_gradle_lock(monkeypatch, tmp_path):

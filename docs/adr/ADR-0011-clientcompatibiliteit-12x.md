@@ -106,7 +106,12 @@
     alleen de eigen container raakt. Elk van de drie krijgt een eigen label (`jelly-leon-clients.compat=server`,
     `=emulator` of `=desktop`) en het eigenaarlabel; vóór een nieuwe start wordt een achtergebleven container van die
     soort met dezelfde regels opgeruimd (alleen bij een dode eigenaar in dezelfde PID-namespace). De datamap van een zo
-    opgeruimde server blijft in de werkmap staan. De testwachtwoorden zijn per server willekeurig (24 letters en cijfers
+    opgeruimde server gaat alleen mee weg als die precies `<werkmap>/<servernaam>` is (een naam die `TestServer` zelf
+    kiest, geen symlink, alleen `config` en `cache` erin); elk ander pad blijft staan. De AVD-map (`<werkmap>/avd`) en de
+    AVD-naam `jlc-jc3-<soort>` blijven gedeeld tussen runs: dat is veilig omdat een emulator alleen binnen `gradle.lock`
+    draait (machinebreed één tegelijk; `android.run` en `hervatproef.herhaal` worden alleen vanuit `cli.py` binnen dat
+    slot aangeroepen, met een test). Voorwaarde: runs die dezelfde werkmap (`JLC_WERK`) gebruiken, gebruiken ook
+    dezelfde `.lokaal` voor de sloten. De testwachtwoorden zijn per server willekeurig (24 letters en cijfers
     uit `secrets`, omdat `adb input text` geen leestekens betrouwbaar typt); elk bewijsdocument wordt geweigerd als er
     een wachtwoord van die run in staat, in elk schrijfpad (Android, desktop, hervatproef, Swiftfin), elk met een
     eigen test. `check_clients.py` faalt op een buildbestand (`.kotlin`, `.gradle`, `build/`, APK, klassebestand,

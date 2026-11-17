@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import itertools
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -25,6 +26,9 @@ from .netwerk import EIGENAAR_LABEL, SERVER_ALIAS, SERVER_POORT, Testnetwerk, ei
 from .scenario import beoordeel_migratie
 
 CONTAINER_LABEL = "jelly-leon-clients.compat=server"  # plus EIGENAAR_LABEL: verweesde servers worden opgeruimd
+# Naam die TestServer zelf kiest (pid, teller, willekeurig achtervoegsel); alleen daarvan gaat een datamap weg.
+SERVERNAAM = re.compile(r"jlc-jc3-server-[0-9]+-[0-9]+-[0-9a-f]{12}")
+DATAMAP_INHOUD = {"config", "cache"}
 STOCK_12_4 = "docker.io/jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771"
 LOKAAL = Path(__file__).resolve().parents[4] / ".lokaal"  # .lokaal ligt naast de repo
 CORPUS = Path(os.environ.get("JLC_CORPUS", str(LOKAAL / "media-corpus")))
@@ -79,6 +83,24 @@ class Testitems:
 
 
 _TELLER = itertools.count(1)
+
+
+def ruim_verweesde_datamap(werk: Path, naam: str) -> bool:
+    """Datamap van een opgeruimde verweesde server weghalen. Alleen als ``naam`` een door ``TestServer`` gekozen naam
+    is, de map precies ``werk/<naam>`` is (geen symlink, na resolve direct onder de werkmap) en er niets anders in
+    staat dan ``config`` en ``cache``. Elk ander pad blijft staan. Geeft True als de map weg is."""
+    if not SERVERNAAM.fullmatch(naam):
+        return False
+    pad = werk / naam
+    try:
+        if pad.is_symlink() or not pad.is_dir() or pad.resolve().parent != werk.resolve():
+            return False
+        if not {k.name for k in pad.iterdir()} <= DATAMAP_INHOUD:
+            return False
+    except OSError:
+        return False
+    shutil.rmtree(pad, ignore_errors=True)
+    return not pad.exists()
 
 
 def vrije_poort() -> int:
@@ -146,7 +168,9 @@ class TestServer:
         time-out van ``wacht_klaar``), dan ruimt ``start`` zelf container, netwerk en map op en geeft de fout door: de
         aanroepers zetten ``start()`` vóór hun ``try/finally`` (review R-TECH-1)."""
         try:
-            ruim_verweesde_containers(CONTAINER_LABEL)  # alleen van een harnasproces dat aantoonbaar niet meer bestaat
+            # alleen van een harnasproces dat aantoonbaar niet meer bestaat; de datamap alleen onder de eigen werkmap
+            for verweesd in ruim_verweesde_containers(CONTAINER_LABEL):
+                ruim_verweesde_datamap(self.map.parent, verweesd)
             shutil.rmtree(self.map, ignore_errors=True)
             for sub in ("config", "cache"):
                 (self.map / sub).mkdir(parents=True, exist_ok=True)
