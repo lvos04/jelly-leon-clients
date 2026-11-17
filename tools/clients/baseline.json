@@ -28,7 +28,7 @@
       "tag_patroon": "^v(\\d+)\\.(\\d+)\\.(\\d+)$",
       "forkversie": "0.19.10-jl.1",
       "licentie": "GPL-2.0",
-      "beschermde_bestanden": ["LICENSE", "CONTRIBUTORS.md"],
+      "beschermde_bestanden": ["LICENSE"],
       "geneste_subtrees": {}
     },
     "desktop": {

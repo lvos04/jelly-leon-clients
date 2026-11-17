@@ -7,8 +7,9 @@ subtree-squashcommit, die exact de upstream-tag uit `tools/clients/baseline.json
 
 - een niet-geregistreerde afwijking → CI faalt;
 - een geregistreerd bestand dat niet (meer) afwijkt → CI faalt (register verouderd, bv. na upstream-acceptatie);
-- beschermde bestanden (licenties en credits: `android/LICENSE.md`, `androidtv/LICENSE`, `androidtv/CONTRIBUTORS.md`,
-  `desktop/LICENSE`, `swiftfin/LICENSE.md`, de LGPL-teksten van mpvqt) mogen **nooit** afwijken of ontbreken;
+- beschermde bestanden (licenties en credits: `android/LICENSE.md`, `androidtv/LICENSE`, `desktop/LICENSE`,
+  `swiftfin/LICENSE.md`, de LGPL-teksten van mpvqt) mogen **nooit** afwijken of ontbreken; `androidtv/CONTRIBUTORS.md`
+  is sinds 2026-11-17 niet meer beschermd, omdat upstream hem heeft verwijderd (zie *Basislijnwijzigingen* onderaan);
 - het register en de basislijn worden gelezen uit de gecontroleerde commit (een niet-gecommitte registratie telt niet);
 - geen gitlinks/submodules: die zou `git subtree` leeg laten (ADR-0005).
 
@@ -103,4 +104,13 @@ elke client (ADR-0012). Swiftfin: de workflow leest de effectieve build-instelli
 | Waarom nodig | Twee apps met dezelfde bundle-id kunnen niet naast elkaar op één apparaat; de eigen build zou de officiële app vervangen. Keychain-items (KeychainSwift), Spotlight-items en caches zijn per app en volgen zonder codewijziging. `fastlane/Fastfile.swift` (upstream-publicatiepad, door onze CI nooit gebruikt) noemt nog de officiële ID en blijft ongewijzigd. |
 | Upstream-PR-kans | Geen — fork-eigen identiteit. |
 | Test | `tools/clients/app_identiteit.py bron` (elke `PRODUCT_BUNDLE_IDENTIFIER` in xcconfig en project = de eigen ID) en `tools/clients/tests/test_app_identiteit.py`; workflow *Clients / Swiftfin*: `xcodebuild -showBuildSettings` voor beide schema's en beide configuraties + `CFBundleIdentifier` in de gebouwde simulator-app. Ondertekenen, registratie van de bundle-id bij Apple en installeren op een apparaat: **NIET GEVALIDEERD (Mac/Xcode)** en **NIET GEVALIDEERD (account)** (Apple Developer-account van de gebruiker nodig). |
-| Bij upstream-sync | Zoals JLC-0002; een nieuwe doelinstelling met de officiële ID laat de bron-controle falen. Proef op de upstream-hoofdbranch (2026-11-09): conflict in `project.pbxproj` (upstream wijzigt de regel naast de patch), sync faalt bewust en draait alles terug; daar staat ook een nieuw doel met bundle-id `org.jellyfin.swiftfin.screenshots`, dat de bron-controle als "andere waarde" afkeurt tot een mens beslist (fail-closed). |
+| Bij upstream-sync | Zoals JLC-0002; een nieuwe doelinstelling met de officiële ID laat de bron-controle falen. Proef op de upstream-hoofdbranch (2026-11-09): conflict in `project.pbxproj` (upstream wijzigt de regel naast de patch), sync faalt bewust en draait alles terug; daar staat ook een nieuw doel met bundle-id `org.jellyfin.swiftfin.screenshots`, dat de bron-controle als "andere waarde" afkeurt tot een mens beslist (fail-closed). **1.6.1 → 1.7.1 (2026-11-17, KLEIN-100):** hetzelfde conflict (upstream zet op die regel ook `PRODUCT_NAME = Swiftfin`), met de hand opgelost in `sync/swiftfin-1.7.1` volgens `FORK_STRATEGIE.md` §2: eigen bundle-id + upstream-`PRODUCT_NAME`; de patch blijft 1 regel in `project.pbxproj` en 1 in `Shared.xcconfig` (xcconfig merget schoon). De vier configuraties met `org.jellyfin.swiftfin.screenshots` horen bij UI-testdoelen (*Swiftfin iOS/tvOS Screenshots*, `.xctest`, geen app): de bron-controle slaat configuraties over die alleen bij een testbundel-doel horen, maar blijft een officiële ID daar en elke andere waarde bij een app-doel afkeuren (`app_identiteit.py`, `pbx_testbundel_bereiken`; `xcode` keek al alleen naar app-doelen). Ongepatcht gelaten: geen officiële app-ID, geen installatie naast de officiële app. |
+
+## Basislijnwijzigingen zonder patch
+
+Wijzigingen aan `tools/clients/baseline.json` die geen afwijking van upstream zijn, maar een beslissing over de
+bewaking ervan (de forkregel zegt bij een verdwenen beschermd bestand: "handmatig beoordelen en basislijn bijwerken").
+
+| Datum | Client | Wijziging | Bewijs |
+|---|---|---|---|
+| 2026-11-17 (KLEIN-100) | androidtv | `CONTRIBUTORS.md` uit `beschermde_bestanden`; `LICENSE` blijft beschermd | Upstream heeft het bestand verwijderd, niet hernoemd: commit `e67c3fbabb214b432736045a9dec325e7ac38835` ("Remove contributors file", Niels van Velzen, 2026-08-12) verwijdert alleen `CONTRIBUTORS.md` (1 bestand, 22 regels weg, geen bestand toegevoegd) en is voorouder van tag `v0.20.0` (`45c52925661ff51427cea46ebabcd3de656276cc`). Gemeten in een eigen kale fetch van `jellyfin/jellyfin-androidtv` (`git log --no-renames --name-status v0.20.0 -- CONTRIBUTORS.md`; `git ls-tree -r v0.20.0`: alleen `LICENSE` als licentie-/creditbestand in de root). Op `v0.19.10` (huidige basis) bestaat het bestand nog en blijft het als gewone upstream-inhoud bewaakt: elke wijziging is een niet-geregistreerde afwijking. Aanleiding: run 43869795396 (`sync-androidtv`: "beschermd bestand 'androidtv/CONTRIBUTORS.md' ontbreekt"). |
