@@ -15,8 +15,11 @@ Controleert de opgegeven commit (standaard HEAD), met de basislijn en het patchr
   5. elk bestand bij een actieve patch wijkt ook echt af (anders is het register verouderd);
   6. beschermde bestanden (licenties, credits) bestaan en wijken nooit af, ook niet met registratie;
   7. geen buildbestand dat de fork in een clientmap (mee)trackt: een `.kotlin`-sessiemap, Gradle- of CMake-uitvoer,
-     APK's, klassebestanden, JVM-crashlogs of `local.properties` (V-022: een `git add -A` tijdens een Gradle-build nam
-     een Kotlin-sessiebestand mee). Ook een registratie in PATCHES.md maakt dat niet toegestaan. Het herstel is
+     APK's, klassebestanden, JVM-crashlogs en heapdumps (`.hprof`), Ninja- en compilerdatabases (`.ninja_log`,
+     `compile_commands.json`), de uitvoer van een getekende release (`release/output-metadata.json`) of
+     `local.properties` (V-022: een `git add -A` tijdens een Gradle-build nam een Kotlin-sessiebestand mee). Mapnamen
+     tellen zonder hoofdlettergevoeligheid (`Build/` = `build/`). Ook een registratie in PATCHES.md maakt dat niet
+     toegestaan. Het herstel is
      `git rm --cached <pad>`; de clientmappen krijgen hiervoor geen eigen `.gitignore` (de upstream-.gitignore blijft
      ongewijzigd).
 
@@ -54,12 +57,14 @@ REQUIRED_FIELDS = ("Status", "Client", "Doel", "Bestanden", "Waarom nodig", "Ups
 PATCH_HEADING_RE = re.compile(r"^##\s+(JLC-\d{4})\b\s*[—-]?\s*(.*)$")
 ROW_RE = re.compile(r"^\|\s*([^|]+?)\s*\|\s*(.*?)\s*\|\s*$")
 BACKTICK_RE = re.compile(r"`([^`]+)`")
-# Punt 7: mappen met bouwuitvoer (een padonderdeel vóór de bestandsnaam) en bestandsnamen van bouwuitvoer.
+# Punt 7: mappen met bouwuitvoer (een padonderdeel vóór de bestandsnaam; vergeleken in kleine letters) en
+# bestandsnamen van bouwuitvoer.
 BUILD_DIRS = {".kotlin", ".gradle", ".cxx", ".externalNativeBuild", "build", "DerivedData", "xcuserdata",
               "CMakeFiles", "node_modules", ".build"}
+BUILD_DIRS_LOWER = {m.lower() for m in BUILD_DIRS}
 BUILD_FILE_RE = re.compile(
-    r"(\.(?:class|dex|apk|aab|ap_|salive|o)$)|(^hs_err_pid\d*\.log$)|(^replay_pid\d*\.log$)"
-    r"|(^local\.properties$)|(^CMakeCache\.txt$)")
+    r"(\.(?:class|dex|apk|aab|ap_|salive|o|hprof)$)|(^hs_err_pid\d*\.log$)|(^replay_pid\d*\.log$)"
+    r"|(^local\.properties$)|(^CMakeCache\.txt$)|(^\.ninja_log$)|(^compile_commands\.json$)")
 
 
 @dataclass
@@ -114,13 +119,16 @@ def covers(entry: str, path: str) -> bool:
 
 def buildbestand(path: str) -> str | None:
     """De reden als ``path`` bouwuitvoer is (map of bestandsnaam), anders None. ``build.gradle.kts`` en ``buildSrc/``
-    zijn broncode: alleen een map die precies zo heet telt."""
+    zijn broncode: alleen een map die zo heet telt (zonder hoofdlettergevoeligheid). Een map ``release/`` is broncode
+    (de source set ``src/release``); alleen ``output-metadata.json`` daarin is uitvoer van een getekende release."""
     *mappen, naam = path.split("/")
     for m in mappen:
-        if m in BUILD_DIRS:
+        if m.lower() in BUILD_DIRS_LOWER:
             return f"map '{m}/'"
     if BUILD_FILE_RE.search(naam):
         return f"bestand '{naam}'"
+    if naam == "output-metadata.json" and mappen and mappen[-1].lower() == "release":
+        return f"bestand '{mappen[-1]}/{naam}'"
     return None
 
 

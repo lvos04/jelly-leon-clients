@@ -7,7 +7,7 @@ import json
 import check_clients
 import pytest
 from clients_common import DEFAULT_REPO_ROOT, find_squash_commit, newest_tag, version_key
-from conftest import Fork, git, patch_block, write_files
+from conftest import ClientSpec, Fork, git, patch_block, write_files
 
 
 def test_echte_repo_voldoet_aan_forkregels():
@@ -309,6 +309,14 @@ def test_ref_zonder_basislijn_valt_terug_op_werkboom_en_meldt_dat(simple_setup, 
     "app/hs_err_pid4242.log",
     "app/local.properties",
     "app/Klasse.class",
+    # review R-VEILIG-5: deze passeerden eerst als ze geregistreerd waren
+    "app/java_pid42.hprof",
+    "app/Build/tmp/x.txt",  # mapnaam zonder hoofdlettergevoeligheid
+    "app/app/release/output-metadata.json",
+    "app/compile_commands.json",
+    "app/.ninja_log",
+    "app/.KOTLIN/sessions/x.salive",
+    "app/app/BUILD/outputs/x.txt",
 ])
 def test_getrackt_buildbestand_in_een_clientmap_faalt_ook_als_het_geregistreerd_is(simple_setup, pad):
     _up, fork = simple_setup
@@ -343,9 +351,10 @@ def test_buildbestand_in_een_geneste_subtree_faalt(nested_setup):
 
 
 def test_gewone_patch_met_build_in_de_naam_is_geen_buildbestand(simple_setup):
-    """Geen valse melding: build.gradle.kts of een map 'buildSrc' is broncode, geen bouwuitvoer."""
+    """Geen valse melding: build.gradle.kts, een map 'buildSrc' of de source set 'src/release' is broncode."""
     _up, fork = simple_setup
-    bestanden = ["app/app/build.gradle.kts", "app/buildSrc/src/main/kotlin/Versies.kt"]
+    bestanden = ["app/app/build.gradle.kts", "app/buildSrc/src/main/kotlin/Versies.kt",
+                 "app/app/src/release/res/values/strings.xml", "app/app/src/release/output-metadata.txt"]
     write_files(fork.path, dict.fromkeys(bestanden, "broncode\n"))
     fork.write_register(patch_block("JLC-0001", "app", bestanden))
     fork.commit_all("broncode met build in de naam")
@@ -357,3 +366,19 @@ def test_buildbestand_dat_upstream_verwijderd_is_telt_niet():
     assert check_clients.buildbestand("app/build/x.apk") is not None
     assert check_clients.buildbestand("app/src/build.gradle") is None
     assert check_clients.buildbestand("app/src/BuildConfig.kt") is None
+
+
+def test_door_de_fork_verwijderd_buildbestand_van_upstream_geeft_geen_melding(tmp_path, make_upstream):
+    """Review R-TECH-3, echte proef: upstream trackt zelf een buildbestand (app/build/x.apk); de fork verwijdert het
+    en registreert dat in PATCHES.md. Dat is geen getrackt buildbestand van de fork: geen melding 'buildbestand' en
+    de forkregels zijn in orde."""
+    up = make_upstream("app")
+    up.commit({"LICENSE": "GPL\n", "src/main.txt": "regel 1\n", "build/x.apk": "apk van upstream\n"}, "v1",
+              tag="v1.0.0")
+    fork = Fork(tmp_path / "fork", [ClientSpec("app", up, "v1.0.0")])
+    write_files(fork.path, {"app/build/x.apk": None})
+    fork.write_register(patch_block("JLC-0001", "app", ["app/build/x.apk"]))
+    fork.commit_all("buildbestand van upstream verwijderd")
+    result = check_clients.check(fork.path)
+    assert result.changed == {"app/build/x.apk": "D"}
+    assert result.violations == []
